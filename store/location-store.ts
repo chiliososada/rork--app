@@ -1,18 +1,23 @@
 import { create } from 'zustand';
-import { Location } from '@/types';
 import * as ExpoLocation from 'expo-location';
 import { Platform } from 'react-native';
 
+// Define our own Location type to avoid conflicts
+interface AppLocation {
+  latitude: number;
+  longitude: number;
+}
+
 interface LocationState {
-  currentLocation: Location | null;
-  selectedLocation: Location | null;
+  currentLocation: AppLocation | null;
+  selectedLocation: AppLocation | null;
   permissionStatus: ExpoLocation.PermissionStatus | null;
   isLoading: boolean;
   error: string | null;
   
   requestPermission: () => Promise<void>;
   getCurrentLocation: () => Promise<void>;
-  setSelectedLocation: (location: Location) => void;
+  setSelectedLocation: (location: AppLocation) => void;
   clearSelectedLocation: () => void;
 }
 

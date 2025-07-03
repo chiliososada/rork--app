@@ -1,12 +1,9 @@
 import { Platform } from 'react-native';
 
 // Platform-specific imports
-let MapViewComponent: any;
-
-if (Platform.OS === 'web') {
-  MapViewComponent = require('./MapView.web').default;
-} else {
-  MapViewComponent = require('./MapView.native').default;
-}
+const MapViewComponent = Platform.select({
+  web: () => require('./MapView.web').default,
+  default: () => require('./MapView.native').default,
+})();
 
 export default MapViewComponent;

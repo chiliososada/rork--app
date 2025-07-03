@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import { Tabs } from "expo-router";
 import { MapPin, Compass, PlusCircle, MessageCircle, User } from "lucide-react-native";
-import { TouchableOpacity } from "react-native";
+import { TouchableOpacity, View } from "react-native";
 import { useRouter, Redirect } from "expo-router";
 import Colors from "@/constants/colors";
 import { useAuthStore } from "@/store/auth-store";
@@ -68,13 +68,18 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <PlusCircle size={24} color={color} />,
           tabBarButton: (props) => (
             <TouchableOpacity
+              {...props}
               onPress={handleCreateTopic}
               style={{
                 flex: 1,
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
-            />
+            >
+              <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                <PlusCircle size={24} color={props.accessibilityState?.selected ? Colors.primary : Colors.inactive} />
+              </View>
+            </TouchableOpacity>
           ),
         }}
       />
