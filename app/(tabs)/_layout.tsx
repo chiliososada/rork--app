@@ -66,22 +66,23 @@ export default function TabLayout() {
         options={{
           title: "Create",
           tabBarIcon: ({ color }) => <PlusCircle size={24} color={color} />,
-          tabBarButton: (props) => {
-            return (
-              <TouchableOpacity
-                onPress={handleCreateTopic}
-                style={{
-                  flex: 1,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-                  <PlusCircle size={24} color={props.accessibilityState?.selected ? Colors.primary : Colors.inactive} />
-                </View>
-              </TouchableOpacity>
-            );
-          },
+          tabBarButton: (props) => (
+            <TouchableOpacity
+              onPress={handleCreateTopic}
+              style={{
+                flex: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                <PlusCircle 
+                  size={24} 
+                  color={props.accessibilityState?.selected ? Colors.primary : Colors.inactive} 
+                />
+              </View>
+            </TouchableOpacity>
+          ),
         }}
       />
       

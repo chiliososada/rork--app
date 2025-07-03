@@ -4,7 +4,7 @@ export default {
   secondary: "#FF9F7A",  // Soft coral - accents, highlights
   background: "#F8F9FD", // Very light gray-blue - main background
   card: "#FFFFFF",       // White - card backgrounds
-  surface: "#FFFFFF",    // White - surface backgrounds (same as card)
+  surface: "#FFFFFF",    // White - surface backgrounds
   text: {
     primary: "#1A2151",  // Dark blue - primary text
     secondary: "#6B7280", // Medium gray - secondary text
