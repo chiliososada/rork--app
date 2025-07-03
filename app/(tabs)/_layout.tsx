@@ -67,11 +67,12 @@ export default function TabLayout() {
           title: "Create",
           tabBarIcon: ({ color }) => <PlusCircle size={24} color={color} />,
           tabBarButton: (props) => {
-            const { delayLongPress, ...restProps } = props;
+            const { delayLongPress, disabled, ...restProps } = props;
             return (
               <TouchableOpacity
                 {...restProps}
                 delayLongPress={delayLongPress || undefined}
+                disabled={disabled || false}
                 onPress={handleCreateTopic}
                 style={{
                   flex: 1,
