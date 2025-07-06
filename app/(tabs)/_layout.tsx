@@ -1,11 +1,16 @@
 import React, { useEffect } from "react";
 import { Tabs } from "expo-router";
+<<<<<<< HEAD
 import { MapPin, Compass, PlusCircle, MessageCircle, User } from "lucide-react-native";
 import { TouchableOpacity, View } from "react-native";
+=======
+import { View } from "react-native";
+>>>>>>> 715cca6 (初始化项目结构)
 import { useRouter, Redirect } from "expo-router";
 import Colors from "@/constants/colors";
 import { useAuthStore } from "@/store/auth-store";
 import { useLocationStore } from "@/store/location-store";
+import CustomTabBar from "@/components/CustomTabBar";
 
 export default function TabLayout() {
   const router = useRouter();
@@ -27,30 +32,13 @@ export default function TabLayout() {
   };
   
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.inactive,
-        tabBarStyle: {
-          backgroundColor: Colors.card,
-          borderTopColor: Colors.border,
-        },
-        headerStyle: {
-          backgroundColor: Colors.background,
-        },
-        headerShadowVisible: false,
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '500',
-        },
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: "Nearby",
-          tabBarIcon: ({ color }) => <MapPin size={24} color={color} />,
+    <View style={{ flex: 1 }}>
+      <Tabs
+        screenOptions={{
+          headerShown: false,
+          tabBarStyle: { display: 'none' }, // Hide default tab bar
         }}
+<<<<<<< HEAD
       />
       
       <Tabs.Screen
@@ -102,5 +90,15 @@ export default function TabLayout() {
         }}
       />
     </Tabs>
+=======
+      >
+        <Tabs.Screen name="index" />
+        <Tabs.Screen name="explore" />
+        <Tabs.Screen name="chats" />
+        <Tabs.Screen name="profile" />
+      </Tabs>
+      <CustomTabBar />
+    </View>
+>>>>>>> 715cca6 (初始化项目结构)
   );
 }

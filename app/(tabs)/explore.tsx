@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View, TouchableWithoutFeedback, Keyboard } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import Colors from "@/constants/colors";
@@ -7,6 +7,7 @@ import { useLocationStore } from "@/store/location-store";
 import { useTopicStore } from "@/store/topic-store";
 import SearchBar from "@/components/SearchBar";
 import MapViewComponent from "@/components/MapView";
+import CustomHeader from "@/components/CustomHeader";
 
 export default function ExploreScreen() {
   const router = useRouter();
@@ -38,31 +39,43 @@ export default function ExploreScreen() {
   };
   
   return (
-    <SafeAreaView style={styles.container} edges={['left', 'right']}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Explore</Text>
-        <Text style={styles.subtitle}>Discover topics on the map</Text>
-      </View>
-      
-      <SearchBar
-        value={searchQuery}
-        onChangeText={handleSearch}
-        onClear={handleClearSearch}
-        placeholder="Search topics on map..."
-      />
-      
-      {currentLocation ? (
-        <MapViewComponent
-          currentLocation={currentLocation}
-          topics={filteredTopics}
-          onMarkerPress={handleMarkerPress}
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      <View style={styles.container}>
+        <CustomHeader
+          title="地図で探索"
+          subtitle={`🗺️ 地図上のトピックを発見 • ${filteredTopics.length} 件のトピック`}
+          showNotification={true}
+          showSettings={true}
+          onNotificationPress={() => console.log('Notifications')}
+          onSettingsPress={() => console.log('Settings')}
         />
-      ) : (
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading map...</Text>
-        </View>
-      )}
-    </SafeAreaView>
+        
+        <SafeAreaView style={styles.content} edges={['left', 'right', 'bottom']}>
+          <SearchBar
+            value={searchQuery}
+            onChangeText={handleSearch}
+            onClear={handleClearSearch}
+            placeholder="地図上でトピックを検索..."
+          />
+          
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.mapWrapper}>
+              {currentLocation ? (
+                <MapViewComponent
+                  currentLocation={currentLocation}
+                  topics={filteredTopics}
+                  onMarkerPress={handleMarkerPress}
+                />
+              ) : (
+                <View style={styles.loadingContainer}>
+                  <Text style={styles.loadingText}>地図を読み込んでいます...</Text>
+                </View>
+              )}
+            </View>
+          </TouchableWithoutFeedback>
+        </SafeAreaView>
+      </View>
+    </TouchableWithoutFeedback>
   );
 }
 
@@ -71,18 +84,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  header: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
+  content: {
+    flex: 1,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: Colors.text.primary,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: Colors.text.secondary,
+  mapWrapper: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,

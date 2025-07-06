@@ -10,6 +10,7 @@ const getBaseUrl = () => {
     return process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
   }
 
+<<<<<<< HEAD
   // Fallback for development
   if (__DEV__) {
     return "http://localhost:3000";
@@ -18,6 +19,15 @@ const getBaseUrl = () => {
   throw new Error(
     "No base url found, please set EXPO_PUBLIC_RORK_API_BASE_URL"
   );
+=======
+  // Development fallback - use localhost
+  if (typeof window !== 'undefined') {
+    return `http://${window.location.hostname}:3000`;
+  }
+  
+  // Default for development
+  return "http://localhost:3000";
+>>>>>>> 715cca6 (初始化项目结构)
 };
 
 export const trpcClient = trpc.createClient({

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform, Alert } from "react-native";
 import { useRouter, Stack } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MapPin } from "lucide-react-native";
+import { MapPin, ChevronLeft, X } from "lucide-react-native";
 import Colors from "@/constants/colors";
 import Input from "@/components/Input";
 import Button from "@/components/Button";
@@ -31,14 +31,14 @@ export default function CreateTopicScreen() {
     let isValid = true;
     
     if (!title.trim()) {
-      setTitleError("Title is required");
+      setTitleError("タイトルは必須です");
       isValid = false;
     } else {
       setTitleError("");
     }
     
     if (!description.trim()) {
-      setDescriptionError("Description is required");
+      setDescriptionError("説明は必須です");
       isValid = false;
     } else {
       setDescriptionError("");
@@ -52,8 +52,8 @@ export default function CreateTopicScreen() {
     
     if (!currentLocation) {
       Alert.alert(
-        "Location Required",
-        "Please enable location services to create a topic.",
+        "位置情報が必要です",
+        "トピックを作成するには位置情報サービスを有効にしてください。",
         [
           { text: "OK" }
         ]
@@ -63,8 +63,8 @@ export default function CreateTopicScreen() {
     
     if (!user) {
       Alert.alert(
-        "Authentication Required",
-        "Please log in to create a topic.",
+        "認証が必要です",
+        "トピックを作成するにはログインしてください。",
         [
           { text: "OK" }
         ]
@@ -83,8 +83,8 @@ export default function CreateTopicScreen() {
       router.push("/(tabs)");
     } catch (error) {
       Alert.alert(
-        "Error",
-        "Failed to create topic. Please try again.",
+        "エラー",
+        "トピックの作成に失敗しました。もう一度お試しください。",
         [
           { text: "OK" }
         ]
@@ -93,12 +93,24 @@ export default function CreateTopicScreen() {
   };
   
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <Stack.Screen 
         options={{
-          title: "Create Topic",
+          headerShown: false,
         }} 
       />
+      
+      {/* Custom Header */}
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <ChevronLeft size={24} color={Colors.text.primary} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>新しいトピックを作成</Text>
+        <View style={styles.placeholder} />
+      </View>
       
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -109,12 +121,11 @@ export default function CreateTopicScreen() {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.title}>Create a New Topic</Text>
-          <Text style={styles.subtitle}>Share what's happening around you</Text>
+          <Text style={styles.subtitle}>あなたの周りで起きていることを共有しましょう</Text>
           
           <Input
-            label="Title"
-            placeholder="Enter a title for your topic"
+            label="タイトル"
+            placeholder="トピックのタイトルを入力"
             value={title}
             onChangeText={setTitle}
             error={titleError}
@@ -122,8 +133,8 @@ export default function CreateTopicScreen() {
           />
           
           <Input
-            label="Description"
-            placeholder="Provide more details about your topic"
+            label="説明"
+            placeholder="トピックの詳細を入力"
             value={description}
             onChangeText={setDescription}
             error={descriptionError}
@@ -134,13 +145,13 @@ export default function CreateTopicScreen() {
           />
           
           <View style={styles.locationSection}>
-            <Text style={styles.locationLabel}>Location</Text>
+            <Text style={styles.locationLabel}>位置情報</Text>
             
             {currentLocation ? (
               <View style={styles.locationContainer}>
                 <MapPin size={16} color={Colors.primary} />
                 <Text style={styles.locationText}>
-                  Using your current location
+                  現在地を使用中
                 </Text>
               </View>
             ) : (
@@ -150,14 +161,14 @@ export default function CreateTopicScreen() {
               >
                 <MapPin size={16} color={Colors.primary} />
                 <Text style={styles.locationButtonText}>
-                  Enable location services
+                  位置情報サービスを有効にする
                 </Text>
               </TouchableOpacity>
             )}
           </View>
           
           <Button
-            title="Create Topic"
+            title="トピックを作成"
             onPress={handleCreateTopic}
             isLoading={isLoading}
             style={styles.createButton}
@@ -169,6 +180,30 @@ export default function CreateTopicScreen() {
 }
 
 const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    backgroundColor: Colors.card,
+  },
+  backButton: {
+    padding: 8,
+  },
+  placeholder: {
+    width: 40,
+    height: 40,
+  },
+  headerTitle: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '600',
+    color: Colors.text.primary,
+    textAlign: 'center',
+    marginHorizontal: 16,
+  },
   container: {
     flex: 1,
     backgroundColor: Colors.background,

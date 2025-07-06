@@ -4,21 +4,22 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LogOut, Settings, MapPin, Bell, Shield, HelpCircle } from "lucide-react-native";
 import Colors from "@/constants/colors";
 import { useAuthStore } from "@/store/auth-store";
+import CustomHeader from "@/components/CustomHeader";
 
 export default function ProfileScreen() {
   const { user, logout } = useAuthStore();
   
   const handleLogout = () => {
     Alert.alert(
-      "Log Out",
-      "Are you sure you want to log out?",
+      "ログアウト",
+      "本当にログアウトしますか？",
       [
         {
-          text: "Cancel",
+          text: "キャンセル",
           style: "cancel"
         },
         {
-          text: "Log Out",
+          text: "ログアウト",
           onPress: logout,
           style: "destructive"
         }
@@ -29,75 +30,82 @@ export default function ProfileScreen() {
   const menuItems = [
     {
       icon: <Settings size={20} color={Colors.text.primary} />,
-      title: "Account Settings",
+      title: "アカウント設定",
       onPress: () => {}
     },
     {
       icon: <MapPin size={20} color={Colors.text.primary} />,
-      title: "Location Settings",
+      title: "位置情報設定",
       onPress: () => {}
     },
     {
       icon: <Bell size={20} color={Colors.text.primary} />,
-      title: "Notifications",
+      title: "通知設定",
       onPress: () => {}
     },
     {
       icon: <Shield size={20} color={Colors.text.primary} />,
-      title: "Privacy",
+      title: "プライバシー設定",
       onPress: () => {}
     },
     {
       icon: <HelpCircle size={20} color={Colors.text.primary} />,
-      title: "Help & Support",
+      title: "ヘルプとサポート",
       onPress: () => {}
     }
   ];
   
   return (
-    <SafeAreaView style={styles.container} edges={['left', 'right']}>
-      <ScrollView>
-        <View style={styles.header}>
-          <Text style={styles.title}>Profile</Text>
-        </View>
-        
-        <View style={styles.profileSection}>
-          <Image 
-            source={{ uri: user?.avatar }} 
-            style={styles.avatar}
-          />
-          <Text style={styles.name}>{user?.name}</Text>
-          <Text style={styles.email}>{user?.email || "No email provided"}</Text>
-        </View>
-        
-        <View style={styles.menuSection}>
-          {menuItems.map((item, index) => (
-            <TouchableOpacity 
-              key={index}
-              style={styles.menuItem}
-              onPress={item.onPress}
-              activeOpacity={0.7}
-            >
-              <View style={styles.menuIcon}>
-                {item.icon}
-              </View>
-              <Text style={styles.menuTitle}>{item.title}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-        
-        <TouchableOpacity 
-          style={styles.logoutButton}
-          onPress={handleLogout}
-          activeOpacity={0.7}
-        >
-          <LogOut size={20} color={Colors.error} />
-          <Text style={styles.logoutText}>Log Out</Text>
-        </TouchableOpacity>
-        
-        <Text style={styles.versionText}>Version 1.0.0</Text>
-      </ScrollView>
-    </SafeAreaView>
+    <View style={styles.container}>
+      <CustomHeader
+        title="プロフィール"
+        subtitle={`👋 おかえりなさい、${user?.name || 'LocalTalkユーザー'}さん`}
+        showNotification={true}
+        showSettings={true}
+        onNotificationPress={() => console.log('Notifications')}
+        onSettingsPress={() => console.log('Settings')}
+      />
+      
+      <SafeAreaView style={styles.content} edges={['left', 'right', 'bottom']}>
+        <ScrollView>
+          <View style={styles.profileSection}>
+            <Image 
+              source={{ uri: user?.avatar }} 
+              style={styles.avatar}
+            />
+            <Text style={styles.name}>{user?.name}</Text>
+            <Text style={styles.email}>{user?.email || "メールアドレスなし"}</Text>
+          </View>
+          
+          <View style={styles.menuSection}>
+            {menuItems.map((item, index) => (
+              <TouchableOpacity 
+                key={index}
+                style={styles.menuItem}
+                onPress={item.onPress}
+                activeOpacity={0.7}
+              >
+                <View style={styles.menuIcon}>
+                  {item.icon}
+                </View>
+                <Text style={styles.menuTitle}>{item.title}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          
+          <TouchableOpacity 
+            style={styles.logoutButton}
+            onPress={handleLogout}
+            activeOpacity={0.7}
+          >
+            <LogOut size={20} color={Colors.error} />
+            <Text style={styles.logoutText}>ログアウト</Text>
+          </TouchableOpacity>
+          
+          <Text style={styles.versionText}>バージョン 1.0.0</Text>
+        </ScrollView>
+      </SafeAreaView>
+    </View>
   );
 }
 
@@ -106,14 +114,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  header: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: Colors.text.primary,
+  content: {
+    flex: 1,
   },
   profileSection: {
     alignItems: "center",

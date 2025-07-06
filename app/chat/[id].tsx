@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useRef } from "react";
 import { StyleSheet, Text, View, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform } from "react-native";
-import { useLocalSearchParams, Stack } from "expo-router";
+import { useLocalSearchParams, Stack, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Send } from "lucide-react-native";
+import { Send, ChevronLeft } from "lucide-react-native";
 import Colors from "@/constants/colors";
 import { useTopicStore } from "@/store/topic-store";
 import { useAuthStore } from "@/store/auth-store";
@@ -11,6 +11,7 @@ import { Message } from "@/types";
 
 export default function ChatRoomScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const { user } = useAuthStore();
   const { currentTopic, messages, fetchTopicById, fetchMessages, addMessage } = useTopicStore();
   const [messageText, setMessageText] = useState("");
@@ -46,7 +47,7 @@ export default function ChatRoomScreen() {
     // Rate limiting
     const now = Date.now();
     if (now - lastSent < 5000) {
-      alert("Please wait a few seconds before sending another message");
+      alert("数秒待ってから次のメッセージを送信してください");
       return;
     }
     
@@ -60,12 +61,24 @@ export default function ChatRoomScreen() {
   };
   
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <Stack.Screen 
         options={{
-          title: currentTopic?.title || "Chat Room",
+          headerShown: false,
         }} 
       />
+      
+      {/* Custom Header */}
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <ChevronLeft size={24} color={Colors.text.primary} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{currentTopic?.title || "チャットルーム"}</Text>
+        <View style={styles.placeholder} />
+      </View>
       
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -81,7 +94,7 @@ export default function ChatRoomScreen() {
             contentContainerStyle={styles.messagesList}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No messages yet. Start the conversation!</Text>
+                <Text style={styles.emptyText}>まだメッセージがありません。会話を始めましょう！</Text>
               </View>
             }
           />
@@ -89,7 +102,7 @@ export default function ChatRoomScreen() {
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
-              placeholder="Type a message..."
+              placeholder="メッセージを入力..."
               value={messageText}
               onChangeText={setMessageText}
               multiline
@@ -112,6 +125,30 @@ export default function ChatRoomScreen() {
 }
 
 const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    backgroundColor: Colors.card,
+  },
+  backButton: {
+    padding: 8,
+  },
+  headerTitle: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '600',
+    color: Colors.text.primary,
+    textAlign: 'center',
+    marginHorizontal: 16,
+  },
+  placeholder: {
+    width: 40,
+    height: 40,
+  },
   container: {
     flex: 1,
     backgroundColor: Colors.background,

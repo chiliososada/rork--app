@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform } from "react-native";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MapPin, MessageCircle, Users, Send } from "lucide-react-native";
+import { MapPin, MessageCircle, Users, Send, ChevronLeft } from "lucide-react-native";
 import Colors from "@/constants/colors";
 import { useTopicStore } from "@/store/topic-store";
 import { useAuthStore } from "@/store/auth-store";
@@ -69,20 +69,29 @@ export default function TopicDetailScreen() {
   }
   
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <Stack.Screen 
         options={{
-          title: "Topic Details",
-          headerRight: () => (
-            <TouchableOpacity 
-              style={styles.chatButton}
-              onPress={handleJoinChat}
-            >
-              <MessageCircle size={24} color={Colors.primary} />
-            </TouchableOpacity>
-          ),
+          headerShown: false,
         }} 
       />
+      
+      {/* Custom Header */}
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <ChevronLeft size={24} color={Colors.text.primary} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>トピック詳細</Text>
+        <TouchableOpacity 
+          style={styles.chatButton}
+          onPress={handleJoinChat}
+        >
+          <MessageCircle size={24} color={Colors.primary} />
+        </TouchableOpacity>
+      </View>
       
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -93,7 +102,7 @@ export default function TopicDetailScreen() {
           <View style={styles.topicHeader}>
             <Text style={styles.topicTitle}>{currentTopic.title}</Text>
             <View style={styles.authorRow}>
-              <Text style={styles.authorName}>Posted by {currentTopic.author.name}</Text>
+              <Text style={styles.authorName}>{currentTopic.author.name}さんの投稿</Text>
               <Text style={styles.topicTime}>{formatTime(currentTopic.createdAt)}</Text>
             </View>
           </View>
@@ -105,7 +114,7 @@ export default function TopicDetailScreen() {
               <View style={styles.locationContainer}>
                 <MapPin size={14} color={Colors.text.secondary} />
                 <Text style={styles.locationText}>
-                  {currentTopic.location.name || "Unknown location"} • {formatDistance(currentTopic.distance)}
+                  {currentTopic.location.name || "不明な場所"} • {formatDistance(currentTopic.distance)}
                 </Text>
               </View>
               
@@ -125,18 +134,18 @@ export default function TopicDetailScreen() {
           
           <View style={styles.commentsSection}>
             <View style={styles.commentHeader}>
-              <Text style={styles.commentTitle}>Comments</Text>
+              <Text style={styles.commentTitle}>コメント</Text>
               <TouchableOpacity 
                 style={styles.chatRoomButton}
                 onPress={handleJoinChat}
               >
-                <Text style={styles.chatRoomText}>Join Chat Room</Text>
+                <Text style={styles.chatRoomText}>チャットルームに参加</Text>
               </TouchableOpacity>
             </View>
             
             {comments.length === 0 ? (
               <View style={styles.noComments}>
-                <Text style={styles.noCommentsText}>No comments yet. Be the first to comment!</Text>
+                <Text style={styles.noCommentsText}>まだコメントがありません。最初のコメントを投稿してみましょう！</Text>
               </View>
             ) : (
               comments.map((comment) => (
@@ -149,7 +158,7 @@ export default function TopicDetailScreen() {
         <View style={styles.inputContainer}>
           <TextInput
             style={styles.input}
-            placeholder="Add a comment..."
+            placeholder="コメントを追加..."
             value={commentText}
             onChangeText={setCommentText}
             multiline
@@ -171,6 +180,26 @@ export default function TopicDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    backgroundColor: Colors.card,
+  },
+  backButton: {
+    padding: 8,
+  },
+  headerTitle: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '600',
+    color: Colors.text.primary,
+    textAlign: 'center',
+    marginHorizontal: 16,
+  },
   container: {
     flex: 1,
     backgroundColor: Colors.background,
@@ -322,6 +351,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.inactive,
   },
   chatButton: {
-    marginRight: 16,
+    padding: 8,
   },
 });

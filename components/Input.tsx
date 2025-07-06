@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { forwardRef } from 'react';
 import { 
   View, 
   TextInput, 
@@ -15,11 +15,11 @@ interface InputProps extends TextInputProps {
   error?: string;
   containerStyle?: ViewStyle;
   labelStyle?: TextStyle;
-  inputStyle?: ViewStyle;
+  inputStyle?: TextStyle;
   errorStyle?: TextStyle;
 }
 
-export default function Input({
+export default forwardRef<TextInput, InputProps>(function Input({
   label,
   error,
   containerStyle,
@@ -27,7 +27,7 @@ export default function Input({
   inputStyle,
   errorStyle,
   ...rest
-}: InputProps) {
+}, ref) {
   return (
     <View style={[styles.container, containerStyle]}>
       {label && (
@@ -37,6 +37,7 @@ export default function Input({
       )}
       
       <TextInput
+        ref={ref}
         style={[
           styles.input,
           error ? styles.inputError : {},
@@ -53,7 +54,7 @@ export default function Input({
       )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

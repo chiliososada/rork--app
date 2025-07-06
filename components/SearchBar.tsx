@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useRef } from 'react';
+import { View, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
 import { Search, X } from 'lucide-react-native';
 import Input from '@/components/Input';
 import Colors from '@/constants/colors';
@@ -17,11 +17,19 @@ export default function SearchBar({
   onClear, 
   placeholder = "Search topics..." 
 }: SearchBarProps) {
+  const inputRef = useRef<TextInput>(null);
+  
+  const handleClear = () => {
+    onClear();
+    inputRef.current?.blur();
+  };
+  
   return (
     <View style={styles.container}>
       <View style={styles.searchContainer}>
         <Search size={20} color={Colors.text.secondary} style={styles.searchIcon} />
         <Input
+          ref={inputRef}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
@@ -29,9 +37,11 @@ export default function SearchBar({
           inputStyle={styles.input}
           autoCapitalize="none"
           autoCorrect={false}
+          returnKeyType="search"
+          onSubmitEditing={() => inputRef.current?.blur()}
         />
         {value.length > 0 && (
-          <TouchableOpacity onPress={onClear} style={styles.clearButton}>
+          <TouchableOpacity onPress={handleClear} style={styles.clearButton}>
             <X size={20} color={Colors.text.secondary} />
           </TouchableOpacity>
         )}

@@ -116,6 +116,39 @@ export const mockTopics: Topic[] = [
     distance: 1200,
     commentCount: 18,
     participantCount: 22
+  },
+  {
+    id: '6',
+    title: "Train delays on JR line",
+    description: "Experiencing major delays on the JR Yamanote line due to signal issues. Use alternative routes if possible.",
+    createdAt: "2025-07-02T08:30:00Z",
+    author: mockUsers[0],
+    location: mockLocations[0],
+    distance: 200,
+    commentCount: 12,
+    participantCount: 35
+  },
+  {
+    id: '7',
+    title: "Casual meetup at park",
+    description: "Anyone free this evening for a casual meetup at the park? Bringing frisbee and snacks!",
+    createdAt: "2025-07-02T12:00:00Z",
+    author: mockUsers[1],
+    location: mockLocations[1],
+    distance: 600,
+    commentCount: 5,
+    participantCount: 8
+  },
+  {
+    id: '8',
+    title: "Food truck festival this weekend",
+    description: "Amazing food truck festival with international cuisine. Over 20 different vendors!",
+    createdAt: "2025-07-02T13:20:00Z",
+    author: mockUsers[2],
+    location: mockLocations[2],
+    distance: 900,
+    commentCount: 20,
+    participantCount: 42
   }
 ];
 

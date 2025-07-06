@@ -7,6 +7,7 @@ import Colors from "@/constants/colors";
 import { useTopicStore } from "@/store/topic-store";
 import { useLocationStore } from "@/store/location-store";
 import SearchBar from "@/components/SearchBar";
+import CustomHeader from "@/components/CustomHeader";
 import { Topic } from "@/types";
 
 export default function ChatsScreen() {
@@ -54,7 +55,7 @@ export default function ChatsScreen() {
             {item.title}
           </Text>
           <Text style={styles.chatParticipants}>
-            {item.participantCount} participants
+            {item.participantCount} 人の参加者
           </Text>
         </View>
         
@@ -65,46 +66,56 @@ export default function ChatsScreen() {
     );
   };
   
+  const getActiveChatsCount = () => {
+    return filteredTopics.filter(topic => topic.participantCount > 1).length;
+  };
+
   return (
-    <SafeAreaView style={styles.container} edges={['left', 'right']}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Chat Rooms</Text>
-        <Text style={styles.subtitle}>Join conversations in your area</Text>
-      </View>
-      
-      <SearchBar
-        value={searchQuery}
-        onChangeText={handleSearch}
-        onClear={handleClearSearch}
-        placeholder="Search chat rooms..."
+    <View style={styles.container}>
+      <CustomHeader
+        title="チャットルーム"
+        subtitle={`💬 ${getActiveChatsCount()} 件のアクティブなチャット • ${filteredTopics.length} 件のトピック`}
+        showNotification={true}
+        showSearch={true}
+        onNotificationPress={() => console.log('Notifications')}
+        onSearchPress={() => console.log('Search')}
       />
       
-      <FlatList
-        data={filteredTopics}
-        renderItem={renderChatItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            {searchQuery ? (
-              <>
-                <Text style={styles.emptyTitle}>No chat rooms found</Text>
-                <Text style={styles.emptyText}>
-                  Try adjusting your search terms or clear the search to see all chat rooms.
-                </Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.emptyTitle}>No active chat rooms</Text>
-                <Text style={styles.emptyText}>
-                  Start a new topic to create a chat room!
-                </Text>
-              </>
-            )}
-          </View>
-        }
-      />
-    </SafeAreaView>
+      <SafeAreaView style={styles.content} edges={['left', 'right', 'bottom']}>
+        <SearchBar
+          value={searchQuery}
+          onChangeText={handleSearch}
+          onClear={handleClearSearch}
+          placeholder="チャットルームを検索..."
+        />
+        
+        <FlatList
+          data={filteredTopics}
+          renderItem={renderChatItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              {searchQuery ? (
+                <>
+                  <Text style={styles.emptyTitle}>チャットルームが見つかりません</Text>
+                  <Text style={styles.emptyText}>
+                    検索条件を変更するか、クリアしてすべてのチャットルームを表示してください。
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.emptyTitle}>アクティブなチャットルームがありません</Text>
+                  <Text style={styles.emptyText}>
+                    新しいトピックを作成してチャットルームを始めましょう！
+                  </Text>
+                </>
+              )}
+            </View>
+          }
+        />
+      </SafeAreaView>
+    </View>
   );
 }
 
@@ -113,18 +124,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  header: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: Colors.text.primary,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: Colors.text.secondary,
+  content: {
+    flex: 1,
   },
   listContent: {
     padding: 16,
