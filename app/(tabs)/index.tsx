@@ -96,10 +96,6 @@ export default function NearbyScreen() {
       <CustomHeader
         title="近くのトピック"
         subtitle={`📍 ${getLocationText()}`}
-        showNotification={true}
-        showSearch={true}
-        onNotificationPress={() => console.log('Notifications')}
-        onSearchPress={() => console.log('Search')}
       />
       
       <SafeAreaView style={styles.content} edges={['left', 'right', 'bottom']}>

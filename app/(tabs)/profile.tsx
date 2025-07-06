@@ -60,10 +60,6 @@ export default function ProfileScreen() {
       <CustomHeader
         title="プロフィール"
         subtitle={`👋 おかえりなさい、${user?.name || 'LocalTalkユーザー'}さん`}
-        showNotification={true}
-        showSettings={true}
-        onNotificationPress={() => console.log('Notifications')}
-        onSettingsPress={() => console.log('Settings')}
       />
       
       <SafeAreaView style={styles.content} edges={['left', 'right', 'bottom']}>

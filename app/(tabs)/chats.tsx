@@ -75,10 +75,6 @@ export default function ChatsScreen() {
       <CustomHeader
         title="チャットルーム"
         subtitle={`💬 ${getActiveChatsCount()} 件のアクティブなチャット • ${filteredTopics.length} 件のトピック`}
-        showNotification={true}
-        showSearch={true}
-        onNotificationPress={() => console.log('Notifications')}
-        onSearchPress={() => console.log('Search')}
       />
       
       <SafeAreaView style={styles.content} edges={['left', 'right', 'bottom']}>

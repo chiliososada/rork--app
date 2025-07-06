@@ -85,12 +85,6 @@ export default function TopicDetailScreen() {
           <ChevronLeft size={24} color={Colors.text.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>トピック詳細</Text>
-        <TouchableOpacity 
-          style={styles.chatButton}
-          onPress={handleJoinChat}
-        >
-          <MessageCircle size={24} color={Colors.primary} />
-        </TouchableOpacity>
       </View>
       
       <KeyboardAvoidingView
@@ -198,7 +192,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.text.primary,
     textAlign: 'center',
-    marginHorizontal: 16,
+    marginLeft: 16,
+    marginRight: 48, // Account for back button width
   },
   container: {
     flex: 1,

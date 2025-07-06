@@ -44,10 +44,6 @@ export default function ExploreScreen() {
         <CustomHeader
           title="地図で探索"
           subtitle={`🗺️ 地図上のトピックを発見 • ${filteredTopics.length} 件のトピック`}
-          showNotification={true}
-          showSettings={true}
-          onNotificationPress={() => console.log('Notifications')}
-          onSettingsPress={() => console.log('Settings')}
         />
         
         <SafeAreaView style={styles.content} edges={['left', 'right', 'bottom']}>
