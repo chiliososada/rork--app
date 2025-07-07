@@ -6,6 +6,7 @@ import { Send, ChevronLeft } from "lucide-react-native";
 import Colors from "@/constants/colors";
 import { useTopicStore } from "@/store/topic-store";
 import { useAuthStore } from "@/store/auth-store";
+import { useChatStore } from "@/store/chat-store";
 import MessageItem from "@/components/MessageItem";
 import { Message } from "@/types";
 
@@ -13,22 +14,44 @@ export default function ChatRoomScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuthStore();
-  const { currentTopic, messages, fetchTopicById, fetchMessages, addMessage } = useTopicStore();
+  const { currentTopic, fetchTopicById } = useTopicStore();
+  const { 
+    getMessagesForTopic, 
+    fetchMessages, 
+    addMessage, 
+    subscribeToTopic, 
+    unsubscribeFromTopic,
+    setCurrentTopic,
+    isSending,
+    isLoading 
+  } = useChatStore();
+  
   const [messageText, setMessageText] = useState("");
   const [lastSent, setLastSent] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   
+  // 現在のトピックのメッセージを取得
+  const messages = id ? getMessagesForTopic(id) : [];
+  
   useEffect(() => {
     if (id) {
+      // トピック情報を取得
       fetchTopicById(id);
+      
+      // 現在のトピックを設定
+      setCurrentTopic(id);
+      
+      // メッセージを取得
       fetchMessages(id);
       
-      // Simulate real-time updates
-      const interval = setInterval(() => {
-        fetchMessages(id);
-      }, 5000);
+      // Realtimeサブスクリプションを開始
+      subscribeToTopic(id);
       
-      return () => clearInterval(interval);
+      // クリーンアップ関数でサブスクリプションを解除
+      return () => {
+        unsubscribeFromTopic(id);
+        setCurrentTopic(null);
+      };
     }
   }, [id]);
   
@@ -42,18 +65,22 @@ export default function ChatRoomScreen() {
   }, [messages]);
   
   const handleSendMessage = async () => {
-    if (!messageText.trim() || !id || !user) return;
+    if (!messageText.trim() || !id || !user || isSending) return;
     
     // Rate limiting
     const now = Date.now();
-    if (now - lastSent < 5000) {
+    if (now - lastSent < 3000) {
       alert("数秒待ってから次のメッセージを送信してください");
       return;
     }
     
-    await addMessage(id, messageText, user.id);
-    setMessageText("");
-    setLastSent(now);
+    try {
+      await addMessage(id, messageText, user.id);
+      setMessageText("");
+      setLastSent(now);
+    } catch (error) {
+      console.error('メッセージ送信エラー:', error);
+    }
   };
   
   const renderMessage = ({ item }: { item: Message }) => {
@@ -61,7 +88,7 @@ export default function ChatRoomScreen() {
   };
   
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <Stack.Screen 
         options={{
           headerShown: false,
@@ -90,7 +117,7 @@ export default function ChatRoomScreen() {
             ref={flatListRef}
             data={messages}
             renderItem={renderMessage}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item, index) => `${item.id}-${index}`}
             contentContainerStyle={styles.messagesList}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
@@ -110,10 +137,10 @@ export default function ChatRoomScreen() {
             <TouchableOpacity 
               style={[
                 styles.sendButton,
-                !messageText.trim() ? styles.sendButtonDisabled : {}
+                (!messageText.trim() || isSending) ? styles.sendButtonDisabled : {}
               ]}
               onPress={handleSendMessage}
-              disabled={!messageText.trim()}
+              disabled={!messageText.trim() || isSending}
             >
               <Send size={20} color={Colors.text.light} />
             </TouchableOpacity>

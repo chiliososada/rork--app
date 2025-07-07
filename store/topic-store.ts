@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Topic, Comment, Message } from '@/types';
 import { supabase } from '@/lib/supabase';
+import { encryptMessage, decryptMessage, isEncrypted } from '@/lib/encryption';
 
 interface TopicState {
   topics: Topic[];
@@ -9,7 +10,6 @@ interface TopicState {
   chatFilteredTopics: Topic[];
   currentTopic: Topic | null;
   comments: Comment[];
-  messages: Message[];
   isLoading: boolean;
   isLoadingMore: boolean;
   hasMore: boolean;
@@ -23,9 +23,7 @@ interface TopicState {
   loadMoreTopics: (latitude: number, longitude: number) => Promise<void>;
   fetchTopicById: (id: string) => Promise<void>;
   fetchComments: (topicId: string) => Promise<void>;
-  fetchMessages: (topicId: string) => Promise<void>;
   addComment: (topicId: string, text: string, userId: string) => Promise<void>;
-  addMessage: (topicId: string, text: string, userId: string) => Promise<void>;
   createTopic: (topic: Omit<Topic, 'id' | 'createdAt' | 'commentCount' | 'participantCount'>) => Promise<void>;
   likeComment: (commentId: string, userId: string) => Promise<void>;
   searchTopics: (query: string) => void;
@@ -45,7 +43,6 @@ export const useTopicStore = create<TopicState>((set, get) => ({
   chatFilteredTopics: [],
   currentTopic: null,
   comments: [],
-  messages: [],
   isLoading: false,
   isLoadingMore: false,
   hasMore: true,
@@ -369,54 +366,6 @@ export const useTopicStore = create<TopicState>((set, get) => ({
     }
   },
 
-  fetchMessages: async (topicId) => {
-    set({ isLoading: true, error: null });
-    
-    try {
-      // Fetch messages from Supabase
-      const { data: messagesData, error: messagesError } = await supabase
-        .from('chat_messages')
-        .select(`
-          *,
-          users!chat_messages_user_id_fkey (
-            id,
-            nickname,
-            avatar_url,
-            email
-          )
-        `)
-        .eq('topic_id', topicId)
-        .order('created_at', { ascending: true });
-
-      if (messagesError) {
-        throw messagesError;
-      }
-
-      // Transform data to match our Message interface
-      const messages: Message[] = (messagesData || []).map(message => ({
-        id: message.id,
-        text: message.message,
-        createdAt: message.created_at,
-        author: {
-          id: message.users.id,
-          name: message.users.nickname,
-          avatar: message.users.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(message.users.nickname)}&background=random`,
-          email: message.users.email
-        },
-        topicId
-      }));
-      
-      set({ 
-        messages,
-        isLoading: false 
-      });
-    } catch (error: any) {
-      set({ 
-        error: "メッセージの取得に失敗しました", 
-        isLoading: false 
-      });
-    }
-  },
 
   addComment: async (topicId, text, userId) => {
     set({ isLoading: true, error: null });
@@ -482,61 +431,6 @@ export const useTopicStore = create<TopicState>((set, get) => ({
     }
   },
 
-  addMessage: async (topicId, text, userId) => {
-    set({ isLoading: true, error: null });
-    
-    try {
-      // Insert message into Supabase
-      const { data: insertedMessage, error: insertError } = await supabase
-        .from('chat_messages')
-        .insert([
-          {
-            topic_id: topicId,
-            user_id: userId,
-            message: text
-          }
-        ])
-        .select(`
-          *,
-          users!chat_messages_user_id_fkey (
-            id,
-            nickname,
-            avatar_url,
-            email
-          )
-        `)
-        .single();
-
-      if (insertError) {
-        throw insertError;
-      }
-
-      // Transform to our Message interface
-      const newMessage: Message = {
-        id: insertedMessage.id,
-        text: insertedMessage.message,
-        createdAt: insertedMessage.created_at,
-        author: {
-          id: insertedMessage.users.id,
-          name: insertedMessage.users.nickname,
-          avatar: insertedMessage.users.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(insertedMessage.users.nickname)}&background=random`,
-          email: insertedMessage.users.email
-        },
-        topicId
-      };
-      
-      set(state => ({ 
-        messages: [...state.messages, newMessage],
-        isLoading: false 
-      }));
-    } catch (error: any) {
-      set({ 
-        error: "メッセージの送信に失敗しました", 
-        isLoading: false 
-      });
-      throw error; // Re-throw so the UI can handle it
-    }
-  },
 
   createTopic: async (topicData) => {
     set({ isLoading: true, error: null });
@@ -785,7 +679,8 @@ export const useTopicStore = create<TopicState>((set, get) => ({
       chatFilteredTopics: topics,
       chatSearchQuery: '' 
     });
-  }
+  },
+
 }));
 
 // Helper function to calculate distance between two coordinates in meters

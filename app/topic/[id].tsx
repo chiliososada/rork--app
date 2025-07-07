@@ -6,12 +6,14 @@ import { MapPin, MessageCircle, Users, Send, ChevronLeft } from "lucide-react-na
 import Colors from "@/constants/colors";
 import { useTopicStore } from "@/store/topic-store";
 import { useAuthStore } from "@/store/auth-store";
+import { useLocationStore } from "@/store/location-store";
 import CommentItem from "@/components/CommentItem";
 
 export default function TopicDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuthStore();
+  const { currentLocation } = useLocationStore();
   const { currentTopic, comments, fetchTopicById, fetchComments, addComment, likeComment, isLoading } = useTopicStore();
   const [commentText, setCommentText] = useState("");
   
@@ -22,13 +24,36 @@ export default function TopicDetailScreen() {
     }
   }, [id]);
   
-  const formatDistance = (meters?: number) => {
-    if (!meters) return "距離不明";
+  // Helper function to calculate distance between two coordinates in meters
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371e3; // Earth radius in meters
+    const φ1 = lat1 * Math.PI / 180;
+    const φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180;
+    const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+    return R * c;
+  };
+
+  const formatDistance = () => {
+    if (!currentTopic || !currentLocation) return "距離不明";
     
-    if (meters < 1000) {
-      return `${meters.toFixed(0)}m先`;
+    const distance = calculateDistance(
+      currentLocation.latitude,
+      currentLocation.longitude,
+      currentTopic.location.latitude,
+      currentTopic.location.longitude
+    );
+    
+    if (distance < 1000) {
+      return `${distance.toFixed(0)}m先`;
     } else {
-      return `${(meters / 1000).toFixed(1)}km先`;
+      return `${(distance / 1000).toFixed(1)}km先`;
     }
   };
   
@@ -99,7 +124,7 @@ export default function TopicDetailScreen() {
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardAvoid}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
       >
         <ScrollView 
           style={styles.scrollView}
@@ -123,7 +148,7 @@ export default function TopicDetailScreen() {
                 <View style={styles.locationContainer}>
                   <MapPin size={14} color={Colors.text.secondary} />
                   <Text style={styles.locationText}>
-                    {currentTopic.location.name || "不明な場所"} • {formatDistance(currentTopic.distance)}
+                    {currentTopic.location.name || "不明な場所"} • {formatDistance()}
                   </Text>
                 </View>
                 
@@ -364,50 +389,31 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     flexDirection: "row",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    paddingBottom: Platform.OS === "ios" ? 34 : 16, // Account for home indicator on iOS
+    padding: 16,
+    paddingBottom: Platform.OS === "ios" ? 16 : 16,
     backgroundColor: Colors.card,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: -2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 8,
   },
   input: {
     flex: 1,
     backgroundColor: Colors.background,
-    borderRadius: 24,
+    borderRadius: 20,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    maxHeight: 120,
-    minHeight: 44,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    paddingVertical: 8,
+    maxHeight: 100,
+    minHeight: 40,
+    fontSize: 14,
     textAlignVertical: 'top',
   },
   sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: Colors.primary,
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: 12,
-    shadowColor: Colors.primary,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
+    marginLeft: 8,
   },
   sendButtonDisabled: {
     backgroundColor: Colors.inactive,
