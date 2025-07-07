@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(pkill:*)",
-      "Bash(EXPO_ROUTER_APP_ROOT=./app npx expo start --web --port 3000)"
+      "Bash(EXPO_ROUTER_APP_ROOT=./app npx expo start --web --port 3000)",
+      "Bash(curl:*)",
+      "Bash(npx expo start:*)"
     ],
     "deny": []
   }

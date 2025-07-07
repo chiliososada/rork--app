@@ -45,8 +45,8 @@ export default function RegisterScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.content}>
-            <Text style={styles.title}>Create account</Text>
-            <Text style={styles.subtitle}>Join the local conversation</Text>
+            <Text style={styles.title}>アカウント作成</Text>
+            <Text style={styles.subtitle}>地域の会話に参加しよう</Text>
             
             {error && (
               <View style={styles.errorContainer}>
@@ -55,8 +55,8 @@ export default function RegisterScreen() {
             )}
             
             <Input
-              label="Name"
-              placeholder="Enter your name"
+              label="ニックネーム"
+              placeholder="ニックネームを入力"
               value={name}
               onChangeText={(text) => {
                 setName(text);
@@ -67,8 +67,8 @@ export default function RegisterScreen() {
             />
             
             <Input
-              label="Email"
-              placeholder="Enter your email"
+              label="メールアドレス"
+              placeholder="メールアドレスを入力"
               value={email}
               onChangeText={(text) => {
                 setEmail(text);
@@ -80,8 +80,8 @@ export default function RegisterScreen() {
             />
             
             <Input
-              label="Password"
-              placeholder="Create a password"
+              label="パスワード"
+              placeholder="パスワードを作成"
               value={password}
               onChangeText={(text) => {
                 setPassword(text);
@@ -93,20 +93,20 @@ export default function RegisterScreen() {
             />
             
             <Text style={styles.termsText}>
-              By signing up, you agree to our Terms of Service and Privacy Policy.
+              アカウントを作成することで、利用規約とプライバシーポリシーに同意したものとみなされます。
             </Text>
             
             <Button
-              title="Create Account"
+              title="アカウント作成"
               onPress={handleRegister}
               isLoading={isLoading}
               style={styles.registerButton}
             />
             
             <View style={styles.loginContainer}>
-              <Text style={styles.loginText}>Already have an account?</Text>
+              <Text style={styles.loginText}>すでにアカウントをお持ちですか？</Text>
               <TouchableOpacity onPress={handleLogin}>
-                <Text style={styles.loginLink}>Log in</Text>
+                <Text style={styles.loginLink}>ログイン</Text>
               </TouchableOpacity>
             </View>
           </View>

@@ -58,7 +58,6 @@ export default function MapViewComponent({
           longitude: marker.coordinate.longitude,
         }}
         title={marker.topic.title}
-        description={marker.topic.description}
         onPress={() => onMarkerPress(marker.topic.id)}
       >
         <View style={styles.markerContainer}>

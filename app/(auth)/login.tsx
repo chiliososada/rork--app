@@ -11,8 +11,8 @@ export default function LoginScreen() {
   const router = useRouter();
   const { login, isLoading, error, isAuthenticated, clearError } = useAuthStore();
   
-  const [email, setEmail] = useState('demo@example.com');
-  const [password, setPassword] = useState('password');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   
   // If user is already authenticated, redirect to main app
   if (isAuthenticated) {
@@ -44,8 +44,8 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.content}>
-            <Text style={styles.title}>Welcome back</Text>
-            <Text style={styles.subtitle}>Log in to continue</Text>
+            <Text style={styles.title}>おかえりなさい</Text>
+            <Text style={styles.subtitle}>ログインして続行</Text>
             
             {error && (
               <View style={styles.errorContainer}>
@@ -54,8 +54,8 @@ export default function LoginScreen() {
             )}
             
             <Input
-              label="Email"
-              placeholder="Enter your email"
+              label="メールアドレス"
+              placeholder="メールアドレスを入力"
               value={email}
               onChangeText={(text) => {
                 setEmail(text);
@@ -67,8 +67,8 @@ export default function LoginScreen() {
             />
             
             <Input
-              label="Password"
-              placeholder="Enter your password"
+              label="パスワード"
+              placeholder="パスワードを入力"
               value={password}
               onChangeText={(text) => {
                 setPassword(text);
@@ -80,20 +80,20 @@ export default function LoginScreen() {
             />
             
             <TouchableOpacity style={styles.forgotPassword}>
-              <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+              <Text style={styles.forgotPasswordText}>パスワードを忘れましたか？</Text>
             </TouchableOpacity>
             
             <Button
-              title="Log In"
+              title="ログイン"
               onPress={handleLogin}
               isLoading={isLoading}
               style={styles.loginButton}
             />
             
             <View style={styles.registerContainer}>
-              <Text style={styles.registerText}>Don't have an account?</Text>
+              <Text style={styles.registerText}>アカウントをお持ちでないですか？</Text>
               <TouchableOpacity onPress={handleRegister}>
-                <Text style={styles.registerLink}>Sign up</Text>
+                <Text style={styles.registerLink}>新規登録</Text>
               </TouchableOpacity>
             </View>
           </View>

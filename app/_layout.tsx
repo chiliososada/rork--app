@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import { useColorScheme, Platform } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { trpc, trpcClient } from '@/lib/trpc';
+import { useAuthStore } from '@/store/auth-store';
 
 // Only import reanimated on native platforms to avoid web bundling issues
 if (Platform.OS !== 'web') {
@@ -21,12 +22,14 @@ const queryClient = new QueryClient();
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const [loaded] = useFonts({});
+  const { checkAuth } = useAuthStore();
 
   useEffect(() => {
     if (loaded) {
       SplashScreen.hideAsync();
+      checkAuth();
     }
-  }, [loaded]);
+  }, [loaded, checkAuth]);
 
   if (!loaded) {
     return null;

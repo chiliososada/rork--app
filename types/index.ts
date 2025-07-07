@@ -32,6 +32,7 @@ export interface Comment {
   author: User;
   likes: number;
   topicId: string;
+  isLikedByUser?: boolean;
 }
 
 export interface Message {

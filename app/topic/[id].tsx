@@ -12,7 +12,7 @@ export default function TopicDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuthStore();
-  const { currentTopic, comments, fetchTopicById, fetchComments, addComment, isLoading } = useTopicStore();
+  const { currentTopic, comments, fetchTopicById, fetchComments, addComment, likeComment, isLoading } = useTopicStore();
   const [commentText, setCommentText] = useState("");
   
   useEffect(() => {
@@ -23,12 +23,12 @@ export default function TopicDetailScreen() {
   }, [id]);
   
   const formatDistance = (meters?: number) => {
-    if (!meters) return "Unknown distance";
+    if (!meters) return "距離不明";
     
     if (meters < 1000) {
-      return `${meters.toFixed(0)}m away`;
+      return `${meters.toFixed(0)}m先`;
     } else {
-      return `${(meters / 1000).toFixed(1)}km away`;
+      return `${(meters / 1000).toFixed(1)}km先`;
     }
   };
   
@@ -42,8 +42,17 @@ export default function TopicDetailScreen() {
   const handleSendComment = async () => {
     if (!commentText.trim() || !id || !user) return;
     
-    await addComment(id, commentText, user.id);
-    setCommentText("");
+    try {
+      await addComment(id, commentText, user.id);
+      setCommentText("");
+    } catch (error) {
+      // Error is handled in the store
+    }
+  };
+
+  const handleLikeComment = async (commentId: string) => {
+    if (!user) return;
+    await likeComment(commentId, user.id);
   };
   
   const handleJoinChat = () => {
@@ -55,7 +64,7 @@ export default function TopicDetailScreen() {
   if (!currentTopic && isLoading) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
-        <Text>Loading topic...</Text>
+        <Text style={styles.loadingText}>トピックを読み込み中...</Text>
       </SafeAreaView>
     );
   }
@@ -63,7 +72,7 @@ export default function TopicDetailScreen() {
   if (!currentTopic) {
     return (
       <SafeAreaView style={styles.errorContainer}>
-        <Text style={styles.errorText}>Topic not found</Text>
+        <Text style={styles.errorText}>トピックが見つかりません</Text>
       </SafeAreaView>
     );
   }
@@ -90,37 +99,44 @@ export default function TopicDetailScreen() {
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardAvoid}
-        keyboardVerticalOffset={100}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
       >
-        <ScrollView style={styles.scrollView}>
-          <View style={styles.topicHeader}>
-            <Text style={styles.topicTitle}>{currentTopic.title}</Text>
-            <View style={styles.authorRow}>
-              <Text style={styles.authorName}>{currentTopic.author.name}さんの投稿</Text>
-              <Text style={styles.topicTime}>{formatTime(currentTopic.createdAt)}</Text>
-            </View>
-          </View>
-          
-          <View style={styles.topicContent}>
-            <Text style={styles.topicDescription}>{currentTopic.description}</Text>
-            
-            <View style={styles.topicMeta}>
-              <View style={styles.locationContainer}>
-                <MapPin size={14} color={Colors.text.secondary} />
-                <Text style={styles.locationText}>
-                  {currentTopic.location.name || "不明な場所"} • {formatDistance(currentTopic.distance)}
-                </Text>
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.topicCard}>
+            <View style={styles.topicHeader}>
+              <Text style={styles.topicTitle}>{currentTopic.title}</Text>
+              <View style={styles.authorRow}>
+                <Text style={styles.authorName}>{currentTopic.author.name}さんの投稿</Text>
+                <Text style={styles.topicTime}>{formatTime(currentTopic.createdAt)}</Text>
               </View>
+            </View>
+            
+            <View style={styles.topicContent}>
+              <Text style={styles.topicDescription}>{currentTopic.description}</Text>
               
-              <View style={styles.statsContainer}>
-                <View style={styles.stat}>
-                  <MessageCircle size={14} color={Colors.text.secondary} />
-                  <Text style={styles.statText}>{comments.length}</Text>
+              <View style={styles.topicMeta}>
+                <View style={styles.locationContainer}>
+                  <MapPin size={14} color={Colors.text.secondary} />
+                  <Text style={styles.locationText}>
+                    {currentTopic.location.name || "不明な場所"} • {formatDistance(currentTopic.distance)}
+                  </Text>
                 </View>
                 
-                <View style={styles.stat}>
-                  <Users size={14} color={Colors.text.secondary} />
-                  <Text style={styles.statText}>{currentTopic.participantCount}</Text>
+                <View style={styles.statsContainer}>
+                  <View style={styles.stat}>
+                    <MessageCircle size={14} color={Colors.text.secondary} />
+                    <Text style={styles.statText}>{comments.length}</Text>
+                  </View>
+                  
+                  <View style={styles.stat}>
+                    <Users size={14} color={Colors.text.secondary} />
+                    <Text style={styles.statText}>{currentTopic.participantCount}</Text>
+                  </View>
                 </View>
               </View>
             </View>
@@ -143,7 +159,11 @@ export default function TopicDetailScreen() {
               </View>
             ) : (
               comments.map((comment) => (
-                <CommentItem key={comment.id} comment={comment} />
+                <CommentItem 
+                  key={comment.id} 
+                  comment={comment} 
+                  onLike={handleLikeComment}
+                />
               ))
             )}
           </View>
@@ -205,10 +225,18 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  scrollContent: {
+    paddingBottom: 20,
+  },
   loadingContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: Colors.background,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: Colors.text.secondary,
   },
   errorContainer: {
     flex: 1,
@@ -219,14 +247,29 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.error,
   },
+  topicCard: {
+    backgroundColor: Colors.card,
+    margin: 16,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
   topicHeader: {
-    padding: 16,
+    padding: 20,
+    paddingBottom: 16,
   },
   topicTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "700",
     color: Colors.text.primary,
-    marginBottom: 8,
+    marginBottom: 12,
+    lineHeight: 32,
   },
   authorRow: {
     flexDirection: "row",
@@ -241,17 +284,16 @@ const styles = StyleSheet.create({
     color: Colors.text.secondary,
   },
   topicContent: {
-    backgroundColor: Colors.card,
-    padding: 16,
-    marginHorizontal: 16,
-    borderRadius: 16,
-    marginBottom: 16,
+    padding: 20,
+    paddingTop: 0,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
   },
   topicDescription: {
     fontSize: 16,
     color: Colors.text.primary,
-    lineHeight: 24,
-    marginBottom: 16,
+    lineHeight: 26,
+    marginBottom: 20,
   },
   topicMeta: {
     flexDirection: "row",
@@ -283,6 +325,7 @@ const styles = StyleSheet.create({
   },
   commentsSection: {
     padding: 16,
+    paddingTop: 0,
   },
   commentHeader: {
     flexDirection: "row",
@@ -291,12 +334,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   commentTitle: {
-    fontSize: 18,
-    fontWeight: "600",
+    fontSize: 20,
+    fontWeight: "700",
     color: Colors.text.primary,
   },
   chatRoomButton: {
-    backgroundColor: 'rgba(91, 114, 242, 0.1)',
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
@@ -307,43 +350,69 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   noComments: {
-    padding: 16,
+    padding: 24,
     backgroundColor: Colors.card,
     borderRadius: 16,
     alignItems: "center",
+    marginTop: 8,
   },
   noCommentsText: {
-    fontSize: 14,
+    fontSize: 16,
     color: Colors.text.secondary,
     textAlign: "center",
+    lineHeight: 24,
   },
   inputContainer: {
     flexDirection: "row",
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingBottom: Platform.OS === "ios" ? 34 : 16, // Account for home indicator on iOS
     backgroundColor: Colors.card,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: -2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 8,
   },
   input: {
     flex: 1,
     backgroundColor: Colors.background,
-    borderRadius: 20,
+    borderRadius: 24,
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    maxHeight: 100,
-    fontSize: 14,
+    paddingVertical: 12,
+    maxHeight: 120,
+    minHeight: 44,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    textAlignVertical: 'top',
   },
   sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: Colors.primary,
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: 8,
+    marginLeft: 12,
+    shadowColor: Colors.primary,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   sendButtonDisabled: {
     backgroundColor: Colors.inactive,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   chatButton: {
     padding: 8,

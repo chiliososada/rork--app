@@ -13,11 +13,11 @@ export default function ExploreScreen() {
   const router = useRouter();
   const { currentLocation } = useLocationStore();
   const { 
-    filteredTopics, 
+    mapFilteredTopics, 
     fetchNearbyTopics, 
-    searchQuery, 
-    searchTopics, 
-    clearSearch 
+    mapSearchQuery, 
+    searchMapTopics, 
+    clearMapSearch 
   } = useTopicStore();
   
   useEffect(() => {
@@ -31,11 +31,11 @@ export default function ExploreScreen() {
   };
   
   const handleSearch = (query: string) => {
-    searchTopics(query);
+    searchMapTopics(query);
   };
   
   const handleClearSearch = () => {
-    clearSearch();
+    clearMapSearch();
   };
   
   return (
@@ -43,12 +43,12 @@ export default function ExploreScreen() {
       <View style={styles.container}>
         <CustomHeader
           title="地図で探索"
-          subtitle={`🗺️ 地図上のトピックを発見 • ${filteredTopics.length} 件のトピック`}
+          subtitle={`🗺️ 地図上のトピックを発見 • ${mapFilteredTopics.length} 件のトピック`}
         />
         
         <SafeAreaView style={styles.content} edges={['left', 'right', 'bottom']}>
           <SearchBar
-            value={searchQuery}
+            value={mapSearchQuery}
             onChangeText={handleSearch}
             onClear={handleClearSearch}
             placeholder="地図上でトピックを検索..."
@@ -59,7 +59,7 @@ export default function ExploreScreen() {
               {currentLocation ? (
                 <MapViewComponent
                   currentLocation={currentLocation}
-                  topics={filteredTopics}
+                  topics={mapFilteredTopics}
                   onMarkerPress={handleMarkerPress}
                 />
               ) : (

@@ -124,3 +124,50 @@ The following warnings appear during development but don't affect functionality:
 - Superjson transformer for enhanced serialization
 
 页面中如果有文本的话 都用日语
+
+我的supabase 表结构
+create table public.users (
+  id uuid primary key default gen_random_uuid(),
+  email text,
+  phone text,
+  nickname text not null,
+  avatar_url text,
+  gender text,
+  created_at timestamp with time zone default now()
+);
+create table public.topics (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  description text,
+  user_id uuid references public.users(id) on delete cascade,
+  latitude double precision not null,
+  longitude double precision not null,
+  location_name text,
+  created_at timestamp with time zone default now()
+);
+create table public.comments (
+  id uuid primary key default gen_random_uuid(),
+  topic_id uuid references public.topics(id) on delete cascade,
+  user_id uuid references public.users(id) on delete cascade,
+  content text not null,
+  likes_count int default 0,
+  created_at timestamp with time zone default now()
+);
+create table public.chat_messages (
+  id uuid primary key default gen_random_uuid(),
+  topic_id uuid references public.topics(id) on delete cascade,
+  user_id uuid references public.users(id) on delete cascade,
+  message text not null,
+  created_at timestamp with time zone default now()
+);
+create table public.comment_likes (
+  id uuid primary key default gen_random_uuid(),
+  comment_id uuid references public.comments(id) on delete cascade,
+  user_id uuid references public.users(id) on delete cascade,
+  created_at timestamp with time zone default now(),
+  unique(comment_id, user_id)
+);
+
+
+REACT_APP_SUPABASE_URL=https://nkhomvyrlkxhuafikyuu.supabase.co
+REACT_APP_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5raG9tdnlybGt4aHVhZmlreXV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE4NjYxOTIsImV4cCI6MjA2NzQ0MjE5Mn0.8mse6qzWK7Q0XfGXyNcP8jRjQPRmZTg_K9jymo2dydA

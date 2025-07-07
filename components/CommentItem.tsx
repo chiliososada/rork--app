@@ -51,8 +51,8 @@ export default function CommentItem({ comment, onLike }: CommentItemProps) {
         >
           <Heart 
             size={16} 
-            color={Colors.text.secondary}
-            fill={comment.likes > 0 ? Colors.secondary : 'transparent'}
+            color={comment.isLikedByUser ? Colors.secondary : Colors.text.secondary}
+            fill={comment.isLikedByUser ? Colors.secondary : 'transparent'}
           />
           <Text style={styles.likeCount}>{comment.likes}</Text>
         </TouchableOpacity>

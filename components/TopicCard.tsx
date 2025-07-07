@@ -64,7 +64,7 @@ export default function TopicCard({ topic }: TopicCardProps) {
         <View style={styles.locationContainer}>
           <MapPin size={14} color={Colors.text.secondary} />
           <Text style={styles.locationText}>
-            {topic.location.name || 'Unknown location'} • {formatDistance(topic.distance || 0)}
+            {topic.location.name || '不明な場所'} • {formatDistance(topic.distance || 0)}
           </Text>
         </View>
         

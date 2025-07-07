@@ -13,11 +13,11 @@ import { Topic } from "@/types";
 export default function ChatsScreen() {
   const router = useRouter();
   const { 
-    filteredTopics, 
+    chatFilteredTopics, 
     fetchNearbyTopics, 
-    searchQuery, 
-    searchTopics, 
-    clearSearch 
+    chatSearchQuery, 
+    searchChatTopics, 
+    clearChatSearch 
   } = useTopicStore();
   const { currentLocation } = useLocationStore();
   
@@ -32,11 +32,11 @@ export default function ChatsScreen() {
   };
   
   const handleSearch = (query: string) => {
-    searchTopics(query);
+    searchChatTopics(query);
   };
   
   const handleClearSearch = () => {
-    clearSearch();
+    clearChatSearch();
   };
   
   const renderChatItem = ({ item }: { item: Topic }) => {
@@ -67,32 +67,32 @@ export default function ChatsScreen() {
   };
   
   const getActiveChatsCount = () => {
-    return filteredTopics.filter(topic => topic.participantCount > 1).length;
+    return chatFilteredTopics.filter(topic => topic.participantCount > 1).length;
   };
 
   return (
     <View style={styles.container}>
       <CustomHeader
         title="チャットルーム"
-        subtitle={`💬 ${getActiveChatsCount()} 件のアクティブなチャット • ${filteredTopics.length} 件のトピック`}
+        subtitle={`💬 ${getActiveChatsCount()} 件のアクティブなチャット • ${chatFilteredTopics.length} 件のトピック`}
       />
       
       <SafeAreaView style={styles.content} edges={['left', 'right', 'bottom']}>
         <SearchBar
-          value={searchQuery}
+          value={chatSearchQuery}
           onChangeText={handleSearch}
           onClear={handleClearSearch}
           placeholder="チャットルームを検索..."
         />
         
         <FlatList
-          data={filteredTopics}
+          data={chatFilteredTopics}
           renderItem={renderChatItem}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              {searchQuery ? (
+              {chatSearchQuery ? (
                 <>
                   <Text style={styles.emptyTitle}>チャットルームが見つかりません</Text>
                   <Text style={styles.emptyText}>

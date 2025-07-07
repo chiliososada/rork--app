@@ -1,17 +1,17 @@
-// App color scheme
+// App color scheme - Black & White theme
 export default {
-  primary: "#5B72F2",    // Soft blue - main actions, buttons
-  secondary: "#FF9F7A",  // Soft coral - accents, highlights
-  background: "#F8F9FD", // Very light gray-blue - main background
+  primary: "#000000",    // Black - main actions, buttons
+  secondary: "#333333",  // Dark gray - accents, highlights
+  background: "#FFFFFF", // White - main background
   card: "#FFFFFF",       // White - card backgrounds
   surface: "#FFFFFF",    // White - surface backgrounds
   text: {
-    primary: "#1A2151",  // Dark blue - primary text
-    secondary: "#6B7280", // Medium gray - secondary text
+    primary: "#000000",  // Black - primary text
+    secondary: "#666666", // Medium gray - secondary text
     light: "#FFFFFF",    // White - text on dark backgrounds
   },
-  border: "#E5E7EB",     // Light gray - borders
-  success: "#34D399",    // Green - success states
-  error: "#F87171",      // Red - error states
-  inactive: "#D1D5DB",   // Light gray - inactive states
+  border: "#E0E0E0",     // Light gray - borders
+  success: "#000000",    // Black - success states
+  error: "#000000",      // Black - error states
+  inactive: "#CCCCCC",   // Light gray - inactive states
 };

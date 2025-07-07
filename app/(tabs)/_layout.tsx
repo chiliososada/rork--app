@@ -11,15 +11,17 @@ export default function TabLayout() {
   const { isAuthenticated } = useAuthStore();
   const { requestPermission } = useLocationStore();
   
+  useEffect(() => {
+    // Request location permission when tabs are loaded
+    if (isAuthenticated) {
+      requestPermission();
+    }
+  }, [isAuthenticated, requestPermission]);
+  
   // If user is not authenticated, redirect to auth flow
   if (!isAuthenticated) {
     return <Redirect href="/(auth)" />;
   }
-  
-  useEffect(() => {
-    // Request location permission when tabs are loaded
-    requestPermission();
-  }, []);
   
   return (
     <View style={{ flex: 1 }}>

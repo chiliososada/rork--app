@@ -61,7 +61,7 @@ export default function ChatRoomScreen() {
   };
   
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.container} edges={['top']}>>
       <Stack.Screen 
         options={{
           headerShown: false,
@@ -83,7 +83,7 @@ export default function ChatRoomScreen() {
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardAvoid}
-        keyboardVerticalOffset={100}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
       >
         <View style={styles.chatContainer}>
           <FlatList
@@ -176,6 +176,7 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: "row",
     padding: 16,
+    paddingBottom: Platform.OS === "ios" ? 16 : 16,
     backgroundColor: Colors.card,
     borderTopWidth: 1,
     borderTopColor: Colors.border,

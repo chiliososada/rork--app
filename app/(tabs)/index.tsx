@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { StyleSheet, Text, View, FlatList, RefreshControl, ActivityIndicator } from "react-native";
+import { StyleSheet, Text, View, FlatList, RefreshControl, ActivityIndicator, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MapPin } from "lucide-react-native";
+import { MapPin, Plus } from "lucide-react-native";
+import { useRouter } from "expo-router";
 import TopicCard from "@/components/TopicCard";
 import SearchBar from "@/components/SearchBar";
 import Button from "@/components/Button";
@@ -12,11 +13,15 @@ import { useTopicStore } from "@/store/topic-store";
 import { Topic } from "@/types";
 
 export default function NearbyScreen() {
+  const router = useRouter();
   const { currentLocation, permissionStatus, requestPermission } = useLocationStore();
   const { 
     filteredTopics, 
     fetchNearbyTopics, 
+    loadMoreTopics,
     isLoading, 
+    isLoadingMore,
+    hasMore,
     searchQuery, 
     searchTopics, 
     clearSearch 
@@ -31,7 +36,7 @@ export default function NearbyScreen() {
   
   const loadTopics = async () => {
     if (currentLocation) {
-      await fetchNearbyTopics(currentLocation.latitude, currentLocation.longitude);
+      await fetchNearbyTopics(currentLocation.latitude, currentLocation.longitude, true);
     }
   };
   
@@ -39,6 +44,12 @@ export default function NearbyScreen() {
     setRefreshing(true);
     await loadTopics();
     setRefreshing(false);
+  };
+
+  const handleLoadMore = async () => {
+    if (currentLocation && hasMore && !isLoadingMore) {
+      await loadMoreTopics(currentLocation.latitude, currentLocation.longitude);
+    }
   };
   
   const handleSearch = (query: string) => {
@@ -51,6 +62,17 @@ export default function NearbyScreen() {
   
   const renderTopic = ({ item }: { item: Topic }) => {
     return <TopicCard topic={item} />;
+  };
+
+  const renderFooter = () => {
+    if (!isLoadingMore) return null;
+    
+    return (
+      <View style={styles.loadingFooter}>
+        <ActivityIndicator size="small" color={Colors.primary} />
+        <Text style={styles.loadingFooterText}>さらに読み込み中...</Text>
+      </View>
+    );
   };
   
   if (!currentLocation && permissionStatus !== 'granted') {
@@ -119,6 +141,9 @@ export default function NearbyScreen() {
               tintColor={Colors.primary}
             />
           }
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.1}
+          ListFooterComponent={renderFooter}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               {searchQuery ? (
@@ -134,11 +159,25 @@ export default function NearbyScreen() {
                   <Text style={styles.emptyText}>
                     あなたのエリアで最初の会話を始めましょう！
                   </Text>
+                  <TouchableOpacity 
+                    style={styles.createTopicButton}
+                    onPress={() => router.push('/create-topic')}
+                  >
+                    <Text style={styles.createTopicText}>トピックを作成</Text>
+                  </TouchableOpacity>
                 </>
               )}
             </View>
           }
         />
+        
+        {/* Floating Action Button */}
+        <TouchableOpacity 
+          style={styles.fab}
+          onPress={() => router.push('/create-topic')}
+        >
+          <Plus size={24} color="white" />
+        </TouchableOpacity>
       </SafeAreaView>
     </View>
   );
@@ -212,5 +251,48 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.text.secondary,
     textAlign: "center",
+    marginBottom: 16,
+  },
+  createTopicButton: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+    alignSelf: 'center',
+  },
+  createTopicText: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4.65,
+  },
+  loadingFooter: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  loadingFooterText: {
+    marginLeft: 10,
+    fontSize: 14,
+    color: Colors.text.secondary,
   },
 });

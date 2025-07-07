@@ -38,7 +38,7 @@ export default function CreateTopicScreen() {
     }
     
     if (!description.trim()) {
-      setDescriptionError("説明は必須です");
+      setDescriptionError("内容は必須です");
       isValid = false;
     } else {
       setDescriptionError("");
@@ -133,7 +133,7 @@ export default function CreateTopicScreen() {
           />
           
           <Input
-            label="説明"
+            label="内容"
             placeholder="トピックの詳細を入力"
             value={description}
             onChangeText={setDescription}
@@ -151,7 +151,7 @@ export default function CreateTopicScreen() {
               <View style={styles.locationContainer}>
                 <MapPin size={16} color={Colors.primary} />
                 <Text style={styles.locationText}>
-                  現在地を使用中
+                  {currentLocation.name || '現在地を使用中'}
                 </Text>
               </View>
             ) : (
