@@ -60,7 +60,7 @@ export const useTopicStore = create<TopicState>((set, get) => ({
     }
     
     try {
-      // Fetch topics from Supabase with pagination and comment counts
+      // Fetch topics from Supabase with pagination, comment counts, and message counts (for participant count)
       const { data: topicsData, error: topicsError } = await supabase
         .from('topics')
         .select(`
@@ -71,7 +71,11 @@ export const useTopicStore = create<TopicState>((set, get) => ({
             avatar_url,
             email
           ),
-          comments!comments_topic_id_fkey (count)
+          comments!comments_topic_id_fkey (count),
+          chat_messages!chat_messages_topic_id_fkey (
+            user_id,
+            created_at
+          )
         `)
         .order('created_at', { ascending: false })
         .range(0, TOPICS_PER_PAGE - 1);
@@ -88,6 +92,18 @@ export const useTopicStore = create<TopicState>((set, get) => ({
           topic.latitude, 
           topic.longitude
         );
+        
+        // Calculate participant count from unique users who have sent messages
+        const uniqueParticipants = new Set(topic.chat_messages?.map((msg: any) => msg.user_id) || []);
+        // Always include the topic author
+        uniqueParticipants.add(topic.user_id);
+        
+        // Find the latest message time
+        const lastMessageTime = topic.chat_messages && topic.chat_messages.length > 0
+          ? topic.chat_messages
+              .map((msg: any) => msg.created_at)
+              .sort((a: string, b: string) => new Date(b).getTime() - new Date(a).getTime())[0]
+          : undefined;
         
         return {
           id: topic.id,
@@ -107,12 +123,20 @@ export const useTopicStore = create<TopicState>((set, get) => ({
           },
           distance,
           commentCount: topic.comments?.[0]?.count || 0,
-          participantCount: 1
+          participantCount: uniqueParticipants.size,
+          lastMessageTime
         };
       });
 
-      // Sort by distance
-      const sortedTopics = topics.sort((a, b) => (a.distance || 0) - (b.distance || 0));
+      // Sort by distance first, then by creation time DESC
+      const sortedTopics = topics.sort((a, b) => {
+        const distanceDiff = (a.distance || 0) - (b.distance || 0);
+        if (distanceDiff !== 0) {
+          return distanceDiff;
+        }
+        // If distances are equal, sort by creation time DESC
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
       
       set({ 
         topics: sortedTopics,
@@ -154,7 +178,7 @@ export const useTopicStore = create<TopicState>((set, get) => ({
       const from = currentPage * TOPICS_PER_PAGE;
       const to = from + TOPICS_PER_PAGE - 1;
       
-      // Fetch more topics from Supabase with comment counts
+      // Fetch more topics from Supabase with comment counts and message counts
       const { data: topicsData, error: topicsError } = await supabase
         .from('topics')
         .select(`
@@ -165,7 +189,11 @@ export const useTopicStore = create<TopicState>((set, get) => ({
             avatar_url,
             email
           ),
-          comments!comments_topic_id_fkey (count)
+          comments!comments_topic_id_fkey (count),
+          chat_messages!chat_messages_topic_id_fkey (
+            user_id,
+            created_at
+          )
         `)
         .order('created_at', { ascending: false })
         .range(from, to);
@@ -182,6 +210,18 @@ export const useTopicStore = create<TopicState>((set, get) => ({
           topic.latitude, 
           topic.longitude
         );
+        
+        // Calculate participant count from unique users who have sent messages
+        const uniqueParticipants = new Set(topic.chat_messages?.map((msg: any) => msg.user_id) || []);
+        // Always include the topic author
+        uniqueParticipants.add(topic.user_id);
+        
+        // Find the latest message time
+        const lastMessageTime = topic.chat_messages && topic.chat_messages.length > 0
+          ? topic.chat_messages
+              .map((msg: any) => msg.created_at)
+              .sort((a: string, b: string) => new Date(b).getTime() - new Date(a).getTime())[0]
+          : undefined;
         
         return {
           id: topic.id,
@@ -201,13 +241,21 @@ export const useTopicStore = create<TopicState>((set, get) => ({
           },
           distance,
           commentCount: topic.comments?.[0]?.count || 0,
-          participantCount: 1
+          participantCount: uniqueParticipants.size,
+          lastMessageTime
         };
       });
 
-      // Combine with existing topics and sort by distance
+      // Combine with existing topics and sort by distance first, then by creation time DESC
       const allTopics = [...topics, ...newTopics];
-      const sortedTopics = allTopics.sort((a, b) => (a.distance || 0) - (b.distance || 0));
+      const sortedTopics = allTopics.sort((a, b) => {
+        const distanceDiff = (a.distance || 0) - (b.distance || 0);
+        if (distanceDiff !== 0) {
+          return distanceDiff;
+        }
+        // If distances are equal, sort by creation time DESC
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
       
       set({ 
         topics: sortedTopics,
@@ -242,7 +290,7 @@ export const useTopicStore = create<TopicState>((set, get) => ({
     set({ isLoading: true, error: null });
     
     try {
-      // Fetch topic from Supabase with comment count
+      // Fetch topic from Supabase with comment count and message count
       const { data: topicData, error: topicError } = await supabase
         .from('topics')
         .select(`
@@ -253,7 +301,11 @@ export const useTopicStore = create<TopicState>((set, get) => ({
             avatar_url,
             email
           ),
-          comments!comments_topic_id_fkey (count)
+          comments!comments_topic_id_fkey (count),
+          chat_messages!chat_messages_topic_id_fkey (
+            user_id,
+            created_at
+          )
         `)
         .eq('id', id)
         .single();
@@ -270,6 +322,18 @@ export const useTopicStore = create<TopicState>((set, get) => ({
         return;
       }
 
+      // Calculate participant count from unique users who have sent messages
+      const uniqueParticipants = new Set(topicData.chat_messages?.map((msg: any) => msg.user_id) || []);
+      // Always include the topic author
+      uniqueParticipants.add(topicData.user_id);
+      
+      // Find the latest message time
+      const lastMessageTime = topicData.chat_messages && topicData.chat_messages.length > 0
+        ? topicData.chat_messages
+            .map((msg: any) => msg.created_at)
+            .sort((a: string, b: string) => new Date(b).getTime() - new Date(a).getTime())[0]
+        : undefined;
+      
       // Transform to our Topic interface
       const topic: Topic = {
         id: topicData.id,
@@ -288,7 +352,8 @@ export const useTopicStore = create<TopicState>((set, get) => ({
           name: topicData.location_name || undefined
         },
         commentCount: topicData.comments?.[0]?.count || 0,
-        participantCount: 1
+        participantCount: uniqueParticipants.size,
+        lastMessageTime
       };
       
       set({ 
@@ -482,7 +547,8 @@ export const useTopicStore = create<TopicState>((set, get) => ({
           name: insertedTopic.location_name || undefined
         },
         commentCount: 0,
-        participantCount: 1
+        participantCount: 1,
+        lastMessageTime: undefined
       };
       
       set(state => ({ 

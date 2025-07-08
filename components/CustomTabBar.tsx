@@ -4,11 +4,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MapPin, Compass, PlusCircle, MessageCircle, User } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useRouter, usePathname } from 'expo-router';
+import { useChatStore } from '@/store/chat-store';
+import { useTopicStore } from '@/store/topic-store';
 
 const CustomTabBar = () => {
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
+  const { getUnreadCount } = useChatStore();
+  const { topics } = useTopicStore();
+  
+  // Calculate total unread count across all topics
+  const totalUnreadCount = topics.reduce((total, topic) => {
+    return total + getUnreadCount(topic.id);
+  }, 0);
   
   // Debug logging
   console.log('Current pathname:', pathname);
@@ -111,6 +120,13 @@ const CustomTabBar = () => {
                   color={active ? Colors.primary : Colors.inactive} 
                 />
                 {active && <View style={styles.activeDot} />}
+                {tab.name === 'chats' && totalUnreadCount > 0 && (
+                  <View style={styles.tabBadge}>
+                    <Text style={styles.tabBadgeText}>
+                      {totalUnreadCount > 99 ? '99+' : totalUnreadCount.toString()}
+                    </Text>
+                  </View>
+                )}
               </View>
               <Text style={[
                 styles.label,
@@ -194,6 +210,25 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     marginTop: 4,
     fontWeight: '600',
+  },
+  tabBadge: {
+    position: 'absolute',
+    top: -2,
+    right: 8,
+    backgroundColor: '#FF3B30',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.card,
+  },
+  tabBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });
 

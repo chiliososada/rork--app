@@ -23,6 +23,7 @@ export interface Topic {
   distance?: number; // Distance from user in meters
   commentCount: number;
   participantCount: number;
+  lastMessageTime?: string; // Time of the last message in this topic
 }
 
 export interface Comment {

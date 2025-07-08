@@ -29,6 +29,8 @@ export default function ChatRoomScreen() {
     quotedMessage,
     setQuotedMessage,
     getOnlineUsers,
+    updateUserPresence,
+    removeUserPresence,
     searchMessages,
     clearSearch,
     searchQuery,
@@ -43,19 +45,28 @@ export default function ChatRoomScreen() {
   const [typingTimeout, setTypingTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const [showOnlineUsers, setShowOnlineUsers] = useState(false);
+  const [isAtBottom, setIsAtBottom] = useState(true);
   const flatListRef = useRef<FlatList>(null);
   
   // 入力中のユーザーを取得
   const typingUsers = id ? getTypingUsers(id).filter(t => t.userId !== user?.id) : [];
   
-  // オンラインユーザーを取得
+  // オンラインユーザーを取得（右上角のバッジ用、現在のユーザーを除外）
   const onlineUsers = id ? getOnlineUsers(id).filter(u => u.userId !== user?.id) : [];
+  
+  // モーダル用のオンラインユーザーリスト（現在のユーザーを含む）
+  const allOnlineUsers = id ? getOnlineUsers(id) : [];
+  // 現在のユーザーがリストにない場合は追加
+  const onlineUsersForModal = user && id ? [
+    ...allOnlineUsers,
+    ...(allOnlineUsers.some(u => u.userId === user.id) ? [] : [{ userId: user.id, name: user.name }])
+  ] : allOnlineUsers;
   
   // 現在のトピックのメッセージを取得
   const messages = id ? getMessagesForTopic(id) : [];
   
   useEffect(() => {
-    if (id) {
+    if (id && user) {
       // トピック情報を取得
       fetchTopicById(id);
       
@@ -68,22 +79,35 @@ export default function ChatRoomScreen() {
       // Realtimeサブスクリプションを開始
       subscribeToTopic(id);
       
+      // サブスクリプション完了を待ってプレゼンス状態を更新
+      setTimeout(() => {
+        updateUserPresence(id, user.id, user.name);
+      }, 1000);
+      
+      // 定期的にプレゼンス状態を更新 (20秒毎)
+      const presenceInterval = setInterval(() => {
+        updateUserPresence(id, user.id, user.name);
+      }, 20000);
+      
       // クリーンアップ関数でサブスクリプションを解除
       return () => {
+        // ユーザーのオンライン状態を削除
+        removeUserPresence(id, user.id);
+        clearInterval(presenceInterval);
         unsubscribeFromTopic(id);
         setCurrentTopic(null);
       };
     }
-  }, [id]);
+  }, [id, user]);
   
   useEffect(() => {
-    // Scroll to bottom when messages change
-    if (flatListRef.current && messages.length > 0) {
+    // Scroll to bottom when messages change, but only if user is already at bottom
+    if (flatListRef.current && messages.length > 0 && isAtBottom) {
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
     }
-  }, [messages]);
+  }, [messages, isAtBottom]);
   
   // チャット画面がアクティブな時は既読マーク
   const handleMarkAsRead = useCallback(() => {
@@ -109,6 +133,14 @@ export default function ChatRoomScreen() {
   
   const handleTextChange = (text: string) => {
     setMessageText(text);
+    
+    // 入力時に最下部にスクロール（キーボードが表示されても最新メッセージが見える）
+    if (flatListRef.current && messages.length > 0) {
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+      setIsAtBottom(true);
+    }
     
     if (!id || !user) return;
     
@@ -221,6 +253,12 @@ export default function ChatRoomScreen() {
             renderItem={renderMessage}
             keyExtractor={(item, index) => `${item.id}-${index}`}
             contentContainerStyle={styles.messagesList}
+            onScroll={(event) => {
+              const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+              const isNearBottom = contentOffset.y + layoutMeasurement.height >= contentSize.height - 50;
+              setIsAtBottom(isNearBottom);
+            }}
+            scrollEventThrottle={100}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyText}>まだメッセージがありません。会話を始めましょう！</Text>
@@ -259,6 +297,15 @@ export default function ChatRoomScreen() {
               placeholder="メッセージを入力..."
               value={messageText}
               onChangeText={handleTextChange}
+              onFocus={() => {
+                // フォーカス時にも最下部にスクロール
+                if (flatListRef.current && messages.length > 0) {
+                  setTimeout(() => {
+                    flatListRef.current?.scrollToEnd({ animated: true });
+                  }, 300); // キーボード表示の遅延を考慮
+                  setIsAtBottom(true);
+                }
+              }}
               multiline
             />
             <TouchableOpacity 
@@ -345,11 +392,13 @@ export default function ChatRoomScreen() {
                 <X size={20} color={Colors.text.primary} />
               </TouchableOpacity>
             </View>
-            {onlineUsers.length > 0 ? (
-              onlineUsers.map((user, index) => (
+            {onlineUsersForModal.length > 0 ? (
+              onlineUsersForModal.map((onlineUser, index) => (
                 <View key={index} style={styles.onlineUserItem}>
                   <View style={styles.onlineIndicator} />
-                  <Text style={styles.onlineUserName}>{user.name}</Text>
+                  <Text style={styles.onlineUserName}>
+                    {onlineUser.name}{onlineUser.userId === user?.id ? " (あなた)" : ""}
+                  </Text>
                 </View>
               ))
             ) : (
@@ -413,20 +462,22 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     flexDirection: "row",
-    padding: 16,
-    paddingBottom: Platform.OS === "ios" ? 16 : 16,
+    padding: 12,
+    paddingBottom: Platform.OS === "ios" ? 12 : 12,
     backgroundColor: Colors.card,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
+    alignItems: "flex-end",
   },
   input: {
     flex: 1,
     backgroundColor: Colors.background,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    maxHeight: 100,
-    fontSize: 14,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    maxHeight: 80,
+    fontSize: 16,
+    minHeight: 40,
   },
   sendButton: {
     width: 40,
@@ -435,7 +486,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: 8,
+    marginLeft: 10,
+    marginBottom: 2,
   },
   sendButtonDisabled: {
     backgroundColor: Colors.inactive,

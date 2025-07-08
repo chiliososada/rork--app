@@ -37,6 +37,10 @@ interface ChatState {
   // Realtime チャンネルの管理
   realtimeChannels: Record<string, any>; // topicId -> Channel
   
+  // 接続制限管理
+  maxActiveConnections: number;
+  activeConnections: Set<string>;
+  
   // メッセージ管理機能
   fetchMessages: (topicId: string) => Promise<void>;
   addMessage: (topicId: string, text: string, userId: string) => Promise<void>;
@@ -101,6 +105,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
   searchQuery: '',
   searchResults: [],
   realtimeChannels: {},
+  
+  // 最大5個のアクティブな接続を許可
+  maxActiveConnections: 5,
+  activeConnections: new Set(),
 
   // メッセージを取得
   fetchMessages: async (topicId: string) => {
@@ -260,10 +268,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   // Realtimeサブスクリプション開始
   subscribeToTopic: (topicId: string) => {
-    const { realtimeChannels } = get();
+    const { realtimeChannels, activeConnections, maxActiveConnections } = get();
     
     // 既存のサブスクリプションがある場合は無視
     if (realtimeChannels[topicId]) {
+      return;
+    }
+    
+    // 接続数制限チェック
+    if (activeConnections.size >= maxActiveConnections) {
+      console.log(`Connection limit reached (${maxActiveConnections}). Skipping subscription for topic ${topicId}`);
       return;
     }
 
@@ -426,6 +440,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const presenceState = channel.presenceState();
         const newOnlineUsers: Record<string, { name: string; timestamp: number }> = {};
         
+        console.log(`Presence sync for topic ${topicId}:`, presenceState);
+        
         Object.values(presenceState).forEach((presences: any) => {
           presences.forEach((presence: any) => {
             if (presence.userId && presence.userName) {
@@ -437,6 +453,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
           });
         });
         
+        console.log(`Updated online users for topic ${topicId}:`, newOnlineUsers);
+        
         set(state => ({
           onlineUsers: {
             ...state.onlineUsers,
@@ -444,30 +462,55 @@ export const useChatStore = create<ChatState>((set, get) => ({
           }
         }));
       })
-      .on('presence', { event: 'join' }, ({ key, newPresences }) => {
-        // 新しいユーザーが参加
+      .on('presence', { event: 'join' }, ({ newPresences }) => {
+        // 新しいユーザーが参加 - ローカル状態のみ更新
         newPresences.forEach((presence: any) => {
           if (presence.userId && presence.userName) {
-            get().updateUserPresence(topicId, presence.userId, presence.userName);
+            set(state => {
+              const newOnlineUsers = { ...state.onlineUsers };
+              if (!newOnlineUsers[topicId]) {
+                newOnlineUsers[topicId] = {};
+              }
+              newOnlineUsers[topicId][presence.userId] = { 
+                name: presence.userName, 
+                timestamp: Date.now() 
+              };
+              return { onlineUsers: newOnlineUsers };
+            });
           }
         });
       })
-      .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
-        // ユーザーが退出
+      .on('presence', { event: 'leave' }, ({ leftPresences }) => {
+        // ユーザーが退出 - ローカル状態のみ更新
         leftPresences.forEach((presence: any) => {
           if (presence.userId) {
-            get().removeUserPresence(topicId, presence.userId);
+            set(state => {
+              const newOnlineUsers = { ...state.onlineUsers };
+              if (newOnlineUsers[topicId] && newOnlineUsers[topicId][presence.userId]) {
+                delete newOnlineUsers[topicId][presence.userId];
+                if (Object.keys(newOnlineUsers[topicId]).length === 0) {
+                  delete newOnlineUsers[topicId];
+                }
+              }
+              return { onlineUsers: newOnlineUsers };
+            });
           }
         });
       })
-      .subscribe();
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          // サブスクリプション完了後、プレゼンス状態を初期化
+          console.log(`チャンネル ${topicId} に正常に接続されました`);
+        }
+      });
 
-    // チャンネルを保存
+    // チャンネルを保存し、アクティブ接続リストに追加
     set(state => ({
       realtimeChannels: {
         ...state.realtimeChannels,
         [topicId]: channel
-      }
+      },
+      activeConnections: new Set([...state.activeConnections, topicId])
     }));
   },
 
@@ -482,7 +525,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set(state => {
         const newChannels = { ...state.realtimeChannels };
         delete newChannels[topicId];
-        return { realtimeChannels: newChannels };
+        
+        const newActiveConnections = new Set(state.activeConnections);
+        newActiveConnections.delete(topicId);
+        
+        return { 
+          realtimeChannels: newChannels,
+          activeConnections: newActiveConnections
+        };
       });
     }
   },
@@ -497,7 +547,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
     });
     
-    set({ realtimeChannels: {} });
+    set({ 
+      realtimeChannels: {},
+      activeConnections: new Set()
+    });
   },
 
   // 現在のトピックを設定
@@ -577,7 +630,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   // メッセージを既読にマーク
   markAsRead: (topicId: string) => {
-    const { lastReadTimestamps, unreadCounts } = get();
+    const { lastReadTimestamps } = get();
     const currentTimestamp = lastReadTimestamps[topicId];
     const currentTime = new Date().toISOString();
     
@@ -688,6 +741,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   // ユーザーのプレゼンス状態を更新
   updateUserPresence: (topicId: string, userId: string, userName: string) => {
+    const { realtimeChannels } = get();
+    const channel = realtimeChannels[topicId];
+    
+    if (channel) {
+      // Supabaseのpresence機能を使用してリアルタイムで状態を共有
+      console.log(`Tracking presence for user ${userName} in topic ${topicId}`);
+      channel.track({
+        userId,
+        userName,
+        timestamp: Date.now()
+      });
+    } else {
+      console.log(`No channel found for topic ${topicId} when updating presence`);
+    }
+    
+    // ローカル状態も更新
     set(state => {
       const newOnlineUsers = { ...state.onlineUsers };
       if (!newOnlineUsers[topicId]) {
@@ -700,6 +769,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   // ユーザーのプレゼンス状態を削除
   removeUserPresence: (topicId: string, userId: string) => {
+    const { realtimeChannels } = get();
+    const channel = realtimeChannels[topicId];
+    
+    if (channel) {
+      // Supabaseのpresence機能を使用してリアルタイムで状態を削除
+      channel.untrack();
+    }
+    
+    // ローカル状態も更新
     set(state => {
       const newOnlineUsers = { ...state.onlineUsers };
       if (newOnlineUsers[topicId] && newOnlineUsers[topicId][userId]) {
