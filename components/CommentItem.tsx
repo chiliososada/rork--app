@@ -50,9 +50,9 @@ export default function CommentItem({ comment, onLike }: CommentItemProps) {
           activeOpacity={0.7}
         >
           <Heart 
-            size={16} 
-            color={comment.isLikedByUser ? Colors.secondary : Colors.text.secondary}
-            fill={comment.isLikedByUser ? Colors.secondary : 'transparent'}
+            size={18} 
+            color={comment.isLikedByUser ? '#FF6B6B' : Colors.text.secondary}
+            fill={comment.isLikedByUser ? '#FF6B6B' : 'transparent'}
           />
           <Text style={styles.likeCount}>{comment.likes}</Text>
         </TouchableOpacity>
@@ -63,9 +63,11 @@ export default function CommentItem({ comment, onLike }: CommentItemProps) {
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    marginVertical: 8,
+    backgroundColor: '#FAFAFA',
+    borderRadius: 16,
   },
   header: {
     flexDirection: 'row',
@@ -78,14 +80,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    marginRight: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    marginRight: 10,
   },
   authorName: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 15,
+    fontWeight: '600',
     color: Colors.text.primary,
   },
   time: {
@@ -93,10 +95,11 @@ const styles = StyleSheet.create({
     color: Colors.text.secondary,
   },
   text: {
-    fontSize: 14,
+    fontSize: 15,
     color: Colors.text.primary,
-    lineHeight: 20,
-    marginBottom: 8,
+    lineHeight: 22,
+    marginBottom: 12,
+    marginLeft: 42,
   },
   footer: {
     flexDirection: 'row',
@@ -105,9 +108,10 @@ const styles = StyleSheet.create({
   likeButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginLeft: 42,
+    borderRadius: 20,
     backgroundColor: Colors.background,
   },
   likeCount: {

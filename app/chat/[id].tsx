@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useRef } from "react";
-import { StyleSheet, Text, View, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform } from "react-native";
+import React, { useEffect, useState, useRef, useCallback } from "react";
+import { StyleSheet, Text, View, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Modal } from "react-native";
 import { useLocalSearchParams, Stack, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Send, ChevronLeft } from "lucide-react-native";
+import { Send, ChevronLeft, Search, Users, X } from "lucide-react-native";
 import Colors from "@/constants/colors";
 import { useTopicStore } from "@/store/topic-store";
 import { useAuthStore } from "@/store/auth-store";
@@ -22,13 +22,34 @@ export default function ChatRoomScreen() {
     subscribeToTopic, 
     unsubscribeFromTopic,
     setCurrentTopic,
+    sendTypingIndicator,
+    stopTypingIndicator,
+    getTypingUsers,
+    markAsRead,
+    quotedMessage,
+    setQuotedMessage,
+    getOnlineUsers,
+    searchMessages,
+    clearSearch,
+    searchQuery,
+    searchResults,
     isSending,
     isLoading 
   } = useChatStore();
   
   const [messageText, setMessageText] = useState("");
   const [lastSent, setLastSent] = useState(0);
+  const [isTyping, setIsTyping] = useState(false);
+  const [typingTimeout, setTypingTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const [showSearch, setShowSearch] = useState(false);
+  const [showOnlineUsers, setShowOnlineUsers] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+  
+  // 入力中のユーザーを取得
+  const typingUsers = id ? getTypingUsers(id).filter(t => t.userId !== user?.id) : [];
+  
+  // オンラインユーザーを取得
+  const onlineUsers = id ? getOnlineUsers(id).filter(u => u.userId !== user?.id) : [];
   
   // 現在のトピックのメッセージを取得
   const messages = id ? getMessagesForTopic(id) : [];
@@ -64,6 +85,52 @@ export default function ChatRoomScreen() {
     }
   }, [messages]);
   
+  // チャット画面がアクティブな時は既読マーク
+  const handleMarkAsRead = useCallback(() => {
+    if (id) {
+      markAsRead(id);
+    }
+  }, [id, markAsRead]);
+  
+  useEffect(() => {
+    handleMarkAsRead();
+  }, [handleMarkAsRead]);
+  
+  // メッセージが変更された時も既読マークを更新（頻度制限付き）
+  useEffect(() => {
+    if (messages.length > 0) {
+      const timeoutId = setTimeout(() => {
+        handleMarkAsRead();
+      }, 1000); // 1秒遅延
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [messages.length, handleMarkAsRead]);
+  
+  const handleTextChange = (text: string) => {
+    setMessageText(text);
+    
+    if (!id || !user) return;
+    
+    // 入力中インジケーターを送信
+    if (text.length > 0 && !isTyping) {
+      setIsTyping(true);
+      sendTypingIndicator(id, user.id, user.name);
+    }
+    
+    // タイピングタイマーをリセット
+    if (typingTimeout) {
+      clearTimeout(typingTimeout);
+    }
+    
+    const timeout = setTimeout(() => {
+      setIsTyping(false);
+      stopTypingIndicator(id, user.id);
+    }, 2000);
+    
+    setTypingTimeout(timeout);
+  };
+  
   const handleSendMessage = async () => {
     if (!messageText.trim() || !id || !user || isSending) return;
     
@@ -74,8 +141,25 @@ export default function ChatRoomScreen() {
       return;
     }
     
+    // 入力中インジケーターを停止
+    if (isTyping) {
+      setIsTyping(false);
+      stopTypingIndicator(id, user.id);
+      if (typingTimeout) {
+        clearTimeout(typingTimeout);
+      }
+    }
+    
     try {
-      await addMessage(id, messageText, user.id);
+      let finalText = messageText;
+      
+      // 引用返信がある場合、メッセージに含める
+      if (quotedMessage) {
+        finalText = `> ${quotedMessage.author.name}: ${quotedMessage.text}\n\n${messageText}`;
+        setQuotedMessage(null);
+      }
+      
+      await addMessage(id, finalText, user.id);
       setMessageText("");
       setLastSent(now);
     } catch (error) {
@@ -104,7 +188,25 @@ export default function ChatRoomScreen() {
           <ChevronLeft size={24} color={Colors.text.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{currentTopic?.title || "チャットルーム"}</Text>
-        <View style={styles.placeholder} />
+        <View style={styles.headerActions}>
+          <TouchableOpacity 
+            style={styles.headerButton}
+            onPress={() => setShowOnlineUsers(true)}
+          >
+            <Users size={20} color={Colors.text.primary} />
+            {onlineUsers.length > 0 && (
+              <View style={styles.onlineBadge}>
+                <Text style={styles.onlineBadgeText}>{onlineUsers.length}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.headerButton}
+            onPress={() => setShowSearch(true)}
+          >
+            <Search size={20} color={Colors.text.primary} />
+          </TouchableOpacity>
+        </View>
       </View>
       
       <KeyboardAvoidingView
@@ -126,12 +228,37 @@ export default function ChatRoomScreen() {
             }
           />
           
+          {/* 入力中インジケーター */}
+          {typingUsers.length > 0 && (
+            <View style={styles.typingContainer}>
+              <Text style={styles.typingText}>
+                {typingUsers.map(u => u.name).join(', ')}さんが入力中...
+              </Text>
+            </View>
+          )}
+          
+          {/* 引用返信プレビュー */}
+          {quotedMessage && (
+            <View style={styles.quotedMessageContainer}>
+              <View style={styles.quotedMessage}>
+                <Text style={styles.quotedAuthor}>{quotedMessage.author.name}</Text>
+                <Text style={styles.quotedText} numberOfLines={2}>{quotedMessage.text}</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.cancelQuoteButton}
+                onPress={() => setQuotedMessage(null)}
+              >
+                <X size={16} color={Colors.text.secondary} />
+              </TouchableOpacity>
+            </View>
+          )}
+          
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
               placeholder="メッセージを入力..."
               value={messageText}
-              onChangeText={setMessageText}
+              onChangeText={handleTextChange}
               multiline
             />
             <TouchableOpacity 
@@ -147,6 +274,90 @@ export default function ChatRoomScreen() {
           </View>
         </View>
       </KeyboardAvoidingView>
+      
+      {/* 検索モーダル */}
+      <Modal
+        visible={showSearch}
+        animationType="slide"
+        onRequestClose={() => {
+          setShowSearch(false);
+          clearSearch();
+        }}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.searchHeader}>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => {
+                setShowSearch(false);
+                clearSearch();
+              }}
+            >
+              <X size={24} color={Colors.text.primary} />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>メッセージ検索</Text>
+          </View>
+          
+          <View style={styles.searchInputContainer}>
+            <Search size={20} color={Colors.text.secondary} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="メッセージを検索..."
+              value={searchQuery}
+              onChangeText={(text) => id && searchMessages(id, text)}
+              autoFocus
+            />
+          </View>
+          
+          <FlatList
+            data={searchResults}
+            renderItem={renderMessage}
+            keyExtractor={(item, index) => `search-${item.id}-${index}`}
+            contentContainerStyle={styles.searchResults}
+            ListEmptyComponent={
+              searchQuery ? (
+                <Text style={styles.noResultsText}>検索結果が見つかりません</Text>
+              ) : (
+                <Text style={styles.searchHintText}>キーワードを入力してメッセージを検索</Text>
+              )
+            }
+          />
+        </SafeAreaView>
+      </Modal>
+      
+      {/* オンラインユーザーモーダル */}
+      <Modal
+        visible={showOnlineUsers}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowOnlineUsers(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          onPress={() => setShowOnlineUsers(false)}
+        >
+          <View style={styles.onlineUsersModal}>
+            <View style={styles.onlineUsersHeader}>
+              <Text style={styles.onlineUsersTitle}>オンラインユーザー</Text>
+              <TouchableOpacity
+                onPress={() => setShowOnlineUsers(false)}
+              >
+                <X size={20} color={Colors.text.primary} />
+              </TouchableOpacity>
+            </View>
+            {onlineUsers.length > 0 ? (
+              onlineUsers.map((user, index) => (
+                <View key={index} style={styles.onlineUserItem}>
+                  <View style={styles.onlineIndicator} />
+                  <Text style={styles.onlineUserName}>{user.name}</Text>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.noOnlineUsersText}>現在オンラインのユーザーはいません</Text>
+            )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -228,5 +439,167 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     backgroundColor: Colors.inactive,
+  },
+  typingContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  typingText: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    fontStyle: 'italic',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerButton: {
+    padding: 8,
+    marginLeft: 8,
+    position: 'relative',
+  },
+  onlineBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: '#FF3B30',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  onlineBadgeText: {
+    fontSize: 10,
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  quotedMessageContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#F5F5F5',
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  quotedMessage: {
+    flex: 1,
+    paddingLeft: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#007AFF',
+  },
+  quotedAuthor: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#007AFF',
+    marginBottom: 2,
+  },
+  quotedText: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+  },
+  cancelQuoteButton: {
+    padding: 8,
+    alignSelf: 'flex-start',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  searchHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  closeButton: {
+    padding: 8,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: Colors.text.primary,
+    marginLeft: 16,
+  },
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    margin: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: Colors.card,
+    borderRadius: 12,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: Colors.text.primary,
+    marginLeft: 8,
+  },
+  searchResults: {
+    padding: 16,
+  },
+  noResultsText: {
+    textAlign: 'center',
+    color: Colors.text.secondary,
+    fontSize: 16,
+    marginTop: 40,
+  },
+  searchHintText: {
+    textAlign: 'center',
+    color: Colors.text.secondary,
+    fontSize: 14,
+    marginTop: 40,
+  },
+  onlineUsersModal: {
+    backgroundColor: Colors.card,
+    borderRadius: 16,
+    padding: 16,
+    minWidth: 250,
+    maxHeight: 400,
+  },
+  onlineUsersHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  onlineUsersTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: Colors.text.primary,
+  },
+  onlineUserItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  onlineIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#34C759',
+    marginRight: 12,
+  },
+  onlineUserName: {
+    fontSize: 16,
+    color: Colors.text.primary,
+  },
+  noOnlineUsersText: {
+    textAlign: 'center',
+    color: Colors.text.secondary,
+    fontSize: 14,
+    paddingVertical: 20,
   },
 });

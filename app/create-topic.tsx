@@ -20,6 +20,8 @@ export default function CreateTopicScreen() {
   const [description, setDescription] = useState("");
   const [titleError, setTitleError] = useState("");
   const [descriptionError, setDescriptionError] = useState("");
+  const [titleFocused, setTitleFocused] = useState(false);
+  const [descriptionFocused, setDescriptionFocused] = useState(false);
   
   useEffect(() => {
     if (!currentLocation) {
@@ -123,16 +125,21 @@ export default function CreateTopicScreen() {
         >
           <Text style={styles.subtitle}>あなたの周りで起きていることを共有しましょう</Text>
           
-          <Input
+          <View style={styles.formCard}>
+            <Input
             label="タイトル"
             placeholder="トピックのタイトルを入力"
             value={title}
             onChangeText={setTitle}
             error={titleError}
             maxLength={100}
+            onFocus={() => setTitleFocused(true)}
+            onBlur={() => setTitleFocused(false)}
+            inputStyle={titleFocused ? styles.inputFocused : {}}
           />
           
-          <Input
+          <View style={styles.descriptionContainer}>
+            <Input
             label="内容"
             placeholder="トピックの詳細を入力"
             value={description}
@@ -142,7 +149,15 @@ export default function CreateTopicScreen() {
             numberOfLines={4}
             style={styles.descriptionInput}
             maxLength={500}
-          />
+            onFocus={() => setDescriptionFocused(true)}
+            onBlur={() => setDescriptionFocused(false)}
+            inputStyle={descriptionFocused ? styles.inputFocused : {}}
+            />
+            <Text style={styles.charCount}>
+              {description.length} / 500
+            </Text>
+          </View>
+          </View>
           
           <View style={styles.locationSection}>
             <Text style={styles.locationLabel}>位置情報</Text>
@@ -180,6 +195,40 @@ export default function CreateTopicScreen() {
 }
 
 const styles = StyleSheet.create({
+  formCard: {
+    backgroundColor: Colors.card,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  titleInputContainer: {
+    marginBottom: 20,
+  },
+  descriptionContainer: {
+    position: 'relative',
+  },
+  descriptionInputContainer: {
+    marginBottom: 0,
+  },
+  inputFocused: {
+    borderColor: '#007AFF',
+    borderWidth: 2,
+  },
+  charCount: {
+    position: 'absolute',
+    bottom: 8,
+    right: 12,
+    fontSize: 12,
+    color: Colors.text.secondary,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -227,10 +276,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.text.secondary,
     marginBottom: 24,
+    lineHeight: 24,
   },
   descriptionInput: {
-    height: 120,
+    height: 160,
     textAlignVertical: "top",
+    paddingBottom: 28,
   },
   locationSection: {
     marginBottom: 24,
@@ -244,9 +295,11 @@ const styles = StyleSheet.create({
   locationContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: 'rgba(91, 114, 242, 0.1)',
-    padding: 12,
-    borderRadius: 12,
+    backgroundColor: '#E3F2FD',
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#BBDEFB',
   },
   locationText: {
     fontSize: 14,
@@ -256,9 +309,11 @@ const styles = StyleSheet.create({
   locationButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: 'rgba(91, 114, 242, 0.1)',
-    padding: 12,
-    borderRadius: 12,
+    backgroundColor: '#E3F2FD',
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#BBDEFB',
   },
   locationButtonText: {
     fontSize: 14,

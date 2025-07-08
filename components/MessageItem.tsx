@@ -1,8 +1,10 @@
-import React from 'react';
-import { View, Text, StyleSheet, Image } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Modal } from 'react-native';
 import { Message } from '@/types';
 import Colors from '@/constants/colors';
 import { useAuthStore } from '@/store/auth-store';
+import { useChatStore } from '@/store/chat-store';
+import { Quote } from 'lucide-react-native';
 
 interface MessageItemProps {
   message: Message;
@@ -10,7 +12,35 @@ interface MessageItemProps {
 
 export default function MessageItem({ message }: MessageItemProps) {
   const { user } = useAuthStore();
+  const { setQuotedMessage } = useChatStore();
+  const [showContextMenu, setShowContextMenu] = useState(false);
   const isCurrentUser = user?.id === message.author.id;
+  
+  // URLを検出する関数
+  const detectUrls = (text: string) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    return text.match(urlRegex) || [];
+  };
+  
+  // メッセージ内のURLを検出
+  const urls = detectUrls(message.text);
+  
+  // URLをリンクに置換したテキストを生成
+  const renderTextWithLinks = (text: string) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+    
+    return parts.map((part, index) => {
+      if (part.match(urlRegex)) {
+        return (
+          <Text key={index} style={styles.linkText}>
+            {part}
+          </Text>
+        );
+      }
+      return part;
+    });
+  };
   
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
@@ -26,10 +56,14 @@ export default function MessageItem({ message }: MessageItemProps) {
         <Image source={{ uri: message.author.avatar }} style={styles.avatar} />
       )}
       
-      <View style={[
-        styles.bubble,
-        isCurrentUser ? styles.currentUserBubble : styles.otherUserBubble
-      ]}>
+      <TouchableOpacity 
+        style={[
+          styles.bubble,
+          isCurrentUser ? styles.currentUserBubble : styles.otherUserBubble
+        ]}
+        onLongPress={() => setShowContextMenu(true)}
+        activeOpacity={0.8}
+      >
         {!isCurrentUser && (
           <Text style={styles.authorName}>{message.author.name}</Text>
         )}
@@ -38,8 +72,22 @@ export default function MessageItem({ message }: MessageItemProps) {
           styles.text,
           isCurrentUser ? styles.currentUserText : {}
         ]}>
-          {message.text}
+          {renderTextWithLinks(message.text)}
         </Text>
+        
+        {/* URLプレビュー */}
+        {urls.length > 0 && (
+          <View style={styles.urlPreviewContainer}>
+            {urls.slice(0, 2).map((url, index) => (
+              <View key={index} style={styles.urlPreview}>
+                <Text style={styles.urlPreviewText} numberOfLines={1}>
+                  🔗 {url}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+        
         
         <Text style={[
           styles.time,
@@ -47,7 +95,34 @@ export default function MessageItem({ message }: MessageItemProps) {
         ]}>
           {formatTime(message.createdAt)}
         </Text>
-      </View>
+      </TouchableOpacity>
+      
+      {/* コンテキストメニュー */}
+      <Modal
+        visible={showContextMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowContextMenu(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          onPress={() => setShowContextMenu(false)}
+        >
+          <View style={styles.contextMenu}>
+            <TouchableOpacity
+              style={styles.contextMenuItem}
+              onPress={() => {
+                setQuotedMessage(message);
+                setShowContextMenu(false);
+              }}
+            >
+              <Quote size={18} color={Colors.text.primary} />
+              <Text style={styles.contextMenuText}>引用返信</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+      
     </View>
   );
 }
@@ -71,13 +146,21 @@ const styles = StyleSheet.create({
     maxWidth: '80%',
     padding: 12,
     borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.08,
+    shadowRadius: 2.5,
+    elevation: 2,
   },
   currentUserBubble: {
-    backgroundColor: Colors.primary,
+    backgroundColor: '#007AFF',
     borderBottomRightRadius: 4,
   },
   otherUserBubble: {
-    backgroundColor: Colors.card,
+    backgroundColor: '#F5F5F5',
     borderBottomLeftRadius: 4,
   },
   authorName: {
@@ -96,11 +179,62 @@ const styles = StyleSheet.create({
   },
   time: {
     fontSize: 10,
-    color: Colors.text.secondary,
+    color: '#999999',
     alignSelf: 'flex-end',
     marginTop: 4,
   },
   currentUserTime: {
     color: 'rgba(255, 255, 255, 0.7)',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  linkText: {
+    color: '#007AFF',
+    textDecorationLine: 'underline',
+  },
+  urlPreviewContainer: {
+    marginTop: 8,
+  },
+  urlPreview: {
+    backgroundColor: 'rgba(0, 122, 255, 0.1)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#007AFF',
+    padding: 8,
+    marginTop: 4,
+    borderRadius: 4,
+  },
+  urlPreviewText: {
+    fontSize: 12,
+    color: '#007AFF',
+    fontWeight: '500',
+  },
+  contextMenu: {
+    backgroundColor: Colors.card,
+    borderRadius: 16,
+    padding: 8,
+    minWidth: 160,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  contextMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+  },
+  contextMenuText: {
+    fontSize: 16,
+    color: Colors.text.primary,
+    marginLeft: 8,
   },
 });

@@ -14,9 +14,9 @@ export default function TopicCard({ topic }: TopicCardProps) {
   
   const formatDistance = (meters: number) => {
     if (meters < 1000) {
-      return `${meters.toFixed(0)}m`;
+      return `${meters.toFixed(0)}m先`;
     } else {
-      return `${(meters / 1000).toFixed(1)}km`;
+      return `${(meters / 1000).toFixed(1)}km先`;
     }
   };
   
@@ -55,7 +55,7 @@ export default function TopicCard({ topic }: TopicCardProps) {
       
       <View style={styles.content}>
         <Text style={styles.title}>{topic.title}</Text>
-        <Text style={styles.description} numberOfLines={2}>
+        <Text style={styles.description}>
           {topic.description}
         </Text>
       </View>

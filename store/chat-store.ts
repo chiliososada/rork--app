@@ -11,6 +11,29 @@ interface ChatState {
   isSending: boolean;
   error: string | null;
   
+  // 入力中インジケーター
+  typingUsers: Record<string, Record<string, { name: string; timestamp: number }>>; // topicId -> userId -> typing info
+  
+  // 未読メッセージカウント
+  unreadCounts: Record<string, number>; // topicId -> count
+  lastReadTimestamps: Record<string, string>; // topicId -> timestamp
+  
+  // リアクション機能
+  messageReactions: Record<string, Record<string, string[]>>; // messageId -> emoji -> userId[]
+  
+  // 通知設定
+  soundEnabled: boolean;
+  
+  // 引用返信機能
+  quotedMessage: Message | null;
+  
+  // オンラインユーザー機能
+  onlineUsers: Record<string, Record<string, { name: string; timestamp: number }>>; // topicId -> userId -> user info
+  
+  // 検索機能
+  searchQuery: string;
+  searchResults: Message[];
+  
   // Realtime チャンネルの管理
   realtimeChannels: Record<string, any>; // topicId -> Channel
   
@@ -25,6 +48,36 @@ interface ChatState {
   unsubscribeFromTopic: (topicId: string) => void;
   unsubscribeFromAllTopics: () => void;
   
+  // 入力中インジケーター機能
+  sendTypingIndicator: (topicId: string, userId: string, userName: string) => void;
+  stopTypingIndicator: (topicId: string, userId: string) => void;
+  getTypingUsers: (topicId: string) => Array<{ userId: string; name: string }>;
+  
+  // 未読メッセージ機能
+  markAsRead: (topicId: string) => void;
+  getUnreadCount: (topicId: string) => number;
+  
+  // リアクション機能
+  addReaction: (messageId: string, emoji: string, userId: string) => void;
+  removeReaction: (messageId: string, emoji: string, userId: string) => void;
+  getMessageReactions: (messageId: string) => Record<string, string[]>;
+  
+  // 通知機能
+  setSoundEnabled: (enabled: boolean) => void;
+  playNotificationSound: () => Promise<void>;
+  
+  // 引用返信機能
+  setQuotedMessage: (message: Message | null) => void;
+  
+  // オンラインユーザー機能
+  updateUserPresence: (topicId: string, userId: string, userName: string) => void;
+  removeUserPresence: (topicId: string, userId: string) => void;
+  getOnlineUsers: (topicId: string) => Array<{ userId: string; name: string }>;
+  
+  // 検索機能
+  searchMessages: (topicId: string, query: string) => void;
+  clearSearch: () => void;
+  
   // ユーティリティ
   setCurrentTopic: (topicId: string | null) => void;
   getMessagesForTopic: (topicId: string) => Message[];
@@ -38,6 +91,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
   isLoading: false,
   isSending: false,
   error: null,
+  typingUsers: {},
+  unreadCounts: {},
+  lastReadTimestamps: {},
+  messageReactions: {},
+  soundEnabled: true,
+  quotedMessage: null,
+  onlineUsers: {},
+  searchQuery: '',
+  searchResults: [],
   realtimeChannels: {},
 
   // メッセージを取得
@@ -272,11 +334,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 return state;
               }
               
+              // 通知音を再生（バックグラウンドで）
+              get().playNotificationSound();
+              
+              // 未読カウントを更新（現在のトピックでない場合）
+              const newUnreadCounts = { ...state.unreadCounts };
+              if (state.currentTopicId !== topicId) {
+                newUnreadCounts[topicId] = (newUnreadCounts[topicId] || 0) + 1;
+              }
+              
               return {
                 messages: {
                   ...state.messages,
                   [topicId]: [...currentMessages, newMessage]
-                }
+                },
+                unreadCounts: newUnreadCounts
               };
             });
 
@@ -322,6 +394,71 @@ export const useChatStore = create<ChatState>((set, get) => ({
             };
           });
         }
+      })
+      .on('broadcast', { event: 'typing' }, (payload) => {
+        const { userId, userName, timestamp } = payload.payload;
+        
+        set(state => {
+          const newTypingUsers = { ...state.typingUsers };
+          if (!newTypingUsers[topicId]) {
+            newTypingUsers[topicId] = {};
+          }
+          newTypingUsers[topicId][userId] = { name: userName, timestamp };
+          return { typingUsers: newTypingUsers };
+        });
+      })
+      .on('broadcast', { event: 'stop_typing' }, (payload) => {
+        const { userId } = payload.payload;
+        
+        set(state => {
+          const newTypingUsers = { ...state.typingUsers };
+          if (newTypingUsers[topicId] && newTypingUsers[topicId][userId]) {
+            delete newTypingUsers[topicId][userId];
+            if (Object.keys(newTypingUsers[topicId]).length === 0) {
+              delete newTypingUsers[topicId];
+            }
+          }
+          return { typingUsers: newTypingUsers };
+        });
+      })
+      .on('presence', { event: 'sync' }, () => {
+        // プレゼンス状態の同期
+        const presenceState = channel.presenceState();
+        const newOnlineUsers: Record<string, { name: string; timestamp: number }> = {};
+        
+        Object.values(presenceState).forEach((presences: any) => {
+          presences.forEach((presence: any) => {
+            if (presence.userId && presence.userName) {
+              newOnlineUsers[presence.userId] = {
+                name: presence.userName,
+                timestamp: Date.now()
+              };
+            }
+          });
+        });
+        
+        set(state => ({
+          onlineUsers: {
+            ...state.onlineUsers,
+            [topicId]: newOnlineUsers
+          }
+        }));
+      })
+      .on('presence', { event: 'join' }, ({ key, newPresences }) => {
+        // 新しいユーザーが参加
+        newPresences.forEach((presence: any) => {
+          if (presence.userId && presence.userName) {
+            get().updateUserPresence(topicId, presence.userId, presence.userName);
+          }
+        });
+      })
+      .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
+        // ユーザーが退出
+        leftPresences.forEach((presence: any) => {
+          if (presence.userId) {
+            get().removeUserPresence(topicId, presence.userId);
+          }
+        });
       })
       .subscribe();
 
@@ -378,5 +515,235 @@ export const useChatStore = create<ChatState>((set, get) => ({
   getMessageCount: (topicId: string) => {
     const { messages } = get();
     return (messages[topicId] || []).length;
+  },
+
+  // 入力中インジケーターを送信
+  sendTypingIndicator: (topicId: string, userId: string, userName: string) => {
+    const { realtimeChannels } = get();
+    const channel = realtimeChannels[topicId];
+    
+    if (channel) {
+      channel.send({
+        type: 'broadcast',
+        event: 'typing',
+        payload: {
+          userId,
+          userName,
+          timestamp: Date.now()
+        }
+      });
+    }
+  },
+
+  // 入力中インジケーターを停止
+  stopTypingIndicator: (topicId: string, userId: string) => {
+    const { realtimeChannels } = get();
+    const channel = realtimeChannels[topicId];
+    
+    if (channel) {
+      channel.send({
+        type: 'broadcast',
+        event: 'stop_typing',
+        payload: {
+          userId
+        }
+      });
+    }
+    
+    // ローカル状態からも削除
+    set(state => {
+      const newTypingUsers = { ...state.typingUsers };
+      if (newTypingUsers[topicId]) {
+        delete newTypingUsers[topicId][userId];
+        if (Object.keys(newTypingUsers[topicId]).length === 0) {
+          delete newTypingUsers[topicId];
+        }
+      }
+      return { typingUsers: newTypingUsers };
+    });
+  },
+
+  // 入力中のユーザー一覧を取得
+  getTypingUsers: (topicId: string) => {
+    const { typingUsers } = get();
+    const topicTyping = typingUsers[topicId] || {};
+    const now = Date.now();
+    
+    // 5秒以上古い入力状態を削除
+    return Object.entries(topicTyping)
+      .filter(([_, info]) => now - info.timestamp < 5000)
+      .map(([userId, info]) => ({ userId, name: info.name }));
+  },
+
+  // メッセージを既読にマーク
+  markAsRead: (topicId: string) => {
+    const { lastReadTimestamps, unreadCounts } = get();
+    const currentTimestamp = lastReadTimestamps[topicId];
+    const currentTime = new Date().toISOString();
+    
+    // 1秒以内の重複呼び出しを防ぐ
+    if (currentTimestamp) {
+      const lastTime = new Date(currentTimestamp).getTime();
+      const now = new Date(currentTime).getTime();
+      if (now - lastTime < 1000) {
+        return; // 1秒以内は無視
+      }
+    }
+    
+    set(state => ({
+      lastReadTimestamps: {
+        ...state.lastReadTimestamps,
+        [topicId]: currentTime
+      },
+      unreadCounts: {
+        ...state.unreadCounts,
+        [topicId]: 0
+      }
+    }));
+  },
+
+  // 未読数を取得
+  getUnreadCount: (topicId: string) => {
+    const { unreadCounts } = get();
+    return unreadCounts[topicId] || 0;
+  },
+
+  // リアクションを追加
+  addReaction: (messageId: string, emoji: string, userId: string) => {
+    set(state => {
+      const newReactions = { ...state.messageReactions };
+      if (!newReactions[messageId]) {
+        newReactions[messageId] = {};
+      }
+      if (!newReactions[messageId][emoji]) {
+        newReactions[messageId][emoji] = [];
+      }
+      if (!newReactions[messageId][emoji].includes(userId)) {
+        newReactions[messageId][emoji].push(userId);
+      }
+      return { messageReactions: newReactions };
+    });
+  },
+
+  // リアクションを削除
+  removeReaction: (messageId: string, emoji: string, userId: string) => {
+    set(state => {
+      const newReactions = { ...state.messageReactions };
+      if (newReactions[messageId] && newReactions[messageId][emoji]) {
+        newReactions[messageId][emoji] = newReactions[messageId][emoji].filter(id => id !== userId);
+        if (newReactions[messageId][emoji].length === 0) {
+          delete newReactions[messageId][emoji];
+        }
+        if (Object.keys(newReactions[messageId]).length === 0) {
+          delete newReactions[messageId];
+        }
+      }
+      return { messageReactions: newReactions };
+    });
+  },
+
+  // メッセージのリアクションを取得
+  getMessageReactions: (messageId: string) => {
+    const { messageReactions } = get();
+    return messageReactions[messageId] || {};
+  },
+
+  // サウンド設定を変更
+  setSoundEnabled: (enabled: boolean) => {
+    set({ soundEnabled: enabled });
+  },
+
+  // 通知音を再生
+  playNotificationSound: async () => {
+    const { soundEnabled } = get();
+    if (!soundEnabled) return;
+    
+    try {
+      // Web環境では音声APIを使用、ネイティブでは後で実装
+      if (typeof window !== 'undefined' && window.AudioContext) {
+        // 簡単なビープ音を生成
+        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.frequency.value = 800;
+        oscillator.type = 'sine';
+        gainNode.gain.value = 0.1;
+        
+        oscillator.start();
+        oscillator.stop(audioContext.currentTime + 0.2);
+      }
+    } catch (error) {
+      console.warn('通知音の再生に失敗:', error);
+    }
+  },
+
+  // 引用メッセージを設定
+  setQuotedMessage: (message: Message | null) => {
+    set({ quotedMessage: message });
+  },
+
+  // ユーザーのプレゼンス状態を更新
+  updateUserPresence: (topicId: string, userId: string, userName: string) => {
+    set(state => {
+      const newOnlineUsers = { ...state.onlineUsers };
+      if (!newOnlineUsers[topicId]) {
+        newOnlineUsers[topicId] = {};
+      }
+      newOnlineUsers[topicId][userId] = { name: userName, timestamp: Date.now() };
+      return { onlineUsers: newOnlineUsers };
+    });
+  },
+
+  // ユーザーのプレゼンス状態を削除
+  removeUserPresence: (topicId: string, userId: string) => {
+    set(state => {
+      const newOnlineUsers = { ...state.onlineUsers };
+      if (newOnlineUsers[topicId] && newOnlineUsers[topicId][userId]) {
+        delete newOnlineUsers[topicId][userId];
+        if (Object.keys(newOnlineUsers[topicId]).length === 0) {
+          delete newOnlineUsers[topicId];
+        }
+      }
+      return { onlineUsers: newOnlineUsers };
+    });
+  },
+
+  // オンラインユーザー一覧を取得
+  getOnlineUsers: (topicId: string) => {
+    const { onlineUsers } = get();
+    const topicUsers = onlineUsers[topicId] || {};
+    const now = Date.now();
+    
+    // 30秒以上古いプレゼンス情報を除外
+    return Object.entries(topicUsers)
+      .filter(([_, info]) => now - info.timestamp < 30000)
+      .map(([userId, info]) => ({ userId, name: info.name }));
+  },
+
+  // メッセージを検索
+  searchMessages: (topicId: string, query: string) => {
+    const { messages } = get();
+    const topicMessages = messages[topicId] || [];
+    
+    if (!query.trim()) {
+      set({ searchQuery: '', searchResults: [] });
+      return;
+    }
+    
+    const results = topicMessages.filter(message =>
+      message.text.toLowerCase().includes(query.toLowerCase()) ||
+      message.author.name.toLowerCase().includes(query.toLowerCase())
+    );
+    
+    set({ searchQuery: query, searchResults: results });
+  },
+
+  // 検索をクリア
+  clearSearch: () => {
+    set({ searchQuery: '', searchResults: [] });
   }
 }));

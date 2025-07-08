@@ -43,6 +43,7 @@ export default forwardRef<TextInput, InputProps>(function Input({
           error ? styles.inputError : {},
           inputStyle
         ]}
+        selectionColor="#007AFF"
         placeholderTextColor={Colors.text.secondary}
         {...rest}
       />
@@ -61,18 +62,18 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 15,
+    fontWeight: '600',
     color: Colors.text.primary,
-    marginBottom: 6,
+    marginBottom: 8,
   },
   input: {
-    backgroundColor: Colors.card,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    backgroundColor: '#FAFAFA',
+    borderWidth: 1.5,
+    borderColor: '#E0E0E0',
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     fontSize: 16,
     color: Colors.text.primary,
   },
