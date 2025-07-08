@@ -12,15 +12,12 @@ const CustomTabBar = () => {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { getUnreadCount } = useChatStore();
-  const { topics } = useTopicStore();
+  const { chatFilteredTopics } = useTopicStore();
   
   // Calculate total unread count across all topics
-  const totalUnreadCount = topics.reduce((total, topic) => {
+  const totalUnreadCount = chatFilteredTopics.reduce((total, topic) => {
     return total + getUnreadCount(topic.id);
   }, 0);
-  
-  // Debug logging
-  console.log('Current pathname:', pathname);
 
   const tabs = [
     {

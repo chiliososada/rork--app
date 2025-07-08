@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useCallback } from "react";
-import { StyleSheet, Text, View, FlatList, TouchableOpacity, Image } from "react-native";
+import React, { useEffect, useMemo, useCallback, useState } from "react";
+import { StyleSheet, Text, View, FlatList, TouchableOpacity, Image, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { MessageCircle, Clock } from "lucide-react-native";
@@ -7,6 +7,7 @@ import Colors from "@/constants/colors";
 import { useTopicStore } from "@/store/topic-store";
 import { useLocationStore } from "@/store/location-store";
 import { useChatStore } from "@/store/chat-store";
+import { useAuthStore } from "@/store/auth-store";
 import SearchBar from "@/components/SearchBar";
 import CustomHeader from "@/components/CustomHeader";
 import { Topic } from "@/types";
@@ -21,13 +22,40 @@ export default function ChatsScreen() {
     clearChatSearch 
   } = useTopicStore();
   const { currentLocation } = useLocationStore();
-  const { getUnreadCount } = useChatStore();
+  const { user } = useAuthStore();
+  const { 
+    getUnreadCount, 
+    refreshUnreadCounts,
+    fetchUnreadCountsForTopics,
+    subscribeToMultipleTopics,
+    cleanupUnusedSubscriptions
+  } = useChatStore();
+  const [refreshing, setRefreshing] = useState(false);
   
   useEffect(() => {
     if (currentLocation) {
       fetchNearbyTopics(currentLocation.latitude, currentLocation.longitude);
     }
   }, [currentLocation]);
+  
+  // トピックが変更されたら未読数を取得し、リアルタイム購読を設定
+  useEffect(() => {
+    if (chatFilteredTopics.length > 0 && user) {
+      // トピックIDのリストを取得
+      const topicIds = chatFilteredTopics.map(topic => topic.id);
+      
+      // 未読数を取得
+      fetchUnreadCountsForTopics(topicIds, user.id);
+      
+      // リアルタイム購読を設定（最大5つまで）
+      subscribeToMultipleTopics(topicIds.slice(0, 5));
+      
+      // クリーンアップ: 表示されていないトピックの購読を解除
+      return () => {
+        cleanupUnusedSubscriptions(topicIds);
+      };
+    }
+  }, [chatFilteredTopics, user, fetchUnreadCountsForTopics, subscribeToMultipleTopics, cleanupUnusedSubscriptions]);
   
   const handleChatPress = useCallback((topicId: string) => {
     router.push(`/chat/${topicId}`);
@@ -40,6 +68,29 @@ export default function ChatsScreen() {
   const handleClearSearch = () => {
     clearChatSearch();
   };
+  
+  const handleRefresh = useCallback(async () => {
+    if (!currentLocation || !user) return;
+    
+    setRefreshing(true);
+    try {
+      // トピックデータを再取得
+      await fetchNearbyTopics(currentLocation.latitude, currentLocation.longitude);
+      
+      // 少し待ってからトピックIDを取得（データが更新されるのを待つ）
+      setTimeout(async () => {
+        const topicIds = chatFilteredTopics.map(topic => topic.id);
+        if (topicIds.length > 0) {
+          // 未読数を更新
+          await fetchUnreadCountsForTopics(topicIds, user.id);
+        }
+      }, 100);
+    } catch (error) {
+      console.error('Failed to refresh:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [currentLocation, user, fetchNearbyTopics, fetchUnreadCountsForTopics, chatFilteredTopics]);
   
   // Memoize expensive time formatting function
   const formatTime = useCallback((dateString: string) => {
@@ -139,6 +190,14 @@ export default function ChatsScreen() {
           renderItem={renderChatItem}
           keyExtractor={keyExtractor}
           contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={[Colors.primary]}
+              tintColor={Colors.primary}
+            />
+          }
           removeClippedSubviews={true}
           maxToRenderPerBatch={10}
           updateCellsBatchingPeriod={50}

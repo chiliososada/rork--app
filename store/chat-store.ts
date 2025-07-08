@@ -60,6 +60,10 @@ interface ChatState {
   // 未読メッセージ機能
   markAsRead: (topicId: string) => void;
   getUnreadCount: (topicId: string) => number;
+  refreshUnreadCounts: () => Promise<void>;
+  fetchUnreadCountsForTopics: (topicIds: string[], currentUserId: string) => Promise<void>;
+  subscribeToMultipleTopics: (topicIds: string[]) => void;
+  cleanupUnusedSubscriptions: (activeTopicIds: string[]) => void;
   
   // リアクション機能
   addReaction: (messageId: string, emoji: string, userId: string) => void;
@@ -349,7 +353,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
               }
               
               // 通知音を再生（バックグラウンドで）
-              get().playNotificationSound();
+              if (state.currentTopicId !== topicId) {
+                get().playNotificationSound();
+              }
               
               // 未読カウントを更新（現在のトピックでない場合）
               const newUnreadCounts = { ...state.unreadCounts };
@@ -653,6 +659,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
         [topicId]: 0
       }
     }));
+    
+    // AsyncStorageに永続化（オプション）
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`lastRead_${topicId}`, currentTime);
+      }
+    } catch (error) {
+      console.warn('Failed to persist last read time:', error);
+    }
   },
 
   // 未読数を取得
@@ -823,5 +838,122 @@ export const useChatStore = create<ChatState>((set, get) => ({
   // 検索をクリア
   clearSearch: () => {
     set({ searchQuery: '', searchResults: [] });
+  },
+
+  // 未読数を再取得
+  refreshUnreadCounts: async () => {
+    const { messages, lastReadTimestamps } = get();
+    const newUnreadCounts: Record<string, number> = {};
+    
+    // 各トピックの未読数を再計算
+    for (const topicId in messages) {
+      const topicMessages = messages[topicId] || [];
+      const lastReadTime = lastReadTimestamps[topicId];
+      
+      if (lastReadTime) {
+        newUnreadCounts[topicId] = topicMessages.filter(
+          msg => new Date(msg.createdAt) > new Date(lastReadTime)
+        ).length;
+      } else {
+        newUnreadCounts[topicId] = topicMessages.length;
+      }
+    }
+    
+    set({ unreadCounts: newUnreadCounts });
+  },
+  
+  // 複数のトピックの未読数を取得
+  fetchUnreadCountsForTopics: async (topicIds: string[], currentUserId: string) => {
+    try {
+      const { lastReadTimestamps } = get();
+      const newUnreadCounts: Record<string, number> = {};
+      
+      // 各トピックの最新メッセージ時刻と未読数を取得
+      for (const topicId of topicIds) {
+        // 最後に読んだタイムスタンプを取得（永続化されたものもチェック）
+        let lastReadTime = lastReadTimestamps[topicId];
+        
+        // 永続化されたタイムスタンプをチェック
+        if (!lastReadTime && typeof window !== 'undefined') {
+          try {
+            const stored = localStorage.getItem(`lastRead_${topicId}`);
+            if (stored) {
+              lastReadTime = stored;
+              // メモリにも保存
+              set(state => ({
+                lastReadTimestamps: {
+                  ...state.lastReadTimestamps,
+                  [topicId]: stored
+                }
+              }));
+            }
+          } catch (error) {
+            console.warn('Failed to load persisted last read time:', error);
+          }
+        }
+        
+        // それでもなければ1年前を設定
+        if (!lastReadTime) {
+          lastReadTime = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
+        }
+        
+        // 未読メッセージ数を取得
+        const { count, error } = await supabase
+          .from('chat_messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('topic_id', topicId)
+          .gt('created_at', lastReadTime)
+          .neq('user_id', currentUserId); // 自分のメッセージは除外
+        
+        if (!error && count !== null) {
+          newUnreadCounts[topicId] = count;
+        }
+      }
+      
+      // 既存の未読数とマージ
+      set(state => ({
+        unreadCounts: {
+          ...state.unreadCounts,
+          ...newUnreadCounts
+        }
+      }));
+      
+    } catch (error) {
+      console.error('Failed to fetch unread counts:', error);
+    }
+  },
+  
+  // バックグラウンドでトピックを監視（チャットリスト用）
+  subscribeToMultipleTopics: (topicIds: string[]) => {
+    const { realtimeChannels, activeConnections, maxActiveConnections } = get();
+    
+    // 接続数の制限を考慮して購読するトピックを選択
+    const availableSlots = maxActiveConnections - activeConnections.size;
+    const topicsToSubscribe = topicIds
+      .filter(id => !realtimeChannels[id]) // まだ購読していないトピックのみ
+      .slice(0, Math.max(0, availableSlots)); // 利用可能なスロット数まで
+    
+    // 各トピックを購読
+    topicsToSubscribe.forEach(topicId => {
+      get().subscribeToTopic(topicId);
+    });
+  },
+  
+  // 不要なトピックの購読を解除（接続数管理用）
+  cleanupUnusedSubscriptions: (activeTopicIds: string[]) => {
+    const { realtimeChannels, currentTopicId } = get();
+    const activeSet = new Set(activeTopicIds);
+    
+    // 現在のトピックは常に保持
+    if (currentTopicId) {
+      activeSet.add(currentTopicId);
+    }
+    
+    // アクティブでないトピックの購読を解除
+    Object.keys(realtimeChannels).forEach(topicId => {
+      if (!activeSet.has(topicId)) {
+        get().unsubscribeFromTopic(topicId);
+      }
+    });
   }
 }));
