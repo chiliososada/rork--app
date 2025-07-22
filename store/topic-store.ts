@@ -23,6 +23,9 @@ interface TopicState {
   mapSearchQuery: string;
   chatSearchQuery: string;
   
+  // Profile统计更新通知
+  profileStatsVersion: number;
+  
   // 请求去重和状态管理
   pendingRequests: Set<string>;
   requestQueue: Map<string, Promise<any>>;
@@ -70,6 +73,9 @@ export const useTopicStore = create<TopicState>((set, get) => ({
   searchQuery: '',
   mapSearchQuery: '',
   chatSearchQuery: '',
+  
+  // Profile统计更新通知
+  profileStatsVersion: 0,
   
   // 请求去重和状态管理
   pendingRequests: new Set(),
@@ -833,7 +839,9 @@ export const useTopicStore = create<TopicState>((set, get) => ({
         set(state => ({
           comments: state.comments.map(c =>
             c.id === commentId ? { ...c, likes: newLikesCount, isLikedByUser: false } : c
-          )
+          ),
+          // 触发Profile页面统计更新
+          profileStatsVersion: state.profileStatsVersion + 1
         }));
       } else {
         // Like: Add like record
@@ -863,7 +871,9 @@ export const useTopicStore = create<TopicState>((set, get) => ({
         set(state => ({
           comments: state.comments.map(c =>
             c.id === commentId ? { ...c, likes: newLikesCount, isLikedByUser: true } : c
-          )
+          ),
+          // 触发Profile页面统计更新
+          profileStatsVersion: state.profileStatsVersion + 1
         }));
       }
     } catch (error: any) {
@@ -1247,7 +1257,9 @@ export const useTopicStore = create<TopicState>((set, get) => ({
           ),
           currentTopic: state.currentTopic?.id === topicId ? 
             { ...state.currentTopic, isLiked: false, likesCount: Math.max(0, (state.currentTopic.likesCount || 0) - 1) } : 
-            state.currentTopic
+            state.currentTopic,
+          // 触发Profile页面统计更新
+          profileStatsVersion: state.profileStatsVersion + 1
         }));
       } else {
         // Like: Add like record
@@ -1280,7 +1292,9 @@ export const useTopicStore = create<TopicState>((set, get) => ({
           ),
           currentTopic: state.currentTopic?.id === topicId ? 
             { ...state.currentTopic, isLiked: true, likesCount: (state.currentTopic.likesCount || 0) + 1 } : 
-            state.currentTopic
+            state.currentTopic,
+          // 触发Profile页面统计更新
+          profileStatsVersion: state.profileStatsVersion + 1
         }));
       }
     } catch (error: any) {

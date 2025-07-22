@@ -7,13 +7,14 @@ import { useAuthStore } from "@/store/auth-store";
 import CustomHeader from "@/components/CustomHeader";
 import AvatarPicker from "@/components/AvatarPicker";
 import { supabase } from "@/lib/supabase";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { useTopicStore } from "@/store/topic-store";
+import { useCallback } from "react";
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, logout, updateAvatar, isUpdatingAvatar } = useAuthStore();
-  const { favoriteTopics, fetchFavoriteTopics } = useTopicStore();
+  const { favoriteTopics, fetchFavoriteTopics, profileStatsVersion } = useTopicStore();
   const [topicCount, setTopicCount] = useState(0);
   const [likeCount, setLikeCount] = useState(0);
   const [favoriteCount, setFavoriteCount] = useState(0);
@@ -25,13 +26,32 @@ export default function ProfileScreen() {
     }
   }, [user?.id]);
   
+  // フォーカス時に統計データをリフレッシュ（点赞数の変更を反映）
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.id) {
+        fetchUserStats();
+      }
+    }, [user?.id])
+  );
+  
   // Update favorite count when favoriteTopics changes
   useEffect(() => {
     setFavoriteCount(favoriteTopics.length);
   }, [favoriteTopics.length]);
   
+  // 点赞状态改变时刷新统计数据
+  useEffect(() => {
+    if (user?.id && profileStatsVersion > 0) {
+      console.log('🔄 Profile stats version changed, refreshing stats...');
+      fetchUserStats();
+    }
+  }, [profileStatsVersion, user?.id]);
+  
   const fetchUserStats = async () => {
     if (!user?.id) return;
+    
+    console.log('🔄 Refreshing user stats...');
     
     try {
       // ユーザーの投稿数を取得
