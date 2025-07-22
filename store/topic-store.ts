@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { Topic, Comment, Message, TopicFavorite } from '@/types';
 import { supabase } from '@/lib/supabase';
 import { encryptMessage, decryptMessage, isEncrypted } from '@/lib/encryption';
+import { withNetworkRetry, withDatabaseRetry, isNetworkError } from '@/lib/retry';
 
 interface TopicState {
   topics: Topic[];
@@ -21,6 +22,11 @@ interface TopicState {
   searchQuery: string;
   mapSearchQuery: string;
   chatSearchQuery: string;
+  
+  // 请求去重和状态管理
+  pendingRequests: Set<string>;
+  requestQueue: Map<string, Promise<any>>;
+  lastRequestTime: number;
   
   fetchNearbyTopics: (latitude: number, longitude: number, refresh?: boolean) => Promise<void>;
   loadMoreTopics: (latitude: number, longitude: number) => Promise<void>;
@@ -64,22 +70,48 @@ export const useTopicStore = create<TopicState>((set, get) => ({
   searchQuery: '',
   mapSearchQuery: '',
   chatSearchQuery: '',
+  
+  // 请求去重和状态管理
+  pendingRequests: new Set(),
+  requestQueue: new Map(),
+  lastRequestTime: 0,
 
   fetchNearbyTopics: async (latitude, longitude, refresh = false) => {
-    set({ isLoading: true, error: null });
+    const requestKey = `fetchNearby_${latitude}_${longitude}_${refresh}`;
+    const { pendingRequests, requestQueue, lastRequestTime } = get();
     
-    if (refresh) {
-      set({ 
-        currentPage: 0, 
-        hasMore: true,
-        topics: [],
-        filteredTopics: [],
-        mapFilteredTopics: [],
-        chatFilteredTopics: []
-      });
+    // 防止频繁请求（1秒内最多一次）
+    const now = Date.now();
+    if (!refresh && now - lastRequestTime < 1000) {
+      console.log('请求过于频繁，已忽略');
+      return;
     }
     
-    try {
+    // 检查是否有相同的请求正在进行
+    if (pendingRequests.has(requestKey)) {
+      console.log('相同请求正在进行中，等待结果');
+      return requestQueue.get(requestKey);
+    }
+    
+    set({ isLoading: true, error: null, lastRequestTime: now });
+    
+    // 将请求标记为进行中
+    set(state => ({
+      pendingRequests: new Set([...state.pendingRequests, requestKey])
+    }));
+    
+    // 创建新请求并添加到队列
+    const requestPromise = withNetworkRetry(async () => {
+      if (refresh) {
+        set({ 
+          currentPage: 0, 
+          hasMore: true,
+          topics: [],
+          filteredTopics: [],
+          mapFilteredTopics: [],
+          chatFilteredTopics: []
+        });
+      }
       // Get current user ID
       const { data: { user } } = await supabase.auth.getUser();
       const currentUserId = user?.id;
@@ -185,31 +217,76 @@ export const useTopicStore = create<TopicState>((set, get) => ({
         await get().checkLikeStatus(topicIds, currentUserId);
       }
       
-      // Apply current searches if exist
-      const { searchQuery, mapSearchQuery, chatSearchQuery } = get();
-      if (searchQuery) {
-        get().searchTopics(searchQuery);
+      // 重新应用当前的搜索状态（如果存在）
+      const currentState = get();
+      if (currentState.searchQuery) {
+        get().searchTopics(currentState.searchQuery);
       }
-      if (mapSearchQuery) {
-        get().searchMapTopics(mapSearchQuery);
+      if (currentState.mapSearchQuery) {
+        get().searchMapTopics(currentState.mapSearchQuery);
       }
-      if (chatSearchQuery) {
-        get().searchChatTopics(chatSearchQuery);
+      if (currentState.chatSearchQuery) {
+        get().searchChatTopics(currentState.chatSearchQuery);
       }
-    } catch (error: any) {
+      
+      return sortedTopics;
+    }).catch((error: any) => {
+      console.error('附近话题获取失败:', error);
+      const errorMessage = isNetworkError(error) 
+        ? 'ネットワーク接続を確認してください' 
+        : '近くのトピックの取得に失敗しました';
       set({ 
-        error: "近くのトピックの取得に失敗しました", 
+        error: errorMessage, 
         isLoading: false 
+      });
+      throw error;
+    });
+    
+    // 将请求添加到队列
+    set(state => ({
+      requestQueue: new Map([...state.requestQueue, [requestKey, requestPromise]])
+    }));
+    
+    try {
+      await requestPromise;
+    } finally {
+      // 清理请求状态
+      set(state => {
+        const newPendingRequests = new Set(state.pendingRequests);
+        newPendingRequests.delete(requestKey);
+        
+        const newRequestQueue = new Map(state.requestQueue);
+        newRequestQueue.delete(requestKey);
+        
+        return {
+          pendingRequests: newPendingRequests,
+          requestQueue: newRequestQueue
+        };
       });
     }
   },
 
   loadMoreTopics: async (latitude, longitude) => {
-    const { isLoadingMore, hasMore, currentPage, topics } = get();
+    const { isLoadingMore, hasMore, currentPage, topics, pendingRequests, requestQueue } = get();
     
     if (isLoadingMore || !hasMore) return;
     
+    const requestKey = `loadMore_${latitude}_${longitude}_${currentPage}`;
+    
+    // 检查是否有相同的请求正在进行
+    if (pendingRequests.has(requestKey)) {
+      console.log('相同的loadMore请求正在进行中');
+      return requestQueue.get(requestKey);
+    }
+    
     set({ isLoadingMore: true, error: null });
+    
+    // 将请求标记为进行中
+    set(state => ({
+      pendingRequests: new Set([...state.pendingRequests, requestKey])
+    }));
+    
+    const requestPromise = (async () => {
     
     try {
       // Get current user ID
@@ -324,21 +401,46 @@ export const useTopicStore = create<TopicState>((set, get) => ({
         await get().checkLikeStatus(newTopicIds, currentUserId);
       }
       
-      // Apply current searches if exist
-      const { searchQuery, mapSearchQuery, chatSearchQuery } = get();
-      if (searchQuery) {
-        get().searchTopics(searchQuery);
+      // 重新应用当前的搜索状态（如果存在）
+      const currentState = get();
+      if (currentState.searchQuery) {
+        get().searchTopics(currentState.searchQuery);
       }
-      if (mapSearchQuery) {
-        get().searchMapTopics(mapSearchQuery);
+      if (currentState.mapSearchQuery) {
+        get().searchMapTopics(currentState.mapSearchQuery);
       }
-      if (chatSearchQuery) {
-        get().searchChatTopics(chatSearchQuery);
+      if (currentState.chatSearchQuery) {
+        get().searchChatTopics(currentState.chatSearchQuery);
       }
     } catch (error: any) {
-      set({ 
-        error: "さらなるトピックの取得に失敗しました", 
-        isLoadingMore: false 
+        set({ 
+          error: "さらなるトピックの取得に失敗しました", 
+          isLoadingMore: false 
+        });
+        throw error;
+      }
+    })();
+    
+    // 将请求添加到队列
+    set(state => ({
+      requestQueue: new Map([...state.requestQueue, [requestKey, requestPromise]])
+    }));
+    
+    try {
+      await requestPromise;
+    } finally {
+      // 清理请求状态
+      set(state => {
+        const newPendingRequests = new Set(state.pendingRequests);
+        newPendingRequests.delete(requestKey);
+        
+        const newRequestQueue = new Map(state.requestQueue);
+        newRequestQueue.delete(requestKey);
+        
+        return {
+          pendingRequests: newPendingRequests,
+          requestQueue: newRequestQueue
+        };
       });
     }
   },
@@ -800,6 +902,7 @@ export const useTopicStore = create<TopicState>((set, get) => ({
       return titleMatch || descriptionMatch || authorMatch || locationMatch;
     });
     
+    // 只更新地图页面的过滤结果，不影响其他页面
     set({ 
       mapFilteredTopics: filtered,
       mapSearchQuery: query 
@@ -1260,13 +1363,36 @@ export const useTopicStore = create<TopicState>((set, get) => ({
   },
 
   ensureMinimumTopicsForMap: async (latitude, longitude) => {
-    const { topics, isLoading, isLoadingMore } = get();
+    const { topics, isLoading, isLoadingMore, pendingRequests, requestQueue, lastRequestTime } = get();
     
     // 如果已经在加载中，则跳过
     if (isLoading || isLoadingMore) return;
     
     // 如果当前话题数量已经足够，则跳过
     if (topics.length >= MINIMUM_MAP_TOPICS) return;
+    
+    const requestKey = `ensureMinimum_${latitude}_${longitude}`;
+    const now = Date.now();
+    
+    // 防止频繁调用（5秒内最多一次）
+    if (now - lastRequestTime < 5000) {
+      console.log('ensureMinimumTopicsForMap: 请求过于频繁，已忽略');
+      return;
+    }
+    
+    // 检查是否有相同的请求正在进行
+    if (pendingRequests.has(requestKey)) {
+      console.log('ensureMinimumTopicsForMap: 相同请求正在进行中');
+      return requestQueue.get(requestKey);
+    }
+    
+    // 将请求标记为进行中
+    set(state => ({
+      pendingRequests: new Set([...state.pendingRequests, requestKey]),
+      lastRequestTime: now
+    }));
+    
+    const requestPromise = (async () => {
     
     try {
       // Get current user ID
@@ -1410,9 +1536,34 @@ export const useTopicStore = create<TopicState>((set, get) => ({
         }
       }
     } catch (error: any) {
-      console.error('Error ensuring minimum topics for map:', error);
+        console.error('Error ensuring minimum topics for map:', error);
+        throw error;
+      } finally {
+        set({ isLoadingMore: false });
+      }
+    })();
+    
+    // 将请求添加到队列
+    set(state => ({
+      requestQueue: new Map([...state.requestQueue, [requestKey, requestPromise]])
+    }));
+    
+    try {
+      await requestPromise;
     } finally {
-      set({ isLoadingMore: false });
+      // 清理请求状态
+      set(state => {
+        const newPendingRequests = new Set(state.pendingRequests);
+        newPendingRequests.delete(requestKey);
+        
+        const newRequestQueue = new Map(state.requestQueue);
+        newRequestQueue.delete(requestKey);
+        
+        return {
+          pendingRequests: newPendingRequests,
+          requestQueue: newRequestQueue
+        };
+      });
     }
   },
 

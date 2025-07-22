@@ -36,7 +36,9 @@ export default function ChatRoomScreen() {
     searchQuery,
     searchResults,
     isSending,
-    isLoading 
+    isLoading,
+    checkConnectionHealth,
+    getConnectionState 
   } = useChatStore();
   
   const [messageText, setMessageText] = useState("");
@@ -65,6 +67,9 @@ export default function ChatRoomScreen() {
   // 現在のトピックのメッセージを取得
   const messages = id ? getMessagesForTopic(id) : [];
   
+  // 接続状態を取得
+  const connectionState = id ? getConnectionState(id) : 'disconnected';
+  
   useEffect(() => {
     if (id && user) {
       // トピック情報を取得
@@ -89,11 +94,17 @@ export default function ChatRoomScreen() {
         updateUserPresence(id, user.id, user.name);
       }, 20000);
       
+      // 接続健全性チェック (30秒毎)
+      const healthCheckInterval = setInterval(() => {
+        checkConnectionHealth();
+      }, 30000);
+      
       // クリーンアップ関数でサブスクリプションを解除
       return () => {
         // ユーザーのオンライン状態を削除
         removeUserPresence(id, user.id);
         clearInterval(presenceInterval);
+        clearInterval(healthCheckInterval);
         unsubscribeFromTopic(id);
         setCurrentTopic(null);
       };
@@ -219,7 +230,15 @@ export default function ChatRoomScreen() {
         >
           <ChevronLeft size={24} color={Colors.text.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{currentTopic?.title || "チャットルーム"}</Text>
+        <View style={styles.titleContainer}>
+          <Text style={styles.headerTitle}>{currentTopic?.title || "チャットルーム"}</Text>
+          <View style={[styles.connectionIndicator, 
+            connectionState === 'connected' ? styles.connectedIndicator :
+            connectionState === 'connecting' ? styles.connectingIndicator :
+            connectionState === 'error' ? styles.errorIndicator :
+            styles.disconnectedIndicator
+          ]} />
+        </View>
         <View style={styles.headerActions}>
           <TouchableOpacity 
             style={styles.headerButton}
@@ -424,13 +443,36 @@ const styles = StyleSheet.create({
   backButton: {
     padding: 8,
   },
-  headerTitle: {
+  titleContainer: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 16,
+  },
+  headerTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: Colors.text.primary,
     textAlign: 'center',
-    marginHorizontal: 16,
+  },
+  connectionIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginLeft: 8,
+  },
+  connectedIndicator: {
+    backgroundColor: '#34C759',
+  },
+  connectingIndicator: {
+    backgroundColor: '#FF9500',
+  },
+  errorIndicator: {
+    backgroundColor: '#FF3B30',
+  },
+  disconnectedIndicator: {
+    backgroundColor: '#8E8E93',
   },
   placeholder: {
     width: 40,

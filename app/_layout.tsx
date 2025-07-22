@@ -46,7 +46,7 @@ export default function RootLayout() {
               name="favorites" 
               options={{ 
                 headerBackTitle: '',
-                headerBackTitleVisible: false,
+                headerBackVisible: true,
               }} 
             />
             <Stack.Screen name="modal" options={{ presentation: 'modal' }} />

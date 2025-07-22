@@ -3,10 +3,12 @@ import { Message } from '@/types';
 import { supabase } from '@/lib/supabase';
 import { encryptMessage, decryptMessage, isEncrypted } from '@/lib/encryption';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { withNetworkRetry, withDatabaseRetry, isNetworkError } from '@/lib/retry';
 
 interface ChatState {
   // メッセージの状態管理
   messages: Record<string, Message[]>; // topicId -> Message[]
+  messageIds: Record<string, Set<string>>; // topicId -> Set<messageId> for faster duplicate checking
   currentTopicId: string | null;
   isLoading: boolean;
   isSending: boolean;
@@ -42,6 +44,12 @@ interface ChatState {
   maxActiveConnections: number;
   activeConnections: Set<string>;
   
+  // 接続状態管理
+  connectionStates: Record<string, 'connecting' | 'connected' | 'disconnected' | 'error'>;
+  reconnectAttempts: Record<string, number>;
+  reconnectTimeouts: Record<string, any>;
+  connectionPriorities: Record<string, number>; // 高い数値 = 高い優先度
+  
   // メッセージ管理機能
   fetchMessages: (topicId: string) => Promise<void>;
   addMessage: (topicId: string, text: string, userId: string) => Promise<void>;
@@ -49,7 +57,7 @@ interface ChatState {
   clearAllMessages: () => void;
   
   // Realtime サブスクリプション管理
-  subscribeToTopic: (topicId: string) => void;
+  subscribeToTopic: (topicId: string, priority?: number) => void;
   unsubscribeFromTopic: (topicId: string) => void;
   unsubscribeFromAllTopics: () => void;
   
@@ -91,11 +99,52 @@ interface ChatState {
   setCurrentTopic: (topicId: string | null) => void;
   getMessagesForTopic: (topicId: string) => Message[];
   getMessageCount: (topicId: string) => number;
+  
+  // 接続管理
+  manageConnectionsByPriority: (newTopicId: string, newPriority: number) => void;
+  scheduleReconnect: (topicId: string) => void;
+  getConnectionState: (topicId: string) => 'connecting' | 'connected' | 'disconnected' | 'error';
+  checkConnectionHealth: () => void;
 }
+
+// 辅助函数：安全地添加消息到状态中，避免重复
+const addMessageToState = (state: any, topicId: string, newMessage: Message) => {
+  // 初始化该话题的消息数组和ID集合（如果不存在）
+  if (!state.messages[topicId]) {
+    state.messages[topicId] = [];
+  }
+  if (!state.messageIds[topicId]) {
+    state.messageIds[topicId] = new Set();
+  }
+  
+  // 检查消息是否已存在
+  if (state.messageIds[topicId].has(newMessage.id)) {
+    console.log(`消息 ${newMessage.id} 已存在，跳过添加`);
+    return state;
+  }
+  
+  // 添加消息
+  const updatedMessages = [...state.messages[topicId], newMessage];
+  const updatedMessageIds = new Set(state.messageIds[topicId]);
+  updatedMessageIds.add(newMessage.id);
+  
+  return {
+    ...state,
+    messages: {
+      ...state.messages,
+      [topicId]: updatedMessages
+    },
+    messageIds: {
+      ...state.messageIds,
+      [topicId]: updatedMessageIds
+    }
+  };
+};
 
 export const useChatStore = create<ChatState>((set, get) => ({
   // 初期状態
   messages: {},
+  messageIds: {},
   currentTopicId: null,
   isLoading: false,
   isSending: false,
@@ -114,6 +163,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
   // 最大5個のアクティブな接続を許可
   maxActiveConnections: 5,
   activeConnections: new Set(),
+  
+  // 接続状態管理の初期化
+  connectionStates: {},
+  reconnectAttempts: {},
+  reconnectTimeouts: {},
+  connectionPriorities: {},
 
   // メッセージを取得
   fetchMessages: async (topicId: string) => {
@@ -121,23 +176,27 @@ export const useChatStore = create<ChatState>((set, get) => ({
     
     try {
       // Supabaseからメッセージを取得
-      const { data: messagesData, error: messagesError } = await supabase
-        .from('chat_messages')
-        .select(`
-          *,
-          users!chat_messages_user_id_fkey (
-            id,
-            nickname,
-            avatar_url,
-            email
-          )
-        `)
-        .eq('topic_id', topicId)
-        .order('created_at', { ascending: true });
+      const messagesData = await withNetworkRetry(async () => {
+        const { data, error } = await supabase
+          .from('chat_messages')
+          .select(`
+            *,
+            users!chat_messages_user_id_fkey (
+              id,
+              nickname,
+              avatar_url,
+              email
+            )
+          `)
+          .eq('topic_id', topicId)
+          .order('created_at', { ascending: true });
 
-      if (messagesError) {
-        throw messagesError;
-      }
+        if (error) {
+          throw error;
+        }
+        
+        return data;
+      });
 
       // メッセージを復号化してローカル形式に変換
       const messages: Message[] = (messagesData || []).map(message => {
@@ -165,19 +224,29 @@ export const useChatStore = create<ChatState>((set, get) => ({
         };
       });
 
-      // 該当トピックのメッセージを更新
+      // 该话题的消息ID集合
+      const messageIdSet = new Set(messages.map(msg => msg.id));
+      
+      // 更新该话题的消息和ID集合
       set(state => ({
         messages: {
           ...state.messages,
           [topicId]: messages
+        },
+        messageIds: {
+          ...state.messageIds,
+          [topicId]: messageIdSet
         },
         isLoading: false
       }));
 
     } catch (error: any) {
       console.error('メッセージの取得に失敗:', error);
+      const errorMessage = isNetworkError(error) 
+        ? 'ネットワーク接続を確認してください' 
+        : "メッセージの取得に失敗しました";
       set({ 
-        error: "メッセージの取得に失敗しました", 
+        error: errorMessage, 
         isLoading: false 
       });
     }
@@ -188,33 +257,37 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ isSending: true, error: null });
     
     try {
-      // メッセージを暗号化
-      const encryptedText = encryptMessage(text);
-      
-      // Supabaseにメッセージを挿入
-      const { data: insertedMessage, error: insertError } = await supabase
-        .from('chat_messages')
-        .insert([
-          {
-            topic_id: topicId,
-            user_id: userId,
-            message: encryptedText
-          }
-        ])
-        .select(`
-          *,
-          users!chat_messages_user_id_fkey (
-            id,
-            nickname,
-            avatar_url,
-            email
-          )
-        `)
-        .single();
+      const insertedMessage = await withDatabaseRetry(async () => {
+        // メッセージを暗号化
+        const encryptedText = encryptMessage(text);
+        
+        // Supabaseにメッセージを挿入
+        const { data, error } = await supabase
+          .from('chat_messages')
+          .insert([
+            {
+              topic_id: topicId,
+              user_id: userId,
+              message: encryptedText
+            }
+          ])
+          .select(`
+            *,
+            users!chat_messages_user_id_fkey (
+              id,
+              nickname,
+              avatar_url,
+              email
+            )
+          `)
+          .single();
 
-      if (insertError) {
-        throw insertError;
-      }
+        if (error) {
+          throw error;
+        }
+        
+        return data;
+      });
 
       // 送信成功後、ローカルステートに追加（復号化済み）
       const newMessage: Message = {
@@ -231,26 +304,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
       };
 
       set(state => {
-        const currentMessages = state.messages[topicId] || [];
-        // 重複チェック
-        const alreadyExists = currentMessages.some(msg => msg.id === insertedMessage.id);
-        if (alreadyExists) {
-          return { ...state, isSending: false };
-        }
-        
+        const updatedState = addMessageToState(state, topicId, newMessage);
         return {
-          messages: {
-            ...state.messages,
-            [topicId]: [...currentMessages, newMessage]
-          },
+          ...updatedState,
           isSending: false
         };
       });
 
     } catch (error: any) {
       console.error('メッセージの送信に失敗:', error);
+      const errorMessage = isNetworkError(error) 
+        ? 'ネットワーク接続を確認してください' 
+        : "メッセージの送信に失敗しました";
       set({ 
-        error: "メッセージの送信に失敗しました", 
+        error: errorMessage, 
         isSending: false 
       });
       throw error;
@@ -261,30 +328,68 @@ export const useChatStore = create<ChatState>((set, get) => ({
   clearMessages: (topicId: string) => {
     set(state => {
       const newMessages = { ...state.messages };
+      const newMessageIds = { ...state.messageIds };
       delete newMessages[topicId];
-      return { messages: newMessages };
+      delete newMessageIds[topicId];
+      return { 
+        messages: newMessages,
+        messageIds: newMessageIds 
+      };
     });
   },
 
   // 全てのメッセージをクリア
   clearAllMessages: () => {
-    set({ messages: {} });
+    set({ 
+      messages: {},
+      messageIds: {}
+    });
   },
 
   // Realtimeサブスクリプション開始
-  subscribeToTopic: (topicId: string) => {
-    const { realtimeChannels, activeConnections, maxActiveConnections } = get();
+  subscribeToTopic: (topicId: string, priority: number = 1) => {
+    const { 
+      realtimeChannels, 
+      activeConnections, 
+      maxActiveConnections,
+      connectionStates,
+      connectionPriorities,
+      reconnectTimeouts
+    } = get();
     
     // 既存のサブスクリプションがある場合は無視
-    if (realtimeChannels[topicId]) {
+    if (realtimeChannels[topicId] && connectionStates[topicId] === 'connected') {
       return;
     }
+    
+    // 接続中または再接続タイマーがある場合はスキップ
+    if (connectionStates[topicId] === 'connecting' || reconnectTimeouts[topicId]) {
+      console.log(`Topic ${topicId} is already connecting or has pending reconnection`);
+      return;
+    }
+    
+    // 優先度を設定
+    set(state => ({
+      connectionPriorities: {
+        ...state.connectionPriorities,
+        [topicId]: priority
+      }
+    }));
     
     // 接続数制限チェック
     if (activeConnections.size >= maxActiveConnections) {
-      console.log(`Connection limit reached (${maxActiveConnections}). Skipping subscription for topic ${topicId}`);
+      console.log(`Connection limit reached (${maxActiveConnections}). Managing connections by priority.`);
+      get().manageConnectionsByPriority(topicId, priority);
       return;
     }
+    
+    // 接続状態を設定
+    set(state => ({
+      connectionStates: {
+        ...state.connectionStates,
+        [topicId]: 'connecting'
+      }
+    }));
 
     // 新しいRealtimeチャンネルを作成
     const channel = supabase
@@ -308,15 +413,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
               return;
             }
 
-            // ユーザー情報を取得
-            const { data: userData, error: userError } = await supabase
-              .from('users')
-              .select('*')
-              .eq('id', payload.new.user_id)
-              .single();
+              // ユーザー情報を取得
+            const userData = await withNetworkRetry(async () => {
+              const { data, error } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', payload.new.user_id)
+                .single();
 
-            if (userError || !userData) {
-              console.error('ユーザー情報の取得に失敗:', userError);
+              if (error || !data) {
+                throw error || new Error('ユーザー情報が見つかりません');
+              }
+              
+              return data;
+            }).catch((error) => {
+              console.error('ユーザー情報の取得に失敗:', error);
+              return null;
+            });
+
+            if (!userData) {
               return;
             }
 
@@ -346,10 +461,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
             };
 
             set(state => {
-              const currentMessages = state.messages[topicId] || [];
-              // 再度重複チェック（レースコンディション対策）
-              const alreadyExists = currentMessages.some(msg => msg.id === payload.new.id);
-              if (alreadyExists) {
+              // 使用辅助函数安全添加消息
+              const updatedState = addMessageToState(state, topicId, newMessage);
+              
+              // 如果消息已存在（没有变化），直接返回原状态
+              if (updatedState === state) {
                 return state;
               }
               
@@ -365,10 +481,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
               }
               
               return {
-                messages: {
-                  ...state.messages,
-                  [topicId]: [...currentMessages, newMessage]
-                },
+                ...updatedState,
                 unreadCounts: newUnreadCounts
               };
             });
@@ -400,19 +513,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           };
 
           set(state => {
-            const currentMessages = state.messages[topicId] || [];
-            // 重複チェック
-            const alreadyExists = currentMessages.some(msg => msg.id === newMessage.id);
-            if (alreadyExists) {
-              return state;
-            }
-            
-            return {
-              messages: {
-                ...state.messages,
-                [topicId]: [...currentMessages, newMessage]
-              }
-            };
+            return addMessageToState(state, topicId, newMessage);
           });
         }
       })
@@ -505,9 +606,48 @@ export const useChatStore = create<ChatState>((set, get) => ({
         });
       })
       .subscribe(async (status) => {
+        console.log(`Topic ${topicId} subscription status:`, status);
+        
         if (status === 'SUBSCRIBED') {
-          // サブスクリプション完了後、プレゼンス状態を初期化
+          // 接続成功
+          set(state => ({
+            connectionStates: {
+              ...state.connectionStates,
+              [topicId]: 'connected'
+            },
+            reconnectAttempts: {
+              ...state.reconnectAttempts,
+              [topicId]: 0
+            }
+          }));
           console.log(`チャンネル ${topicId} に正常に接続されました`);
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          // 接続エラー
+          set(state => ({
+            connectionStates: {
+              ...state.connectionStates,
+              [topicId]: 'error'
+            }
+          }));
+          console.error(`チャンネル ${topicId} 接続エラー:`, status);
+          
+          // 自動再接続を試行
+          get().scheduleReconnect(topicId);
+        } else if (status === 'CLOSED') {
+          // 接続切断
+          set(state => ({
+            connectionStates: {
+              ...state.connectionStates,
+              [topicId]: 'disconnected'
+            }
+          }));
+          console.log(`チャンネル ${topicId} が切断されました`);
+          
+          // 必要に応じて再接続
+          const { activeConnections } = get();
+          if (activeConnections.has(topicId)) {
+            get().scheduleReconnect(topicId);
+          }
         }
       });
 
@@ -523,22 +663,39 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   // 特定トピックのサブスクリプション解除
   unsubscribeFromTopic: (topicId: string) => {
-    const { realtimeChannels } = get();
+    const { realtimeChannels, reconnectTimeouts } = get();
     const channel = realtimeChannels[topicId];
+    
+    // 再接続タイマーをクリア
+    if (reconnectTimeouts[topicId]) {
+      clearTimeout(reconnectTimeouts[topicId]);
+    }
     
     if (channel) {
       supabase.removeChannel(channel);
       
       set(state => {
         const newChannels = { ...state.realtimeChannels };
-        delete newChannels[topicId];
-        
         const newActiveConnections = new Set(state.activeConnections);
+        const newConnectionStates = { ...state.connectionStates };
+        const newReconnectAttempts = { ...state.reconnectAttempts };
+        const newReconnectTimeouts = { ...state.reconnectTimeouts };
+        const newConnectionPriorities = { ...state.connectionPriorities };
+        
+        delete newChannels[topicId];
         newActiveConnections.delete(topicId);
+        delete newConnectionStates[topicId];
+        delete newReconnectAttempts[topicId];
+        delete newReconnectTimeouts[topicId];
+        delete newConnectionPriorities[topicId];
         
         return { 
           realtimeChannels: newChannels,
-          activeConnections: newActiveConnections
+          activeConnections: newActiveConnections,
+          connectionStates: newConnectionStates,
+          reconnectAttempts: newReconnectAttempts,
+          reconnectTimeouts: newReconnectTimeouts,
+          connectionPriorities: newConnectionPriorities
         };
       });
     }
@@ -546,7 +703,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   // 全てのサブスクリプション解除
   unsubscribeFromAllTopics: () => {
-    const { realtimeChannels } = get();
+    const { realtimeChannels, reconnectTimeouts } = get();
+    
+    // 全ての再接続タイマーをクリア
+    Object.values(reconnectTimeouts).forEach(timeout => {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+    });
     
     Object.values(realtimeChannels).forEach(channel => {
       if (channel) {
@@ -556,13 +720,31 @@ export const useChatStore = create<ChatState>((set, get) => ({
     
     set({ 
       realtimeChannels: {},
-      activeConnections: new Set()
+      activeConnections: new Set(),
+      connectionStates: {},
+      reconnectAttempts: {},
+      reconnectTimeouts: {},
+      connectionPriorities: {}
     });
   },
 
   // 現在のトピックを設定
   setCurrentTopic: (topicId: string | null) => {
     set({ currentTopicId: topicId });
+    
+    // 現在のトピックを高優先度で接続
+    if (topicId) {
+      // 接続試行回数をリセットして新しいチャンスを与える
+      set(state => ({
+        reconnectAttempts: {
+          ...state.reconnectAttempts,
+          [topicId]: 0
+        },
+        activeConnections: new Set([...state.activeConnections, topicId])
+      }));
+      
+      get().subscribeToTopic(topicId, 10); // 最高優先度
+    }
   },
 
   // 特定トピックのメッセージを取得
@@ -895,15 +1077,26 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
         
         // 未読メッセージ数を取得
-        const { count, error } = await supabase
-          .from('chat_messages')
-          .select('*', { count: 'exact', head: true })
-          .eq('topic_id', topicId)
-          .gt('created_at', lastReadTime)
-          .neq('user_id', currentUserId); // 自分のメッセージは除外
+        const result = await withDatabaseRetry(async () => {
+          const { count, error } = await supabase
+            .from('chat_messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('topic_id', topicId)
+            .gt('created_at', lastReadTime)
+            .neq('user_id', currentUserId); // 自分のメッセージは除外
+          
+          if (error) {
+            throw error;
+          }
+          
+          return count;
+        }).catch((error) => {
+          console.warn(`Failed to fetch unread count for topic ${topicId}:`, error);
+          return null;
+        });
         
-        if (!error && count !== null) {
-          newUnreadCounts[topicId] = count;
+        if (result !== null) {
+          newUnreadCounts[topicId] = result;
         }
       }
       
@@ -927,12 +1120,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // 接続数の制限を考慮して購読するトピックを選択
     const availableSlots = maxActiveConnections - activeConnections.size;
     const topicsToSubscribe = topicIds
-      .filter(id => !realtimeChannels[id]) // まだ購読していないトピックのみ
+      .filter(id => !realtimeChannels[id] || get().connectionStates[id] === 'disconnected') // まだ購読していないか切断されたトピック
       .slice(0, Math.max(0, availableSlots)); // 利用可能なスロット数まで
     
-    // 各トピックを購読
-    topicsToSubscribe.forEach(topicId => {
-      get().subscribeToTopic(topicId);
+    // 各トピックを購読（低優先度）
+    topicsToSubscribe.forEach((topicId, index) => {
+      get().subscribeToTopic(topicId, 1); // 低優先度
     });
   },
   
@@ -950,6 +1143,143 @@ export const useChatStore = create<ChatState>((set, get) => ({
     Object.keys(realtimeChannels).forEach(topicId => {
       if (!activeSet.has(topicId)) {
         get().unsubscribeFromTopic(topicId);
+      }
+    });
+  },
+  
+  // 優先度による接続管理
+  manageConnectionsByPriority: (newTopicId: string, newPriority: number) => {
+    const { connectionPriorities, activeConnections } = get();
+    
+    // 最も低い優先度の接続を見つける
+    let lowestPriority = newPriority;
+    let topicToDisconnect: string | null = null;
+    
+    Array.from(activeConnections).forEach(topicId => {
+      const priority = connectionPriorities[topicId] || 1;
+      if (priority < lowestPriority) {
+        lowestPriority = priority;
+        topicToDisconnect = topicId;
+      }
+    });
+    
+    // 新しい接続の優先度が高い場合、既存の低優先度接続を切断
+    if (topicToDisconnect && newPriority > lowestPriority) {
+      console.log(`Disconnecting lower priority topic ${topicToDisconnect} for ${newTopicId}`);
+      get().unsubscribeFromTopic(topicToDisconnect);
+      
+      // 少し待ってから新しい接続を開始
+      setTimeout(() => {
+        get().subscribeToTopic(newTopicId, newPriority);
+      }, 100);
+    }
+  },
+  
+  // 自動再接続スケジュール
+  scheduleReconnect: (topicId: string) => {
+    const { reconnectAttempts, reconnectTimeouts, connectionStates } = get();
+    const currentAttempts = reconnectAttempts[topicId] || 0;
+    const maxAttempts = 3; // 減らして無限ループを防止
+    
+    // 既に再接続タイマーが設定されている場合はスキップ
+    if (reconnectTimeouts[topicId]) {
+      console.log(`Reconnection already scheduled for topic ${topicId}`);
+      return;
+    }
+    
+    if (currentAttempts >= maxAttempts) {
+      console.log(`Max reconnection attempts reached for topic ${topicId}. Giving up.`);
+      // 接続状態をエラーに設定
+      set(state => ({
+        connectionStates: {
+          ...state.connectionStates,
+          [topicId]: 'error'
+        }
+      }));
+      return;
+    }
+    
+    // 指数バックオフによる遅延
+    const delay = Math.min(3000 * Math.pow(2, currentAttempts), 15000); // 最大15秒
+    
+    console.log(`Scheduling reconnection for topic ${topicId} in ${delay}ms (attempt ${currentAttempts + 1}/${maxAttempts})`);
+    
+    const timeoutId = setTimeout(() => {
+      // タイムアウトをクリア
+      set(state => {
+        const newTimeouts = { ...state.reconnectTimeouts };
+        delete newTimeouts[topicId];
+        return { reconnectTimeouts: newTimeouts };
+      });
+      
+      const { activeConnections, connectionPriorities } = get();
+      
+      // まだアクティブな接続として管理されている場合のみ再接続
+      if (activeConnections.has(topicId)) {
+        const priority = connectionPriorities[topicId] || 1;
+        
+        // 再接続試行回数を増やす
+        set(state => ({
+          reconnectAttempts: {
+            ...state.reconnectAttempts,
+            [topicId]: currentAttempts + 1
+          }
+        }));
+        
+        console.log(`Attempting to reconnect to topic ${topicId}`);
+        get().subscribeToTopic(topicId, priority);
+      }
+    }, delay);
+    
+    // タイムアウトIDを保存
+    set(state => ({
+      reconnectTimeouts: {
+        ...state.reconnectTimeouts,
+        [topicId]: timeoutId
+      }
+    }));
+  },
+  
+  // 接続状態の取得
+  getConnectionState: (topicId: string) => {
+    const { connectionStates } = get();
+    return connectionStates[topicId] || 'disconnected';
+  },
+  
+  // 接続健全性チェック
+  checkConnectionHealth: () => {
+    const { realtimeChannels, connectionStates, activeConnections, reconnectAttempts } = get();
+    
+    Array.from(activeConnections).forEach(topicId => {
+      const channel = realtimeChannels[topicId];
+      const state = connectionStates[topicId];
+      const attempts = reconnectAttempts[topicId] || 0;
+      
+      // 再接続試行が多いトピックはアクティブ接続から除外
+      if (attempts >= 3 && state === 'error') {
+        console.log(`Removing problematic topic ${topicId} from active connections`);
+        set(state => {
+          const newActiveConnections = new Set(state.activeConnections);
+          newActiveConnections.delete(topicId);
+          return { activeConnections: newActiveConnections };
+        });
+        return;
+      }
+      
+      if (channel && state === 'connected') {
+        // チャンネルが正常に動作しているかテスト
+        try {
+          // 軽量なping的操作を送信してテスト
+          channel.send({
+            type: 'broadcast',
+            event: 'ping',
+            payload: { timestamp: Date.now() }
+          });
+        } catch (error) {
+          console.warn(`Health check failed for topic ${topicId}:`, error);
+          // 再接続をスケジュール
+          get().scheduleReconnect(topicId);
+        }
       }
     });
   }

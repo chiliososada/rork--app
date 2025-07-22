@@ -53,7 +53,7 @@ export default function FavoritesScreen() {
           },
           headerTintColor: Colors.text.primary,
           headerBackTitle: '',
-          headerBackTitleVisible: false,
+          headerBackVisible: true,
           headerShadowVisible: true,
         }}
       />
