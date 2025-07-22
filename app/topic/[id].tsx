@@ -2,19 +2,20 @@ import React, { useEffect, useState } from "react";
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform } from "react-native";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MapPin, MessageCircle, Users, Send, ChevronLeft } from "lucide-react-native";
+import { MapPin, MessageCircle, Users, Send, ChevronLeft, Heart, Bookmark } from "lucide-react-native";
 import Colors from "@/constants/colors";
 import { useTopicStore } from "@/store/topic-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useLocationStore } from "@/store/location-store";
 import CommentItem from "@/components/CommentItem";
+import TopicImage from "@/components/TopicImage";
 
 export default function TopicDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuthStore();
   const { currentLocation } = useLocationStore();
-  const { currentTopic, comments, fetchTopicById, fetchComments, addComment, likeComment, isLoading } = useTopicStore();
+  const { currentTopic, comments, fetchTopicById, fetchComments, addComment, likeComment, toggleFavorite, toggleLike, isFavoriteLoading, isLikeLoading, isLoading } = useTopicStore();
   const [commentText, setCommentText] = useState("");
   
   useEffect(() => {
@@ -86,6 +87,18 @@ export default function TopicDetailScreen() {
     }
   };
   
+  const handleFavoritePress = async () => {
+    if (user?.id && id && !isFavoriteLoading) {
+      await toggleFavorite(id, user.id);
+    }
+  };
+  
+  const handleLikePress = async () => {
+    if (user?.id && id && !isLikeLoading) {
+      await toggleLike(id, user.id);
+    }
+  };
+  
   if (!currentTopic && isLoading) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
@@ -119,6 +132,17 @@ export default function TopicDetailScreen() {
           <ChevronLeft size={24} color={Colors.text.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>トピック詳細</Text>
+        <TouchableOpacity
+          style={styles.favoriteButton}
+          onPress={handleFavoritePress}
+          disabled={isFavoriteLoading}
+        >
+          <Bookmark
+            size={24}
+            color={currentTopic.isFavorited ? '#007AFF' : Colors.text.secondary}
+            fill={currentTopic.isFavorited ? '#007AFF' : 'transparent'}
+          />
+        </TouchableOpacity>
       </View>
       
       <KeyboardAvoidingView
@@ -144,6 +168,13 @@ export default function TopicDetailScreen() {
             <View style={styles.topicContent}>
               <Text style={styles.topicDescription}>{currentTopic.description}</Text>
               
+              {/* Topic Image */}
+              <TopicImage 
+                topic={currentTopic} 
+                size="large" 
+                style={styles.topicImage} 
+              />
+              
               <View style={styles.topicMeta}>
                 <View style={styles.locationContainer}>
                   <MapPin size={14} color={Colors.text.secondary} />
@@ -153,6 +184,17 @@ export default function TopicDetailScreen() {
                 </View>
                 
                 <View style={styles.statsContainer}>
+                  <TouchableOpacity style={styles.stat} onPress={handleLikePress} activeOpacity={0.7}>
+                    <Heart 
+                      size={14} 
+                      color={currentTopic.isLiked ? '#FF6B6B' : Colors.text.secondary}
+                      fill={currentTopic.isLiked ? '#FF6B6B' : 'transparent'}
+                    />
+                    <Text style={[styles.statText, currentTopic.isLiked && { color: '#FF6B6B' }]}>
+                      {currentTopic.likesCount || 0}
+                    </Text>
+                  </TouchableOpacity>
+                  
                   <View style={styles.stat}>
                     <MessageCircle size={14} color={Colors.text.secondary} />
                     <Text style={styles.statText}>{comments.length}</Text>
@@ -237,8 +279,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.text.primary,
     textAlign: 'center',
-    marginLeft: 16,
-    marginRight: 48, // Account for back button width
+    marginHorizontal: 16,
+  },
+  favoriteButton: {
+    padding: 8,
   },
   container: {
     flex: 1,
@@ -318,6 +362,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.text.primary,
     lineHeight: 26,
+    marginBottom: 16,
+  },
+  topicImage: {
     marginBottom: 20,
   },
   topicMeta: {

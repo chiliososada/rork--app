@@ -34,7 +34,7 @@ export default function ChatsScreen() {
   
   useEffect(() => {
     if (currentLocation) {
-      fetchNearbyTopics(currentLocation.latitude, currentLocation.longitude);
+      fetchNearbyTopics(currentLocation.latitude, currentLocation.longitude, true);
     }
   }, [currentLocation]);
   
@@ -75,7 +75,7 @@ export default function ChatsScreen() {
     setRefreshing(true);
     try {
       // トピックデータを再取得
-      await fetchNearbyTopics(currentLocation.latitude, currentLocation.longitude);
+      await fetchNearbyTopics(currentLocation.latitude, currentLocation.longitude, true);
       
       // 少し待ってからトピックIDを取得（データが更新されるのを待つ）
       setTimeout(async () => {
@@ -164,7 +164,7 @@ export default function ChatsScreen() {
   
   // Memoize expensive calculations
   const getActiveChatsCount = useMemo(() => {
-    return chatFilteredTopics.filter(topic => topic.participantCount > 1).length;
+    return chatFilteredTopics.filter(topic => topic.lastMessageTime).length;
   }, [chatFilteredTopics]);
   
   // Memoize key extractor

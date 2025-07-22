@@ -1,22 +1,34 @@
 import React, { useEffect, useState } from "react";
-import { StyleSheet, Text, View, Image, TouchableOpacity, ScrollView, Alert } from "react-native";
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LogOut, Settings, MapPin, Bell, Shield, HelpCircle, MessageSquare, Heart } from "lucide-react-native";
+import { LogOut, Settings, MapPin, Bell, Shield, HelpCircle, MessageSquare, Heart, Bookmark, ThumbsUp } from "lucide-react-native";
 import Colors from "@/constants/colors";
 import { useAuthStore } from "@/store/auth-store";
 import CustomHeader from "@/components/CustomHeader";
+import AvatarPicker from "@/components/AvatarPicker";
 import { supabase } from "@/lib/supabase";
+import { useRouter } from "expo-router";
+import { useTopicStore } from "@/store/topic-store";
 
 export default function ProfileScreen() {
-  const { user, logout } = useAuthStore();
+  const router = useRouter();
+  const { user, logout, updateAvatar, isUpdatingAvatar } = useAuthStore();
+  const { favoriteTopics, fetchFavoriteTopics } = useTopicStore();
   const [topicCount, setTopicCount] = useState(0);
   const [likeCount, setLikeCount] = useState(0);
+  const [favoriteCount, setFavoriteCount] = useState(0);
   
   useEffect(() => {
     if (user?.id) {
       fetchUserStats();
+      fetchFavoriteTopics(user.id);
     }
   }, [user?.id]);
+  
+  // Update favorite count when favoriteTopics changes
+  useEffect(() => {
+    setFavoriteCount(favoriteTopics.length);
+  }, [favoriteTopics.length]);
   
   const fetchUserStats = async () => {
     if (!user?.id) return;
@@ -28,7 +40,10 @@ export default function ProfileScreen() {
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user.id);
       
-      // ユーザーが受け取ったいいね数を取得
+      // ユーザーが受け取ったいいね数を取得（话题の点赞数 + コメントの点赞数）
+      let totalLikes = 0;
+      
+      // 1. 用户话题获得的点赞数
       const { data: userTopics } = await supabase
         .from('topics')
         .select('id')
@@ -36,17 +51,52 @@ export default function ProfileScreen() {
       
       if (userTopics && userTopics.length > 0) {
         const topicIds = userTopics.map(t => t.id);
-        const { count: likes } = await supabase
-          .from('comment_likes')
-          .select('*', { count: 'exact', head: true })
-          .in('comment_id', topicIds);
         
-        setLikeCount(likes || 0);
+        // 统计用户话题的点赞数
+        const { count: topicLikes } = await supabase
+          .from('topic_likes')
+          .select('*', { count: 'exact', head: true })
+          .in('topic_id', topicIds);
+        
+        totalLikes += topicLikes || 0;
       }
       
+      // 2. 用户所有评论获得的点赞数
+      const { data: userComments } = await supabase
+        .from('comments')
+        .select('id')
+        .eq('user_id', user.id);
+      
+      if (userComments && userComments.length > 0) {
+        const commentIds = userComments.map(c => c.id);
+        const { count: commentLikes } = await supabase
+          .from('comment_likes')
+          .select('*', { count: 'exact', head: true })
+          .in('comment_id', commentIds);
+        
+        totalLikes += commentLikes || 0;
+      }
+      
+      setLikeCount(totalLikes);
+      
+      // ユーザーの収藏数を取得
+      const { count: favorites } = await supabase
+        .from('topic_favorites')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id);
+      
       setTopicCount(topics || 0);
+      setFavoriteCount(favorites || 0);
     } catch (error) {
       console.error('Error fetching user stats:', error);
+    }
+  };
+
+  const handleAvatarChange = async (newAvatarUrl: string) => {
+    try {
+      await updateAvatar(newAvatarUrl);
+    } catch (error) {
+      // 错误处理已在updateAvatar中完成
     }
   };
   
@@ -107,12 +157,13 @@ export default function ProfileScreen() {
         <ScrollView>
           <View style={styles.profileHeader}>
             <View style={styles.profileSection}>
-              <View style={styles.avatarContainer}>
-                <Image 
-                  source={{ uri: user?.avatar }} 
-                  style={styles.avatar}
-                />
-              </View>
+              <AvatarPicker
+                currentAvatarUrl={user?.avatar}
+                userId={user?.id || ''}
+                onAvatarChange={handleAvatarChange}
+                size={120}
+                editable={true}
+              />
               <Text style={styles.name}>{user?.name}</Text>
               <Text style={styles.email}>{user?.email || "メールアドレスなし"}</Text>
               
@@ -128,6 +179,16 @@ export default function ProfileScreen() {
                   <Text style={styles.statNumber}>{likeCount}</Text>
                   <Text style={styles.statLabel}>いいね</Text>
                 </View>
+                <View style={styles.statDivider} />
+                <TouchableOpacity 
+                  style={styles.statItem}
+                  onPress={() => router.push('/favorites')}
+                  activeOpacity={0.7}
+                >
+                  <Bookmark size={20} color={Colors.text.secondary} />
+                  <Text style={styles.statNumber}>{favoriteCount}</Text>
+                  <Text style={styles.statLabel}>収藏</Text>
+                </TouchableOpacity>
               </View>
             </View>
           </View>
@@ -171,18 +232,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
-  },
-  avatarContainer: {
-    position: 'relative',
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 5,
   },
   statsContainer: {
     flexDirection: 'row',
@@ -231,17 +280,11 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 0,
   },
-  avatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 4,
-    borderColor: Colors.card,
-  },
   name: {
     fontSize: 24,
     fontWeight: "700",
     color: Colors.text.primary,
+    marginTop: 16,
     marginBottom: 4,
   },
   email: {

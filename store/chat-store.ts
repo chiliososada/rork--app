@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { Message } from '@/types';
 import { supabase } from '@/lib/supabase';
 import { encryptMessage, decryptMessage, isEncrypted } from '@/lib/encryption';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface ChatState {
   // メッセージの状態管理
@@ -660,14 +661,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
     }));
     
-    // AsyncStorageに永続化（オプション）
-    try {
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(`lastRead_${topicId}`, currentTime);
-      }
-    } catch (error) {
+    // AsyncStorageに永続化（オプション、非同期で実行）
+    AsyncStorage.setItem(`lastRead_${topicId}`, currentTime).catch(error => {
       console.warn('Failed to persist last read time:', error);
-    }
+    });
   },
 
   // 未読数を取得
@@ -874,9 +871,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         let lastReadTime = lastReadTimestamps[topicId];
         
         // 永続化されたタイムスタンプをチェック
-        if (!lastReadTime && typeof window !== 'undefined') {
+        if (!lastReadTime) {
           try {
-            const stored = localStorage.getItem(`lastRead_${topicId}`);
+            const stored = await AsyncStorage.getItem(`lastRead_${topicId}`);
             if (stored) {
               lastReadTime = stored;
               // メモリにも保存

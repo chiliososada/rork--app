@@ -171,3 +171,8 @@ create table public.comment_likes (
 
 REACT_APP_SUPABASE_URL=https://nkhomvyrlkxhuafikyuu.supabase.co
 REACT_APP_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5raG9tdnlybGt4aHVhZmlreXV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE4NjYxOTIsImV4cCI6MjA2NzQ0MjE5Mn0.8mse6qzWK7Q0XfGXyNcP8jRjQPRmZTg_K9jymo2dydA
+
+
+如果设计到文本都使用日语
+
+我偏向于ios和安卓 web端可以降低比重

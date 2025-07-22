@@ -9,19 +9,22 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
+  isUpdatingAvatar: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;
   checkAuth: () => Promise<void>;
+  updateAvatar: (avatarUrl: string) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       isAuthenticated: false,
       isLoading: false,
+      isUpdatingAvatar: false,
       error: null,
 
       login: async (email, password) => {
@@ -184,6 +187,45 @@ export const useAuthStore = create<AuthState>()(
             user: null,
             isAuthenticated: false 
           });
+        }
+      },
+
+      updateAvatar: async (avatarUrl: string) => {
+        const { user } = get();
+        if (!user) {
+          throw new Error('ユーザーがログインしていません');
+        }
+
+        set({ isUpdatingAvatar: true, error: null });
+        
+        try {
+          // 数据库中更新头像URL
+          const { error } = await supabase
+            .from('users')
+            .update({ avatar_url: avatarUrl })
+            .eq('id', user.id);
+
+          if (error) {
+            throw error;
+          }
+
+          // 本地状态更新
+          set({ 
+            user: {
+              ...user,
+              avatar: avatarUrl
+            },
+            isUpdatingAvatar: false 
+          });
+
+          console.log('头像更新成功:', avatarUrl);
+        } catch (error: any) {
+          set({ 
+            error: "アバターの更新に失敗しました。もう一度お試しください。", 
+            isUpdatingAvatar: false 
+          });
+          console.error('头像更新错误:', error);
+          throw error;
         }
       }
     }),

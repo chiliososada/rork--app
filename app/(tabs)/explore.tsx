@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { StyleSheet, Text, View, TouchableWithoutFeedback, Keyboard } from "react-native";
+import { StyleSheet, Text, View, TouchableWithoutFeedback, Keyboard, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import Colors from "@/constants/colors";
@@ -15,6 +15,8 @@ export default function ExploreScreen() {
   const { 
     mapFilteredTopics, 
     fetchNearbyTopics, 
+    ensureMinimumTopicsForMap,
+    isLoadingMore,
     mapSearchQuery, 
     searchMapTopics, 
     clearMapSearch 
@@ -22,9 +24,16 @@ export default function ExploreScreen() {
   
   useEffect(() => {
     if (currentLocation) {
-      fetchNearbyTopics(currentLocation.latitude, currentLocation.longitude);
+      fetchNearbyTopics(currentLocation.latitude, currentLocation.longitude, true);
     }
   }, [currentLocation]);
+  
+  // 确保地图有足够的话题点显示
+  useEffect(() => {
+    if (currentLocation && mapFilteredTopics.length > 0) {
+      ensureMinimumTopicsForMap(currentLocation.latitude, currentLocation.longitude);
+    }
+  }, [currentLocation, mapFilteredTopics.length, ensureMinimumTopicsForMap]);
   
   const handleMarkerPress = (topicId: string) => {
     router.push(`/topic/${topicId}`);
@@ -57,11 +66,21 @@ export default function ExploreScreen() {
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <View style={styles.mapWrapper}>
               {currentLocation ? (
-                <MapViewComponent
-                  currentLocation={currentLocation}
-                  topics={mapFilteredTopics}
-                  onMarkerPress={handleMarkerPress}
-                />
+                <>
+                  <MapViewComponent
+                    currentLocation={currentLocation}
+                    topics={mapFilteredTopics}
+                    onMarkerPress={handleMarkerPress}
+                  />
+                  {isLoadingMore && (
+                    <View style={styles.loadingOverlay}>
+                      <View style={styles.loadingIndicator}>
+                        <ActivityIndicator size="small" color={Colors.primary} style={{ marginRight: 8 }} />
+                        <Text style={styles.loadingText}>より多くのトピックを読み込んでいます...</Text>
+                      </View>
+                    </View>
+                  )}
+                </>
               ) : (
                 <View style={styles.loadingContainer}>
                   <Text style={styles.loadingText}>地図を読み込んでいます...</Text>
@@ -94,5 +113,29 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
     color: Colors.text.secondary,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 20,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  loadingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
 });

@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Heart } from 'lucide-react-native';
 import { Comment } from '@/types';
 import Colors from '@/constants/colors';
+import { CommentAvatar } from '@/components/UserAvatar';
 
 interface CommentItemProps {
   comment: Comment;
@@ -35,7 +36,7 @@ export default function CommentItem({ comment, onLike }: CommentItemProps) {
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.authorContainer}>
-          <Image source={{ uri: comment.author.avatar }} style={styles.avatar} />
+          <CommentAvatar user={comment.author} />
           <Text style={styles.authorName}>{comment.author.name}</Text>
         </View>
         <Text style={styles.time}>{formatTime(comment.createdAt)}</Text>
@@ -78,12 +79,7 @@ const styles = StyleSheet.create({
   authorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    marginRight: 10,
+    gap: 10,
   },
   authorName: {
     fontSize: 15,

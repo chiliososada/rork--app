@@ -40,8 +40,15 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <Stack>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="(tabs)" options={{ headerShown: false, title: '' }} />
             <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+            <Stack.Screen 
+              name="favorites" 
+              options={{ 
+                headerBackTitle: '',
+                headerBackTitleVisible: false,
+              }} 
+            />
             <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
             <Stack.Screen name="+not-found" />
           </Stack>

@@ -6,7 +6,9 @@
       "Bash(curl:*)",
       "Bash(npx expo start:*)",
       "Bash(git checkout:*)",
-      "Bash(npm start)"
+      "Bash(npm start)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run:*)"
     ],
     "deny": []
   }

@@ -1,9 +1,13 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MapPin, MessageCircle, Users } from 'lucide-react-native';
+import { MapPin, MessageCircle, Users, Heart, Bookmark } from 'lucide-react-native';
 import { Topic } from '@/types';
 import Colors from '@/constants/colors';
+import { TopicCardImage } from '@/components/TopicImage';
+import { TopicCardAvatar } from '@/components/UserAvatar';
+import { useTopicStore } from '@/store/topic-store';
+import { useAuthStore } from '@/store/auth-store';
 
 interface TopicCardProps {
   topic: Topic;
@@ -11,6 +15,8 @@ interface TopicCardProps {
 
 export default function TopicCard({ topic }: TopicCardProps) {
   const router = useRouter();
+  const { toggleFavorite, toggleLike, isFavoriteLoading, isLikeLoading } = useTopicStore();
+  const { user } = useAuthStore();
   
   const formatDistance = (meters: number) => {
     if (meters < 1000) {
@@ -39,6 +45,20 @@ export default function TopicCard({ topic }: TopicCardProps) {
     router.push(`/topic/${topic.id}`);
   };
   
+  const handleFavoritePress = async (e: any) => {
+    e.stopPropagation(); // Prevent triggering the topic navigation
+    if (user?.id && !isFavoriteLoading) {
+      await toggleFavorite(topic.id, user.id);
+    }
+  };
+  
+  const handleLikePress = async (e: any) => {
+    e.stopPropagation(); // Prevent triggering the topic navigation
+    if (user?.id && !isLikeLoading) {
+      await toggleLike(topic.id, user.id);
+    }
+  };
+  
   return (
     <TouchableOpacity 
       style={styles.container}
@@ -47,10 +67,24 @@ export default function TopicCard({ topic }: TopicCardProps) {
     >
       <View style={styles.header}>
         <View style={styles.authorContainer}>
-          <Image source={{ uri: topic.author.avatar }} style={styles.avatar} />
+          <TopicCardAvatar user={topic.author} />
           <Text style={styles.authorName}>{topic.author.name}</Text>
         </View>
-        <Text style={styles.time}>{formatTime(topic.createdAt)}</Text>
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            style={styles.favoriteButton}
+            onPress={handleFavoritePress}
+            disabled={isFavoriteLoading}
+            activeOpacity={0.7}
+          >
+            <Bookmark
+              size={18}
+              color={topic.isFavorited ? '#007AFF' : Colors.text.secondary}
+              fill={topic.isFavorited ? '#007AFF' : 'transparent'}
+            />
+          </TouchableOpacity>
+          <Text style={styles.time}>{formatTime(topic.createdAt)}</Text>
+        </View>
       </View>
       
       <View style={styles.content}>
@@ -58,6 +92,9 @@ export default function TopicCard({ topic }: TopicCardProps) {
         <Text style={styles.description}>
           {topic.description}
         </Text>
+        
+        {/* Topic Image */}
+        <TopicCardImage topic={topic} />
       </View>
       
       <View style={styles.footer}>
@@ -69,6 +106,17 @@ export default function TopicCard({ topic }: TopicCardProps) {
         </View>
         
         <View style={styles.statsContainer}>
+          <TouchableOpacity style={styles.stat} onPress={handleLikePress} activeOpacity={0.7}>
+            <Heart 
+              size={14} 
+              color={topic.isLiked ? '#FF6B6B' : Colors.text.secondary}
+              fill={topic.isLiked ? '#FF6B6B' : 'transparent'}
+            />
+            <Text style={[styles.statText, topic.isLiked && { color: '#FF6B6B' }]}>
+              {topic.likesCount || 0}
+            </Text>
+          </TouchableOpacity>
+          
           <View style={styles.stat}>
             <MessageCircle size={14} color={Colors.text.secondary} />
             <Text style={styles.statText}>{topic.commentCount}</Text>
@@ -105,17 +153,21 @@ const styles = StyleSheet.create({
   authorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  avatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    marginRight: 8,
+    gap: 8,
   },
   authorName: {
     fontSize: 14,
     fontWeight: '500',
     color: Colors.text.primary,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  favoriteButton: {
+    padding: 4,
+    borderRadius: 20,
   },
   time: {
     fontSize: 12,
