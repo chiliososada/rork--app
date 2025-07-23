@@ -40,6 +40,7 @@ interface MapTopicsState {
   checkFavoriteStatus: (topicIds: string[], userId: string) => Promise<void>;
   checkLikeStatus: (topicIds: string[], userId: string) => Promise<void>;
   invalidateCache: (method?: string) => void;
+  cleanup: () => void;
 }
 
 const TOPICS_PER_PAGE = 10;
@@ -55,26 +56,33 @@ cacheManager.registerConfig(STORE_KEY, {
 });
 
 export const useMapTopicsStore = create<MapTopicsState>((set, get) => {
-  // Set up event listeners (same as home store)
+  // Set up event listeners with proper cleanup tracking
+  const unsubscribeFunctions: Array<() => void> = [];
+  
   const unsubscribeLike = eventBus.on(EVENT_TYPES.TOPIC_LIKED, (data: TopicInteractionEvent) => {
     get().updateTopicInteraction(data.topicId, { isLiked: true, likesCount: data.count });
   });
+  unsubscribeFunctions.push(unsubscribeLike);
   
   const unsubscribeUnlike = eventBus.on(EVENT_TYPES.TOPIC_UNLIKED, (data: TopicInteractionEvent) => {
     get().updateTopicInteraction(data.topicId, { isLiked: false, likesCount: data.count });
   });
+  unsubscribeFunctions.push(unsubscribeUnlike);
   
   const unsubscribeFavorite = eventBus.on(EVENT_TYPES.TOPIC_FAVORITED, (data: TopicInteractionEvent) => {
     get().updateTopicInteraction(data.topicId, { isFavorited: true });
   });
+  unsubscribeFunctions.push(unsubscribeFavorite);
   
   const unsubscribeUnfavorite = eventBus.on(EVENT_TYPES.TOPIC_UNFAVORITED, (data: TopicInteractionEvent) => {
     get().updateTopicInteraction(data.topicId, { isFavorited: false });
   });
+  unsubscribeFunctions.push(unsubscribeUnfavorite);
   
   const unsubscribeComment = eventBus.on(EVENT_TYPES.TOPIC_COMMENTED, (data: CommentEvent) => {
     get().updateTopicInteraction(data.topicId, { commentCount: data.commentCount });
   });
+  unsubscribeFunctions.push(unsubscribeComment);
   
   const unsubscribeMessage = eventBus.on(EVENT_TYPES.MESSAGE_SENT, (data: MessageEvent) => {
     get().updateTopicInteraction(data.topicId, { 
@@ -82,6 +90,7 @@ export const useMapTopicsStore = create<MapTopicsState>((set, get) => {
       participantCount: data.participantCount 
     });
   });
+  unsubscribeFunctions.push(unsubscribeMessage);
 
   return ({
   topics: [],
@@ -626,6 +635,22 @@ export const useMapTopicsStore = create<MapTopicsState>((set, get) => {
 
   invalidateCache: (method?: string) => {
     cacheManager.invalidateCache(STORE_KEY, method);
+  },
+
+  cleanup: () => {
+    // 清理事件监听器
+    unsubscribeFunctions.forEach(unsubscribe => {
+      try {
+        unsubscribe();
+      } catch (error) {
+        console.error('[MapTopicsStore] Error during cleanup:', error);
+      }
+    });
+    
+    // 清空unsubscribe函数数组
+    unsubscribeFunctions.length = 0;
+    
+    console.log('[MapTopicsStore] Cleanup completed');
   }
   });
 });

@@ -51,8 +51,13 @@ export class CacheManager {
   private pendingRequests = new Map<string, PendingRequest>();
   private lastRequestTimes = new Map<string, number>();
   private configs = new Map<string, CacheConfig>();
+  private cleanupInterval: NodeJS.Timeout | null = null;
+  private isDestroyed = false;
 
-  private constructor() {}
+  private constructor() {
+    // 启动定期清理，每30秒清理一次过期缓存
+    this.startCleanupInterval();
+  }
 
   static getInstance(): CacheManager {
     if (!CacheManager.instance) {
@@ -62,9 +67,55 @@ export class CacheManager {
   }
 
   /**
+   * 启动定期清理
+   */
+  private startCleanupInterval(): void {
+    if (this.cleanupInterval) {
+      return;
+    }
+    
+    this.cleanupInterval = setInterval(() => {
+      if (this.isDestroyed) {
+        return;
+      }
+      
+      try {
+        this.cleanupExpiredCache();
+      } catch (error) {
+        console.error('[CacheManager] Cleanup error:', error);
+      }
+    }, 30000); // 每30秒清理一次
+  }
+
+  /**
+   * 停止清理并销毁实例
+   */
+  public destroy(): void {
+    this.isDestroyed = true;
+    
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
+    
+    // 清理所有数据
+    this.cache.clear();
+    this.pendingRequests.clear();
+    this.lastRequestTimes.clear();
+    this.configs.clear();
+    
+    // 重置单例实例
+    CacheManager.instance = null as any;
+  }
+
+  /**
    * 注册缓存配置
    */
   registerConfig(storeKey: string, config: CacheConfig): void {
+    if (this.isDestroyed) {
+      console.warn('[CacheManager] Cannot register config on destroyed instance');
+      return;
+    }
     this.configs.set(storeKey, config);
   }
 
@@ -197,6 +248,13 @@ export class CacheManager {
     params: Record<string, any>,
     currentLocation?: { latitude: number; longitude: number }
   ): RequestDeduplicationResult<T> {
+    if (this.isDestroyed) {
+      return {
+        shouldRequest: false,
+        cleanup: () => {}
+      };
+    }
+
     const config = this.configs.get(storeKey);
     if (!config) {
       throw new Error(`No cache config registered for store: ${storeKey}`);
@@ -279,12 +337,38 @@ export class CacheManager {
     params: Record<string, any>,
     promise: Promise<T>
   ): void {
+    if (this.isDestroyed) {
+      return;
+    }
+
     const requestKey = this.generateRequestKey(storeKey, method, params);
-    this.pendingRequests.set(requestKey, {
+    
+    // 确保不会重复注册同一个请求
+    if (this.pendingRequests.has(requestKey)) {
+      console.warn(`[CacheManager] Request already pending: ${requestKey}`);
+      return;
+    }
+
+    const pendingRequest: PendingRequest<T> = {
       promise,
       timestamp: Date.now(),
       requestKey
-    });
+    };
+
+    this.pendingRequests.set(requestKey, pendingRequest);
+
+    // 请求完成后自动清理
+    promise
+      .finally(() => {
+        // 检查是否仍然是同一个请求实例
+        const currentPending = this.pendingRequests.get(requestKey);
+        if (currentPending === pendingRequest) {
+          this.pendingRequests.delete(requestKey);
+        }
+      })
+      .catch(() => {
+        // Promise rejection已经由调用者处理，这里只是确保清理
+      });
   }
 
   /**

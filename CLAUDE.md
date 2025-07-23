@@ -167,7 +167,30 @@ create table public.comment_likes (
   created_at timestamp with time zone default now(),
   unique(comment_id, user_id)
 );
+  create table public.topic_likes (
+    id uuid primary key default gen_random_uuid(),
+    topic_id uuid references public.topics(id) on delete cascade,
+    user_id uuid references public.users(id) on delete cascade,
+    created_at timestamp with time zone default now(),
+    unique(topic_id, user_id)
+  );
+ALTER TABLE public.topics ADD COLUMN image_aspect_ratio TEXT CHECK (image_aspect_ratio IN ('1:1', '4:5', '1.91:1'));   
+  -- 创建索引
+  create index topic_likes_topic_id_idx on public.topic_likes(topic_id);
+  create index topic_likes_user_id_idx on public.topic_likes(user_id);
 
+    -- 创建话题收藏表
+  create table public.topic_favorites (
+    id uuid primary key default gen_random_uuid(),
+    topic_id uuid references public.topics(id) on delete cascade,
+    user_id uuid references public.users(id) on delete cascade,
+    created_at timestamp with time zone default now(),
+    unique(topic_id, user_id)
+  );
+
+  -- 创建索引以提高查询性能
+  create index topic_favorites_topic_id_idx on public.topic_favorites(topic_id);
+  create index topic_favorites_user_id_idx on public.topic_favorites(user_id);
 
 REACT_APP_SUPABASE_URL=https://nkhomvyrlkxhuafikyuu.supabase.co
 REACT_APP_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5raG9tdnlybGt4aHVhZmlreXV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE4NjYxOTIsImV4cCI6MjA2NzQ0MjE5Mn0.8mse6qzWK7Q0XfGXyNcP8jRjQPRmZTg_K9jymo2dydA

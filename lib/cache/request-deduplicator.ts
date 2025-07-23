@@ -34,12 +34,55 @@ export class RequestDeduplicator {
     averageTime: number;
     lastRequestTime: number;
   }>();
+  private cleanupInterval: NodeJS.Timeout | null = null;
+  private isDestroyed = false;
 
   private constructor() {
     // 定期清理超时的请求
-    setInterval(() => {
-      this.cleanupTimeoutRequests();
+    this.startCleanupInterval();
+  }
+
+  /**
+   * 启动定期清理
+   */
+  private startCleanupInterval(): void {
+    if (this.cleanupInterval) {
+      return;
+    }
+    
+    this.cleanupInterval = setInterval(() => {
+      if (this.isDestroyed) {
+        return;
+      }
+      
+      try {
+        this.cleanupTimeoutRequests();
+      } catch (error) {
+        console.error('[RequestDeduplicator] Cleanup error:', error);
+      }
     }, 30000); // 每30秒清理一次
+  }
+
+  /**
+   * 销毁实例并清理资源
+   */
+  public destroy(): void {
+    this.isDestroyed = true;
+    
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
+    
+    // 取消所有pending请求
+    this.cancelAllRequests();
+    
+    // 清理所有数据
+    this.pendingRequests.clear();
+    this.requestStats.clear();
+    
+    // 重置单例实例
+    RequestDeduplicator.instance = null as any;
   }
 
   static getInstance(): RequestDeduplicator {

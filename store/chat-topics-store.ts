@@ -36,6 +36,7 @@ interface ChatTopicsState {
   checkFavoriteStatus: (topicIds: string[], userId: string) => Promise<void>;
   checkLikeStatus: (topicIds: string[], userId: string) => Promise<void>;
   invalidateCache: (method?: string) => void;
+  cleanup: () => void;
 }
 
 const TOPICS_PER_PAGE = 20; // チャットは一度に多め
@@ -49,26 +50,33 @@ cacheManager.registerConfig(STORE_KEY, {
 });
 
 export const useChatTopicsStore = create<ChatTopicsState>((set, get) => {
-  // Set up event listeners
+  // Set up event listeners with cleanup tracking
+  const unsubscribeFunctions: Array<() => void> = [];
+  
   const unsubscribeLike = eventBus.on(EVENT_TYPES.TOPIC_LIKED, (data: TopicInteractionEvent) => {
     get().updateTopicInteraction(data.topicId, { isLiked: true, likesCount: data.count });
   });
+  unsubscribeFunctions.push(unsubscribeLike);
   
   const unsubscribeUnlike = eventBus.on(EVENT_TYPES.TOPIC_UNLIKED, (data: TopicInteractionEvent) => {
     get().updateTopicInteraction(data.topicId, { isLiked: false, likesCount: data.count });
   });
+  unsubscribeFunctions.push(unsubscribeUnlike);
   
   const unsubscribeFavorite = eventBus.on(EVENT_TYPES.TOPIC_FAVORITED, (data: TopicInteractionEvent) => {
     get().updateTopicInteraction(data.topicId, { isFavorited: true });
   });
+  unsubscribeFunctions.push(unsubscribeFavorite);
   
   const unsubscribeUnfavorite = eventBus.on(EVENT_TYPES.TOPIC_UNFAVORITED, (data: TopicInteractionEvent) => {
     get().updateTopicInteraction(data.topicId, { isFavorited: false });
   });
+  unsubscribeFunctions.push(unsubscribeUnfavorite);
   
   const unsubscribeComment = eventBus.on(EVENT_TYPES.TOPIC_COMMENTED, (data: CommentEvent) => {
     get().updateTopicInteraction(data.topicId, { commentCount: data.commentCount });
   });
+  unsubscribeFunctions.push(unsubscribeComment);
 
   return ({
   topics: [],
@@ -793,6 +801,22 @@ export const useChatTopicsStore = create<ChatTopicsState>((set, get) => {
 
   invalidateCache: (method?: string) => {
     cacheManager.invalidateCache(STORE_KEY, method);
+  },
+
+  cleanup: () => {
+    // 清理事件监听器
+    unsubscribeFunctions.forEach(unsubscribe => {
+      try {
+        unsubscribe();
+      } catch (error) {
+        console.error('[ChatTopicsStore] Error during cleanup:', error);
+      }
+    });
+    
+    // 清空unsubscribe函数数组
+    unsubscribeFunctions.length = 0;
+    
+    console.log('[ChatTopicsStore] Cleanup completed');
   }
   });
 });

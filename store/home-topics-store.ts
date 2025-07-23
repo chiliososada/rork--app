@@ -2,11 +2,12 @@ import { create } from 'zustand';
 import { Topic } from '@/types';
 import { withNetworkRetry, isNetworkError } from '@/lib/retry';
 import { eventBus, EVENT_TYPES, TopicInteractionEvent, CommentEvent, MessageEvent, TopicEvent, PAGE_EVENT_RELEVANCE } from '@/lib/event-bus';
-import { topicCache, cacheUtils } from '@/lib/topic-cache';
+// Removed topicCache import - now using unified caching system
 import { fetchNearbyTopics, GeoQueryParams } from '@/lib/geo-queries';
 import { supabase } from '@/lib/supabase';
 import { cacheManager } from '@/lib/cache/cache-manager';
 import { CACHE_PRESETS } from '@/lib/cache/base-store';
+import { getCachedBatchTopicInteractionStatus } from '@/lib/database-optimizers';
 import { requestDeduplicator } from '@/lib/cache/request-deduplicator';
 
 interface HomeTopicsState {
@@ -30,8 +31,7 @@ interface HomeTopicsState {
   searchTopics: (query: string) => void;
   clearSearch: () => void;
   updateTopicInteraction: (topicId: string, updates: Partial<Topic>) => void;
-  checkFavoriteStatus: (topicIds: string[], userId: string) => Promise<void>;
-  checkLikeStatus: (topicIds: string[], userId: string) => Promise<void>;
+  checkInteractionStatus: (topicIds: string[], userId: string) => Promise<void>;
   invalidateCache: (method?: string) => void;
 }
 
@@ -191,8 +191,7 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
           const { data: { user } } = await supabase.auth.getUser();
           if (user?.id && result.topics.length > 0) {
             const topicIds = result.topics.map(t => t.id);
-            await get().checkFavoriteStatus(topicIds, user.id);
-            await get().checkLikeStatus(topicIds, user.id);
+            await get().checkInteractionStatus(topicIds, user.id);
           }
           
           return;
@@ -217,8 +216,7 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
             const { data: { user } } = await supabase.auth.getUser();
             if (user?.id && result.topics.length > 0) {
               const topicIds = result.topics.map(t => t.id);
-              await get().checkFavoriteStatus(topicIds, user.id);
-              await get().checkLikeStatus(topicIds, user.id);
+              await get().checkInteractionStatus(topicIds, user.id);
             }
           } catch (error) {
             set({ isLoading: false, error: '近くのトピックの取得に失敗しました' });
@@ -237,12 +235,7 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
       const requestPromise = withNetworkRetry(async () => {
         const result = await fetchNearbyTopics(queryParams);
         
-        // Cache individual topics for faster access
-        result.topics.forEach(topic => {
-          if (cacheUtils.shouldCache(topic)) {
-            topicCache.set(topic);
-          }
-        });
+        // Topics are now cached through the unified cache system
         
         return result;
       });
@@ -275,12 +268,11 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
         isLoading: false 
       });
       
-      // Check favorite and like status
+      // Check user interaction status
       const { data: { user } } = await supabase.auth.getUser();
       if (user?.id && result.topics.length > 0) {
         const topicIds = result.topics.map(t => t.id);
-        await get().checkFavoriteStatus(topicIds, user.id);
-        await get().checkLikeStatus(topicIds, user.id);
+        await get().checkInteractionStatus(topicIds, user.id);
       }
       
       // Re-apply search state
@@ -379,12 +371,7 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
       const requestPromise = (async () => {
         const result = await fetchNearbyTopics(queryParams);
         
-        // Cache new topics
-        result.topics.forEach(topic => {
-          if (cacheUtils.shouldCache(topic)) {
-            topicCache.set(topic);
-          }
-        });
+        // Topics are cached through the unified cache system
         
         return result;
       })();
@@ -421,12 +408,11 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
         isLoadingMore: false 
       });
       
-      // Check favorite and like status for new topics
+      // Check interaction status for new topics
       const { data: { user } } = await supabase.auth.getUser();
       if (user?.id && uniqueNewTopics.length > 0) {
         const newTopicIds = uniqueNewTopics.map(t => t.id);
-        await get().checkFavoriteStatus(newTopicIds, user.id);
-        await get().checkLikeStatus(newTopicIds, user.id);
+        await get().checkInteractionStatus(newTopicIds, user.id);
       }
       
       // Re-apply search state
@@ -491,87 +477,48 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
     }));
   },
 
-  checkFavoriteStatus: async (topicIds, userId) => {
+  checkInteractionStatus: async (topicIds, userId) => {
     try {
-      const { data: favoritesData, error: favoritesError } = await supabase
-        .from('topic_favorites')
-        .select('topic_id')
-        .eq('user_id', userId)
-        .in('topic_id', topicIds);
-
-      if (favoritesError) {
-        throw favoritesError;
-      }
-
-      const favoritedTopicIds = new Set(favoritesData?.map(f => f.topic_id) || []);
+      // Use optimized batch query instead of individual queries
+      const interactionStatuses = await getCachedBatchTopicInteractionStatus(topicIds, userId);
+      
       const targetTopicIds = new Set(topicIds);
+      const statusMap = new Map(
+        interactionStatuses.map(status => [status.topicId, status])
+      );
       
       set(state => ({
-        topics: state.topics.map(topic => 
-          targetTopicIds.has(topic.id) ? {
+        topics: state.topics.map(topic => {
+          if (!targetTopicIds.has(topic.id)) return topic;
+          
+          const status = statusMap.get(topic.id);
+          if (!status) return topic;
+          
+          return {
             ...topic,
-            isFavorited: favoritedTopicIds.has(topic.id)
-          } : topic
-        ),
-        filteredTopics: state.filteredTopics.map(topic => 
-          targetTopicIds.has(topic.id) ? {
+            isLiked: status.isLiked,
+            isFavorited: status.isFavorited,
+            likesCount: status.likesCount,
+            commentCount: status.commentsCount
+          };
+        }),
+        filteredTopics: state.filteredTopics.map(topic => {
+          if (!targetTopicIds.has(topic.id)) return topic;
+          
+          const status = statusMap.get(topic.id);
+          if (!status) return topic;
+          
+          return {
             ...topic,
-            isFavorited: favoritedTopicIds.has(topic.id)
-          } : topic
-        )
+            isLiked: status.isLiked,
+            isFavorited: status.isFavorited,
+            likesCount: status.likesCount,
+            commentCount: status.commentsCount
+          };
+        })
       }));
     } catch (error: any) {
-      console.error('Error checking favorite status:', error);
-    }
-  },
-
-  checkLikeStatus: async (topicIds, userId) => {
-    try {
-      // Check user's like status
-      const { data: likesData, error: likesError } = await supabase
-        .from('topic_likes')
-        .select('topic_id')
-        .eq('user_id', userId)
-        .in('topic_id', topicIds);
-
-      if (likesError) {
-        throw likesError;
-      }
-
-      const likedTopicIds = new Set(likesData?.map(l => l.topic_id) || []);
-
-      // Get likes count for each topic
-      const likesCountPromises = topicIds.map(async (topicId) => {
-        const { count } = await supabase
-          .from('topic_likes')
-          .select('*', { count: 'exact', head: true })
-          .eq('topic_id', topicId);
-        return { topicId, count: count || 0 };
-      });
-
-      const likesCountResults = await Promise.all(likesCountPromises);
-      const likesCountMap = new Map(likesCountResults.map(r => [r.topicId, r.count]));
-
-      const targetTopicIds = new Set(topicIds);
-      
-      set(state => ({
-        topics: state.topics.map(topic => 
-          targetTopicIds.has(topic.id) ? {
-            ...topic,
-            isLiked: likedTopicIds.has(topic.id),
-            likesCount: likesCountMap.get(topic.id) ?? topic.likesCount ?? 0
-          } : topic
-        ),
-        filteredTopics: state.filteredTopics.map(topic => 
-          targetTopicIds.has(topic.id) ? {
-            ...topic,
-            isLiked: likedTopicIds.has(topic.id),
-            likesCount: likesCountMap.get(topic.id) ?? topic.likesCount ?? 0
-          } : topic
-        )
-      }));
-    } catch (error: any) {
-      console.error('Error checking like status:', error);
+      console.error('Error checking interaction status:', error);
     }
   },
 

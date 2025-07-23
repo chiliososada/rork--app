@@ -3,7 +3,7 @@ import { Topic, Comment } from '@/types';
 import { supabase } from '@/lib/supabase';
 import { withNetworkRetry, isNetworkError } from '@/lib/retry';
 import { eventBus, EVENT_TYPES, TopicInteractionEvent, CommentEvent } from '@/lib/event-bus';
-import { topicCache, cacheUtils } from '@/lib/topic-cache';
+// Using unified caching system instead of separate topic cache
 
 interface TopicDetailState {
   currentTopic: Topic | null;
@@ -36,18 +36,8 @@ export const useTopicDetailStore = create<TopicDetailState>((set, get) => ({
   error: null,
 
   fetchTopicById: async (id) => {
-    // Check cache first
-    const cachedTopic = topicCache.get(id);
-    if (cachedTopic) {
-      set({ 
-        currentTopic: cachedTopic,
-        isLoading: false,
-        error: null 
-      });
-      // Still fetch fresh data in background, but don't block UI
-      get().fetchFreshTopicData(id);
-      return;
-    }
+    // Direct fetch - caching is now handled by the unified cache system
+    // at the component level for better control
     
     set({ isLoading: true, error: null });
     await get().fetchFreshTopicData(id);
@@ -162,10 +152,7 @@ export const useTopicDetailStore = create<TopicDetailState>((set, get) => ({
           likesCount: likesCount || 0
         };
         
-        // Cache the topic if it should be cached
-        if (cacheUtils.shouldCache(topic)) {
-          topicCache.set(topic);
-        }
+        // Topic caching is now handled by the unified cache system
         
         set({ 
           currentTopic: topic,
@@ -188,10 +175,7 @@ export const useTopicDetailStore = create<TopicDetailState>((set, get) => ({
     set(state => {
       const updatedTopic = state.currentTopic ? { ...state.currentTopic, ...updates } : null;
       
-      // Update cache if topic exists
-      if (updatedTopic) {
-        topicCache.update(updatedTopic.id, updates);
-      }
+      // Cache updates are handled by the unified cache system
       
       return { currentTopic: updatedTopic };
     });
