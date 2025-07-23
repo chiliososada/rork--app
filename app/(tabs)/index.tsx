@@ -9,7 +9,7 @@ import Button from "@/components/Button";
 import CustomHeader from "@/components/CustomHeader";
 import Colors from "@/constants/colors";
 import { useLocationStore } from "@/store/location-store";
-import { useTopicStore } from "@/store/topic-store";
+import { useHomeTopicsStore } from "@/store/home-topics-store";
 import { Topic } from "@/types";
 
 export default function NearbyScreen() {
@@ -25,7 +25,7 @@ export default function NearbyScreen() {
     searchQuery, 
     searchTopics, 
     clearSearch 
-  } = useTopicStore();
+  } = useHomeTopicsStore();
   const [refreshing, setRefreshing] = useState(false);
   
   useEffect(() => {

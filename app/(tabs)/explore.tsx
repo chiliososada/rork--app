@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import Colors from "@/constants/colors";
 import { useLocationStore } from "@/store/location-store";
-import { useTopicStore } from "@/store/topic-store";
+import { useMapTopicsStore } from "@/store/map-topics-store";
 import SearchBar from "@/components/SearchBar";
 import MapViewComponent from "@/components/MapView";
 import CustomHeader from "@/components/CustomHeader";
@@ -13,38 +13,38 @@ export default function ExploreScreen() {
   const router = useRouter();
   const { currentLocation } = useLocationStore();
   const { 
-    mapFilteredTopics, 
-    fetchNearbyTopics, 
-    ensureMinimumTopicsForMap,
+    filteredTopics, 
+    fetchMapTopics, 
+    loadMoreTopics,
     isLoadingMore,
-    mapSearchQuery, 
-    searchMapTopics, 
-    clearMapSearch 
-  } = useTopicStore();
+    searchQuery, 
+    searchTopics, 
+    clearSearch 
+  } = useMapTopicsStore();
   
   useEffect(() => {
     if (currentLocation) {
-      fetchNearbyTopics(currentLocation.latitude, currentLocation.longitude, true);
+      fetchMapTopics(currentLocation.latitude, currentLocation.longitude, true);
     }
   }, [currentLocation]);
   
   // 确保地图有足够的话题点显示
   useEffect(() => {
-    if (currentLocation && mapFilteredTopics.length > 0) {
-      ensureMinimumTopicsForMap(currentLocation.latitude, currentLocation.longitude);
+    if (currentLocation && filteredTopics.length > 0) {
+      loadMoreTopics(currentLocation.latitude, currentLocation.longitude);
     }
-  }, [currentLocation, mapFilteredTopics.length, ensureMinimumTopicsForMap]);
+  }, [currentLocation, filteredTopics.length, loadMoreTopics]);
   
   const handleMarkerPress = (topicId: string) => {
     router.push(`/topic/${topicId}`);
   };
   
   const handleSearch = (query: string) => {
-    searchMapTopics(query);
+    searchTopics(query);
   };
   
   const handleClearSearch = () => {
-    clearMapSearch();
+    clearSearch();
   };
   
   return (
@@ -52,12 +52,12 @@ export default function ExploreScreen() {
       <View style={styles.container}>
         <CustomHeader
           title="地図で探索"
-          subtitle={`🗺️ 地図上のトピックを発見 • ${mapFilteredTopics.length} 件のトピック`}
+          subtitle={`🗺️ 地図上のトピックを発見 • ${filteredTopics.length} 件のトピック`}
         />
         
         <SafeAreaView style={styles.content} edges={['left', 'right', 'bottom']}>
           <SearchBar
-            value={mapSearchQuery}
+            value={searchQuery}
             onChangeText={handleSearch}
             onClear={handleClearSearch}
             placeholder="地図上でトピックを検索..."
@@ -69,7 +69,7 @@ export default function ExploreScreen() {
                 <>
                   <MapViewComponent
                     currentLocation={currentLocation}
-                    topics={mapFilteredTopics}
+                    topics={filteredTopics}
                     onMarkerPress={handleMarkerPress}
                   />
                   {isLoadingMore && (

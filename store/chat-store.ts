@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { encryptMessage, decryptMessage, isEncrypted } from '@/lib/encryption';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { withNetworkRetry, withDatabaseRetry, isNetworkError } from '@/lib/retry';
+import { eventBus, EVENT_TYPES, MessageEvent } from '@/lib/event-bus';
 
 interface ChatState {
   // メッセージの状態管理
@@ -310,6 +311,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
           isSending: false
         };
       });
+      
+      // Emit event for other stores to update topic info
+      eventBus.emit(EVENT_TYPES.MESSAGE_SENT, { 
+        topicId, 
+        userId,
+        messageTime: newMessage.createdAt
+      } as MessageEvent);
 
     } catch (error: any) {
       console.error('メッセージの送信に失敗:', error);

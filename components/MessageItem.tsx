@@ -5,6 +5,7 @@ import Colors from '@/constants/colors';
 import { useAuthStore } from '@/store/auth-store';
 import { useChatStore } from '@/store/chat-store';
 import { Quote } from 'lucide-react-native';
+import { formatMessageTime } from '@/lib/utils/timeUtils';
 
 interface MessageItemProps {
   message: Message;
@@ -42,10 +43,6 @@ export default function MessageItem({ message }: MessageItemProps) {
     });
   };
   
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
   
   return (
     <View style={[
@@ -93,7 +90,7 @@ export default function MessageItem({ message }: MessageItemProps) {
           styles.time,
           isCurrentUser ? styles.currentUserTime : {}
         ]}>
-          {formatTime(message.createdAt)}
+          {formatMessageTime(message.createdAt)}
         </Text>
       </TouchableOpacity>
       

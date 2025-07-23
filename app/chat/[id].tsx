@@ -8,7 +8,9 @@ import { useTopicStore } from "@/store/topic-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useChatStore } from "@/store/chat-store";
 import MessageItem from "@/components/MessageItem";
+import DateSeparator from "@/components/DateSeparator";
 import { Message } from "@/types";
+import { groupMessagesByDate, MessageGroup } from "@/lib/utils/timeUtils";
 
 export default function ChatRoomScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -66,6 +68,29 @@ export default function ChatRoomScreen() {
   
   // 現在のトピックのメッセージを取得
   const messages = id ? getMessagesForTopic(id) : [];
+  
+  // メッセージを日付でグループ化
+  const messageGroups = groupMessagesByDate(messages);
+  
+  // 日付分隔符と消息を平展的な配列に結合
+  const flattenedItems = messageGroups.reduce((acc: any[], group: MessageGroup) => {
+    // 日期分隔符
+    acc.push({
+      type: 'date-separator',
+      id: `date-${group.date.getTime()}`,
+      dateString: group.dateString,
+    });
+    
+    // 该日期的所有消息
+    group.messages.forEach(message => {
+      acc.push({
+        type: 'message',
+        ...message,
+      });
+    });
+    
+    return acc;
+  }, []);
   
   // 接続状態を取得
   const connectionState = id ? getConnectionState(id) : 'disconnected';
@@ -210,8 +235,13 @@ export default function ChatRoomScreen() {
     }
   };
   
-  const renderMessage = ({ item }: { item: Message }) => {
-    return <MessageItem message={item} />;
+  const renderItem = ({ item }: { item: any }) => {
+    if (item.type === 'date-separator') {
+      return <DateSeparator dateString={item.dateString} />;
+    } else if (item.type === 'message') {
+      return <MessageItem message={item} />;
+    }
+    return null;
   };
   
   return (
@@ -268,8 +298,8 @@ export default function ChatRoomScreen() {
         <View style={styles.chatContainer}>
           <FlatList
             ref={flatListRef}
-            data={messages}
-            renderItem={renderMessage}
+            data={flattenedItems}
+            renderItem={renderItem}
             keyExtractor={(item, index) => `${item.id}-${index}`}
             contentContainerStyle={styles.messagesList}
             onScroll={(event) => {
@@ -377,7 +407,7 @@ export default function ChatRoomScreen() {
           
           <FlatList
             data={searchResults}
-            renderItem={renderMessage}
+            renderItem={({ item }) => <MessageItem message={item} />}
             keyExtractor={(item, index) => `search-${item.id}-${index}`}
             contentContainerStyle={styles.searchResults}
             ListEmptyComponent={

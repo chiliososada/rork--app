@@ -4,24 +4,23 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { MessageCircle, Clock } from "lucide-react-native";
 import Colors from "@/constants/colors";
-import { useTopicStore } from "@/store/topic-store";
-import { useLocationStore } from "@/store/location-store";
+import { useChatTopicsStore } from "@/store/chat-topics-store";
 import { useChatStore } from "@/store/chat-store";
 import { useAuthStore } from "@/store/auth-store";
 import SearchBar from "@/components/SearchBar";
 import CustomHeader from "@/components/CustomHeader";
 import { Topic } from "@/types";
+import { formatChatListTime } from "@/lib/utils/timeUtils";
 
 export default function ChatsScreen() {
   const router = useRouter();
   const { 
-    chatFilteredTopics, 
-    fetchNearbyTopics, 
-    chatSearchQuery, 
-    searchChatTopics, 
-    clearChatSearch 
-  } = useTopicStore();
-  const { currentLocation } = useLocationStore();
+    filteredTopics, 
+    fetchChatTopics, 
+    searchQuery, 
+    searchTopics, 
+    clearSearch 
+  } = useChatTopicsStore();
   const { user } = useAuthStore();
   const { 
     getUnreadCount, 
@@ -33,16 +32,16 @@ export default function ChatsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   
   useEffect(() => {
-    if (currentLocation) {
-      fetchNearbyTopics(currentLocation.latitude, currentLocation.longitude, true);
+    if (user) {
+      fetchChatTopics(user.id, true);
     }
-  }, [currentLocation]);
+  }, [user, fetchChatTopics]);
   
   // トピックが変更されたら未読数を取得し、リアルタイム購読を設定
   useEffect(() => {
-    if (chatFilteredTopics.length > 0 && user) {
+    if (filteredTopics.length > 0 && user) {
       // トピックIDのリストを取得
-      const topicIds = chatFilteredTopics.map(topic => topic.id);
+      const topicIds = filteredTopics.map(topic => topic.id);
       
       // 未読数を取得
       fetchUnreadCountsForTopics(topicIds, user.id);
@@ -55,31 +54,31 @@ export default function ChatsScreen() {
         cleanupUnusedSubscriptions(topicIds);
       };
     }
-  }, [chatFilteredTopics, user, fetchUnreadCountsForTopics, subscribeToMultipleTopics, cleanupUnusedSubscriptions]);
+  }, [filteredTopics, user, fetchUnreadCountsForTopics, subscribeToMultipleTopics, cleanupUnusedSubscriptions]);
   
   const handleChatPress = useCallback((topicId: string) => {
     router.push(`/chat/${topicId}`);
   }, [router]);
   
   const handleSearch = (query: string) => {
-    searchChatTopics(query);
+    searchTopics(query);
   };
   
   const handleClearSearch = () => {
-    clearChatSearch();
+    clearSearch();
   };
   
   const handleRefresh = useCallback(async () => {
-    if (!currentLocation || !user) return;
+    if (!user) return;
     
     setRefreshing(true);
     try {
       // トピックデータを再取得
-      await fetchNearbyTopics(currentLocation.latitude, currentLocation.longitude, true);
+      await fetchChatTopics(user.id, true);
       
       // 少し待ってからトピックIDを取得（データが更新されるのを待つ）
       setTimeout(async () => {
-        const topicIds = chatFilteredTopics.map(topic => topic.id);
+        const topicIds = filteredTopics.map(topic => topic.id);
         if (topicIds.length > 0) {
           // 未読数を更新
           await fetchUnreadCountsForTopics(topicIds, user.id);
@@ -90,30 +89,8 @@ export default function ChatsScreen() {
     } finally {
       setRefreshing(false);
     }
-  }, [currentLocation, user, fetchNearbyTopics, fetchUnreadCountsForTopics, chatFilteredTopics]);
+  }, [user, fetchChatTopics, fetchUnreadCountsForTopics, filteredTopics]);
   
-  // Memoize expensive time formatting function
-  const formatTime = useCallback((dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInMs = now.getTime() - date.getTime();
-    const diffInHours = diffInMs / (1000 * 60 * 60);
-    const diffInDays = diffInMs / (1000 * 60 * 60 * 24);
-    
-    if (diffInHours < 1) {
-      const minutes = Math.floor(diffInMs / (1000 * 60));
-      return minutes <= 0 ? "今" : `${minutes}分前`;
-    } else if (diffInHours < 24) {
-      return `${Math.floor(diffInHours)}時間前`;
-    } else if (diffInDays < 7) {
-      return `${Math.floor(diffInDays)}日前`;
-    } else {
-      return date.toLocaleDateString('ja-JP', { 
-        month: 'short', 
-        day: 'numeric' 
-      });
-    }
-  }, []);
   
   // Memoize chat item renderer for performance
   const renderChatItem = useCallback(({ item }: { item: Topic }) => {
@@ -146,7 +123,7 @@ export default function ChatsScreen() {
                 <Clock size={12} color={Colors.text.secondary} style={styles.clockIcon} />
               )}
               <Text style={styles.chatTime}>
-                {item.lastMessageTime ? formatTime(item.lastMessageTime) : 'まだメッセージなし'}
+                {item.lastMessageTime ? formatChatListTime(item.lastMessageTime) : 'まだメッセージなし'}
               </Text>
             </View>
           </View>
@@ -160,12 +137,12 @@ export default function ChatsScreen() {
         </View>
       </TouchableOpacity>
     );
-  }, [getUnreadCount, formatTime, handleChatPress]);
+  }, [getUnreadCount, handleChatPress]);
   
   // Memoize expensive calculations
   const getActiveChatsCount = useMemo(() => {
-    return chatFilteredTopics.filter(topic => topic.lastMessageTime).length;
-  }, [chatFilteredTopics]);
+    return filteredTopics.filter(topic => topic.lastMessageTime).length;
+  }, [filteredTopics]);
   
   // Memoize key extractor
   const keyExtractor = useCallback((item: Topic) => item.id, []);
@@ -174,19 +151,19 @@ export default function ChatsScreen() {
     <View style={styles.container}>
       <CustomHeader
         title="チャットルーム"
-        subtitle={`💬 ${getActiveChatsCount} 件のアクティブなチャット • ${chatFilteredTopics.length} 件のトピック`}
+        subtitle={`💬 ${getActiveChatsCount} 件のアクティブなチャット • ${filteredTopics.length} 件のトピック`}
       />
       
       <SafeAreaView style={styles.content} edges={['left', 'right', 'bottom']}>
         <SearchBar
-          value={chatSearchQuery}
+          value={searchQuery}
           onChangeText={handleSearch}
           onClear={handleClearSearch}
           placeholder="チャットルームを検索..."
         />
         
         <FlatList
-          data={chatFilteredTopics}
+          data={filteredTopics}
           renderItem={renderChatItem}
           keyExtractor={keyExtractor}
           contentContainerStyle={styles.listContent}
@@ -210,7 +187,7 @@ export default function ChatsScreen() {
           })}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              {chatSearchQuery ? (
+              {searchQuery ? (
                 <>
                   <Text style={styles.emptyTitle}>チャットルームが見つかりません</Text>
                   <Text style={styles.emptyText}>

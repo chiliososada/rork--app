@@ -8,6 +8,7 @@ import { TopicCardImage } from '@/components/TopicImage';
 import { TopicCardAvatar } from '@/components/UserAvatar';
 import { useTopicStore } from '@/store/topic-store';
 import { useAuthStore } from '@/store/auth-store';
+import { formatChatListTime } from '@/lib/utils/timeUtils';
 
 interface TopicCardProps {
   topic: Topic;
@@ -26,20 +27,6 @@ export default function TopicCard({ topic }: TopicCardProps) {
     }
   };
   
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    
-    if (diffMins < 60) {
-      return `${diffMins}m ago`;
-    } else if (diffMins < 1440) {
-      return `${Math.floor(diffMins / 60)}h ago`;
-    } else {
-      return `${Math.floor(diffMins / 1440)}d ago`;
-    }
-  };
   
   const handlePress = () => {
     router.push(`/topic/${topic.id}`);
@@ -83,7 +70,7 @@ export default function TopicCard({ topic }: TopicCardProps) {
               fill={topic.isFavorited ? '#007AFF' : 'transparent'}
             />
           </TouchableOpacity>
-          <Text style={styles.time}>{formatTime(topic.createdAt)}</Text>
+          <Text style={styles.time}>{formatChatListTime(topic.createdAt)}</Text>
         </View>
       </View>
       

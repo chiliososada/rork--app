@@ -4,18 +4,31 @@ import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MapPin, MessageCircle, Users, Send, ChevronLeft, Heart, Bookmark } from "lucide-react-native";
 import Colors from "@/constants/colors";
-import { useTopicStore } from "@/store/topic-store";
+import { useTopicDetailStore } from "@/store/topic-detail-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useLocationStore } from "@/store/location-store";
 import CommentItem from "@/components/CommentItem";
 import TopicImage from "@/components/TopicImage";
+import { formatMessageTime } from "@/lib/utils/timeUtils";
 
 export default function TopicDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuthStore();
   const { currentLocation } = useLocationStore();
-  const { currentTopic, comments, fetchTopicById, fetchComments, addComment, likeComment, toggleFavorite, toggleLike, isFavoriteLoading, isLikeLoading, isLoading } = useTopicStore();
+  const { 
+    currentTopic, 
+    comments, 
+    fetchTopicById, 
+    fetchComments, 
+    addComment, 
+    likeComment, 
+    toggleFavorite, 
+    toggleLike, 
+    isLoading, 
+    isLoadingComments,
+    clearCurrentTopic
+  } = useTopicDetailStore();
   const [commentText, setCommentText] = useState("");
   
   useEffect(() => {
@@ -23,7 +36,12 @@ export default function TopicDetailScreen() {
       fetchTopicById(id);
       fetchComments(id);
     }
-  }, [id]);
+    
+    // Cleanup when component unmounts
+    return () => {
+      clearCurrentTopic();
+    };
+  }, [id, fetchTopicById, fetchComments, clearCurrentTopic]);
   
   // Helper function to calculate distance between two coordinates in meters
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -58,12 +76,6 @@ export default function TopicDetailScreen() {
     }
   };
   
-  const formatTime = (dateString?: string) => {
-    if (!dateString) return "";
-    
-    const date = new Date(dateString);
-    return date.toLocaleString();
-  };
   
   const handleSendComment = async () => {
     if (!commentText.trim() || !id || !user) return;
@@ -88,13 +100,13 @@ export default function TopicDetailScreen() {
   };
   
   const handleFavoritePress = async () => {
-    if (user?.id && id && !isFavoriteLoading) {
+    if (user?.id && id) {
       await toggleFavorite(id, user.id);
     }
   };
   
   const handleLikePress = async () => {
-    if (user?.id && id && !isLikeLoading) {
+    if (user?.id && id) {
       await toggleLike(id, user.id);
     }
   };
@@ -135,7 +147,6 @@ export default function TopicDetailScreen() {
         <TouchableOpacity
           style={styles.favoriteButton}
           onPress={handleFavoritePress}
-          disabled={isFavoriteLoading}
         >
           <Bookmark
             size={24}
@@ -161,7 +172,7 @@ export default function TopicDetailScreen() {
               <Text style={styles.topicTitle}>{currentTopic.title}</Text>
               <View style={styles.authorRow}>
                 <Text style={styles.authorName}>{currentTopic.author.name}さんの投稿</Text>
-                <Text style={styles.topicTime}>{formatTime(currentTopic.createdAt)}</Text>
+                <Text style={styles.topicTime}>{formatMessageTime(currentTopic.createdAt)}</Text>
               </View>
             </View>
             

@@ -4,6 +4,7 @@ import { Heart } from 'lucide-react-native';
 import { Comment } from '@/types';
 import Colors from '@/constants/colors';
 import { CommentAvatar } from '@/components/UserAvatar';
+import { formatMessageTime } from '@/lib/utils/timeUtils';
 
 interface CommentItemProps {
   comment: Comment;
@@ -11,20 +12,6 @@ interface CommentItemProps {
 }
 
 export default function CommentItem({ comment, onLike }: CommentItemProps) {
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    
-    if (diffMins < 60) {
-      return `${diffMins}m ago`;
-    } else if (diffMins < 1440) {
-      return `${Math.floor(diffMins / 60)}h ago`;
-    } else {
-      return `${Math.floor(diffMins / 1440)}d ago`;
-    }
-  };
   
   const handleLike = () => {
     if (onLike) {
@@ -39,7 +26,7 @@ export default function CommentItem({ comment, onLike }: CommentItemProps) {
           <CommentAvatar user={comment.author} />
           <Text style={styles.authorName}>{comment.author.name}</Text>
         </View>
-        <Text style={styles.time}>{formatTime(comment.createdAt)}</Text>
+        <Text style={styles.time}>{formatMessageTime(comment.createdAt)}</Text>
       </View>
       
       <Text style={styles.text}>{comment.text}</Text>
