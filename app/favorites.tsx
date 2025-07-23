@@ -3,13 +3,13 @@ import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, Stack } from 'expo-router';
 import TopicCard from '@/components/TopicCard';
-import { useTopicStore } from '@/store/topic-store';
+import { useTopicDetailsStore } from '@/store/topic-details-store';
 import { useAuthStore } from '@/store/auth-store';
 import Colors from '@/constants/colors';
 
 export default function FavoritesScreen() {
   const router = useRouter();
-  const { favoriteTopics, isFavoriteLoading, fetchFavoriteTopics } = useTopicStore();
+  const { favoriteTopics, isFavoriteLoading, fetchFavoriteTopics } = useTopicDetailsStore();
   const { user } = useAuthStore();
 
   useEffect(() => {

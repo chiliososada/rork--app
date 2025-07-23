@@ -4,19 +4,22 @@ import { useLocalSearchParams, Stack, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Send, ChevronLeft, Search, Users, X } from "lucide-react-native";
 import Colors from "@/constants/colors";
-import { useTopicStore } from "@/store/topic-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useChatStore } from "@/store/chat-store";
+import { useLocationStore } from "@/store/location-store";
 import MessageItem from "@/components/MessageItem";
 import DateSeparator from "@/components/DateSeparator";
-import { Message } from "@/types";
+import { Message, Topic } from "@/types";
 import { groupMessagesByDate, MessageGroup } from "@/lib/utils/timeUtils";
+import { TopicDetailService } from "@/lib/services/topicDetailService";
 
 export default function ChatRoomScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuthStore();
-  const { currentTopic, fetchTopicById } = useTopicStore();
+  const [currentTopic, setCurrentTopicState] = useState<Topic | null>(null);
+  const [topicLoading, setTopicLoading] = useState(false);
+  const { currentLocation } = useLocationStore();
   const { 
     getMessagesForTopic, 
     fetchMessages, 
@@ -95,10 +98,30 @@ export default function ChatRoomScreen() {
   // 接続状態を取得
   const connectionState = id ? getConnectionState(id) : 'disconnected';
   
+  // 独立したトピック詳細取得関数
+  const loadTopicDetail = async () => {
+    if (!id || !user) return;
+    
+    setTopicLoading(true);
+    try {
+      const topic = await TopicDetailService.fetchFullTopicDetail(
+        id,
+        user.id,
+        currentLocation?.latitude,
+        currentLocation?.longitude
+      );
+      setCurrentTopicState(topic);
+    } catch (error) {
+      console.error('Failed to load topic detail:', error);
+    } finally {
+      setTopicLoading(false);
+    }
+  };
+  
   useEffect(() => {
     if (id && user) {
-      // トピック情報を取得
-      fetchTopicById(id);
+      // トピック情報を独立して取得
+      loadTopicDetail();
       
       // 現在のトピックを設定
       setCurrentTopic(id);
@@ -134,7 +157,7 @@ export default function ChatRoomScreen() {
         setCurrentTopic(null);
       };
     }
-  }, [id, user]);
+  }, [id, user, currentLocation]);
   
   useEffect(() => {
     // Scroll to bottom when messages change, but only if user is already at bottom
@@ -261,7 +284,9 @@ export default function ChatRoomScreen() {
           <ChevronLeft size={24} color={Colors.text.primary} />
         </TouchableOpacity>
         <View style={styles.titleContainer}>
-          <Text style={styles.headerTitle}>{currentTopic?.title || "チャットルーム"}</Text>
+          <Text style={styles.headerTitle}>
+            {topicLoading ? "読み込み中..." : (currentTopic?.title || "チャットルーム")}
+          </Text>
           <View style={[styles.connectionIndicator, 
             connectionState === 'connected' ? styles.connectedIndicator :
             connectionState === 'connecting' ? styles.connectingIndicator :

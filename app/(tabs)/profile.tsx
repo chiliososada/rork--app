@@ -8,13 +8,13 @@ import CustomHeader from "@/components/CustomHeader";
 import AvatarPicker from "@/components/AvatarPicker";
 import { supabase } from "@/lib/supabase";
 import { useRouter, useFocusEffect } from "expo-router";
-import { useTopicStore } from "@/store/topic-store";
+import { useTopicDetailsStore } from "@/store/topic-details-store";
 import { useCallback } from "react";
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, logout, updateAvatar, isUpdatingAvatar } = useAuthStore();
-  const { favoriteTopics, fetchFavoriteTopics, profileStatsVersion } = useTopicStore();
+  const { favoriteTopics, fetchFavoriteTopics, profileStatsVersion } = useTopicDetailsStore();
   const [topicCount, setTopicCount] = useState(0);
   const [likeCount, setLikeCount] = useState(0);
   const [favoriteCount, setFavoriteCount] = useState(0);

@@ -8,7 +8,7 @@ import Input from "@/components/Input";
 import Button from "@/components/Button";
 import ImagePicker from "@/components/ImagePicker";
 import { useLocationStore } from "@/store/location-store";
-import { useTopicStore } from "@/store/topic-store";
+import { useTopicDetailsStore } from "@/store/topic-details-store";
 import { useAuthStore } from "@/store/auth-store";
 import { AspectRatio, uploadTopicImage } from "@/lib/image-upload";
 
@@ -16,7 +16,7 @@ export default function CreateTopicScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
   const { currentLocation, requestPermission } = useLocationStore();
-  const { createTopic, isLoading } = useTopicStore();
+  const { createTopic, isLoading } = useTopicDetailsStore();
   
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");

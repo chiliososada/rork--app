@@ -19,12 +19,19 @@ interface MapViewComponentProps {
   currentLocation: Location;
   topics: Topic[];
   onMarkerPress: (topicId: string) => void;
+  onRegionChange?: (bounds: {
+    north: number;
+    south: number;
+    east: number;
+    west: number;
+  }) => void;
 }
 
 export default function MapViewComponent({ 
   currentLocation, 
   topics, 
-  onMarkerPress 
+  onMarkerPress,
+  onRegionChange 
 }: MapViewComponentProps) {
   return (
     <View style={styles.webFallback}>

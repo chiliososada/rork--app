@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MapPin, MessageCircle, Users, Heart, Bookmark } from 'lucide-react-native';
@@ -6,18 +6,21 @@ import { Topic } from '@/types';
 import Colors from '@/constants/colors';
 import { TopicCardImage } from '@/components/TopicImage';
 import { TopicCardAvatar } from '@/components/UserAvatar';
-import { useTopicStore } from '@/store/topic-store';
 import { useAuthStore } from '@/store/auth-store';
 import { formatChatListTime } from '@/lib/utils/timeUtils';
+import { TopicInteractionService } from '@/lib/services/topicInteractionService';
 
 interface TopicCardProps {
   topic: Topic;
+  onFavoriteToggle?: (topicId: string, isFavorited: boolean) => void;
+  onLikeToggle?: (topicId: string, likeData: { isLiked: boolean; count: number }) => void;
 }
 
-export default function TopicCard({ topic }: TopicCardProps) {
+export default function TopicCard({ topic, onFavoriteToggle, onLikeToggle }: TopicCardProps) {
   const router = useRouter();
-  const { toggleFavorite, toggleLike, isFavoriteLoading, isLikeLoading } = useTopicStore();
   const { user } = useAuthStore();
+  const [isFavoriteLoading, setIsFavoriteLoading] = useState(false);
+  const [isLikeLoading, setIsLikeLoading] = useState(false);
   
   const formatDistance = (meters: number) => {
     if (meters < 1000) {
@@ -34,15 +37,41 @@ export default function TopicCard({ topic }: TopicCardProps) {
   
   const handleFavoritePress = async (e: any) => {
     e.stopPropagation(); // Prevent triggering the topic navigation
-    if (user?.id && !isFavoriteLoading) {
-      await toggleFavorite(topic.id, user.id);
+    if (!user?.id || isFavoriteLoading) return;
+    
+    setIsFavoriteLoading(true);
+    try {
+      const isFavorited = await TopicInteractionService.toggleFavorite(topic.id, user.id);
+      
+      // 如果有自定义handler，调用它（用于局部更新）
+      if (onFavoriteToggle) {
+        onFavoriteToggle(topic.id, isFavorited);
+      }
+      // 事件总线会自动处理跨页面同步
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+    } finally {
+      setIsFavoriteLoading(false);
     }
   };
   
   const handleLikePress = async (e: any) => {
     e.stopPropagation(); // Prevent triggering the topic navigation
-    if (user?.id && !isLikeLoading) {
-      await toggleLike(topic.id, user.id);
+    if (!user?.id || isLikeLoading) return;
+    
+    setIsLikeLoading(true);
+    try {
+      const likeData = await TopicInteractionService.toggleLike(topic.id, user.id);
+      
+      // 如果有自定义handler，调用它（用于局部更新）
+      if (onLikeToggle) {
+        onLikeToggle(topic.id, likeData);
+      }
+      // 事件总线会自动处理跨页面同步
+    } catch (error) {
+      console.error('Error toggling like:', error);
+    } finally {
+      setIsLikeLoading(false);
     }
   };
   

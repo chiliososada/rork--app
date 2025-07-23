@@ -5,17 +5,17 @@ import { MapPin, Compass, PlusCircle, MessageCircle, User } from 'lucide-react-n
 import Colors from '@/constants/colors';
 import { useRouter, usePathname } from 'expo-router';
 import { useChatStore } from '@/store/chat-store';
-import { useTopicStore } from '@/store/topic-store';
+import { useChatTopicsStore } from '@/store/chat-topics-store';
 
 const CustomTabBar = () => {
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { getUnreadCount } = useChatStore();
-  const { chatFilteredTopics } = useTopicStore();
+  const { filteredTopics } = useChatTopicsStore();
   
-  // Calculate total unread count across all topics
-  const totalUnreadCount = chatFilteredTopics.reduce((total, topic) => {
+  // Calculate total unread count across all topics (only from chat page)
+  const totalUnreadCount = filteredTopics.reduce((total, topic) => {
     return total + getUnreadCount(topic.id);
   }, 0);
 

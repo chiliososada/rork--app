@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useCallback } from "react";
 import { StyleSheet, Text, View, TouchableWithoutFeedback, Keyboard, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -15,25 +15,33 @@ export default function ExploreScreen() {
   const { 
     filteredTopics, 
     fetchMapTopics, 
+    fetchTopicsInViewport,
     loadMoreTopics,
+    isLoading,
     isLoadingMore,
     searchQuery, 
     searchTopics, 
     clearSearch 
   } = useMapTopicsStore();
   
+  // 初期データ読み込み：位置情報取得後にマップ用データを取得
   useEffect(() => {
     if (currentLocation) {
+      // 地図専用のデータ取得（アクティビティベースソート）
       fetchMapTopics(currentLocation.latitude, currentLocation.longitude, true);
     }
   }, [currentLocation]);
   
-  // 确保地图有足够的话题点显示
-  useEffect(() => {
-    if (currentLocation && filteredTopics.length > 0) {
-      loadMoreTopics(currentLocation.latitude, currentLocation.longitude);
-    }
-  }, [currentLocation, filteredTopics.length, loadMoreTopics]);
+  // 地図視区変更時の処理
+  const handleMapRegionChange = useCallback((bounds: {
+    north: number;
+    south: number;
+    east: number;
+    west: number;
+  }) => {
+    // 視区が変更された時に新しいエリアのトピックを取得
+    fetchTopicsInViewport(bounds);
+  }, [fetchTopicsInViewport]);
   
   const handleMarkerPress = (topicId: string) => {
     router.push(`/topic/${topicId}`);
@@ -71,19 +79,31 @@ export default function ExploreScreen() {
                     currentLocation={currentLocation}
                     topics={filteredTopics}
                     onMarkerPress={handleMarkerPress}
+                    onRegionChange={handleMapRegionChange}
                   />
+                  {/* 初期データ読み込み中のインジケーター */}
+                  {isLoading && filteredTopics.length === 0 && (
+                    <View style={styles.loadingOverlay}>
+                      <View style={styles.loadingIndicator}>
+                        <ActivityIndicator size="small" color={Colors.primary} style={{ marginRight: 8 }} />
+                        <Text style={styles.loadingText}>地図上のトピックを読み込んでいます...</Text>
+                      </View>
+                    </View>
+                  )}
+                  {/* 追加データ読み込み中のインジケーター */}
                   {isLoadingMore && (
                     <View style={styles.loadingOverlay}>
                       <View style={styles.loadingIndicator}>
                         <ActivityIndicator size="small" color={Colors.primary} style={{ marginRight: 8 }} />
-                        <Text style={styles.loadingText}>より多くのトピックを読み込んでいます...</Text>
+                        <Text style={styles.loadingText}>さらにトピックを読み込んでいます...</Text>
                       </View>
                     </View>
                   )}
                 </>
               ) : (
                 <View style={styles.loadingContainer}>
-                  <Text style={styles.loadingText}>地図を読み込んでいます...</Text>
+                  <ActivityIndicator size="large" color={Colors.primary} />
+                  <Text style={styles.loadingText}>位置情報を取得しています...</Text>
                 </View>
               )}
             </View>

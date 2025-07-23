@@ -1,10 +1,13 @@
 import { create } from 'zustand';
 import { Topic } from '@/types';
 import { withNetworkRetry, isNetworkError } from '@/lib/retry';
-import { eventBus, EVENT_TYPES, TopicInteractionEvent, CommentEvent, MessageEvent, TopicEvent } from '@/lib/event-bus';
+import { eventBus, EVENT_TYPES, TopicInteractionEvent, CommentEvent, MessageEvent, TopicEvent, PAGE_EVENT_RELEVANCE } from '@/lib/event-bus';
 import { topicCache, cacheUtils } from '@/lib/topic-cache';
 import { fetchNearbyTopics, GeoQueryParams } from '@/lib/geo-queries';
 import { supabase } from '@/lib/supabase';
+import { cacheManager } from '@/lib/cache/cache-manager';
+import { CACHE_PRESETS } from '@/lib/cache/base-store';
+import { requestDeduplicator } from '@/lib/cache/request-deduplicator';
 
 interface HomeTopicsState {
   topics: Topic[];
@@ -18,8 +21,9 @@ interface HomeTopicsState {
   // Cursor-based pagination
   nextCursor?: string;
   
-  // 独立したリクエスト管理
-  lastRequestTime: number;
+  // 缓存和位置管理
+  currentLocation?: { latitude: number; longitude: number };
+  cacheStats: () => any;
   
   fetchNearbyTopics: (latitude: number, longitude: number, refresh?: boolean) => Promise<void>;
   loadMoreTopics: (latitude: number, longitude: number) => Promise<void>;
@@ -28,72 +32,98 @@ interface HomeTopicsState {
   updateTopicInteraction: (topicId: string, updates: Partial<Topic>) => void;
   checkFavoriteStatus: (topicIds: string[], userId: string) => Promise<void>;
   checkLikeStatus: (topicIds: string[], userId: string) => Promise<void>;
+  invalidateCache: (method?: string) => void;
 }
 
 const TOPICS_PER_PAGE = 10;
+const STORE_KEY = 'home-topics';
+
+// 初始化缓存配置
+cacheManager.registerConfig(STORE_KEY, {
+  ...CACHE_PRESETS.SHORT_TERM,
+  ttl: 5 * 60 * 1000, // 5分钟 - 因为附近话题可能经常变化
+  locationThreshold: 500, // 500米位置变化失效
+  debounceTime: 2000, // 2秒防抖
+});
 
 export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
-  // Set up event listeners
+  // Optimized event listeners setup with automatic cleanup and filtering
   const setupEventListeners = () => {
-    // Listen for topic interactions from other pages
-    const unsubscribeLike = eventBus.on(EVENT_TYPES.TOPIC_LIKED, (data: TopicInteractionEvent) => {
-      get().updateTopicInteraction(data.topicId, { isLiked: true, likesCount: data.count });
-    });
+    const unsubscribers: Array<() => void> = [];
     
-    const unsubscribeUnlike = eventBus.on(EVENT_TYPES.TOPIC_UNLIKED, (data: TopicInteractionEvent) => {
-      get().updateTopicInteraction(data.topicId, { isLiked: false, likesCount: data.count });
-    });
+    // Only listen to events relevant to the HOME page
+    const homeRelevantEvents = PAGE_EVENT_RELEVANCE.HOME;
     
-    const unsubscribeFavorite = eventBus.on(EVENT_TYPES.TOPIC_FAVORITED, (data: TopicInteractionEvent) => {
-      get().updateTopicInteraction(data.topicId, { isFavorited: true });
-    });
-    
-    const unsubscribeUnfavorite = eventBus.on(EVENT_TYPES.TOPIC_UNFAVORITED, (data: TopicInteractionEvent) => {
-      get().updateTopicInteraction(data.topicId, { isFavorited: false });
-    });
-    
-    const unsubscribeComment = eventBus.on(EVENT_TYPES.TOPIC_COMMENTED, (data: CommentEvent) => {
-      get().updateTopicInteraction(data.topicId, { commentCount: data.commentCount });
-    });
-    
-    const unsubscribeMessage = eventBus.on(EVENT_TYPES.MESSAGE_SENT, (data: MessageEvent) => {
-      get().updateTopicInteraction(data.topicId, { 
-        lastMessageTime: data.messageTime,
-        participantCount: data.participantCount 
+    // Subscribe to relevant events with debouncing for performance
+    if (homeRelevantEvents.has(EVENT_TYPES.TOPIC_LIKED)) {
+      const unsubscribe = eventBus.on(EVENT_TYPES.TOPIC_LIKED, (data: TopicInteractionEvent) => {
+        get().updateTopicInteraction(data.topicId, { isLiked: true, likesCount: data.count });
       });
-    });
+      unsubscribers.push(unsubscribe);
+    }
     
-    const unsubscribeTopicCreated = eventBus.on(EVENT_TYPES.TOPIC_CREATED, (data: TopicEvent) => {
-      // Add new topic to the beginning of the list
-      set(state => {
-        const newTopic: Topic = {
-          ...data.topic,
-          distance: 0, // Will be calculated properly on next fetch
-          commentCount: 0,
-          participantCount: 1,
-          isFavorited: false,
-          isLiked: false,
-          likesCount: 0
-        };
-        
-        return {
-          topics: [newTopic, ...state.topics],
-          filteredTopics: state.searchQuery 
-            ? state.filteredTopics
-            : [newTopic, ...state.filteredTopics]
-        };
+    if (homeRelevantEvents.has(EVENT_TYPES.TOPIC_UNLIKED)) {
+      const unsubscribe = eventBus.on(EVENT_TYPES.TOPIC_UNLIKED, (data: TopicInteractionEvent) => {
+        get().updateTopicInteraction(data.topicId, { isLiked: false, likesCount: data.count });
       });
-    });
+      unsubscribers.push(unsubscribe);
+    }
     
-    // Store cleanup functions
+    if (homeRelevantEvents.has(EVENT_TYPES.TOPIC_FAVORITED)) {
+      const unsubscribe = eventBus.on(EVENT_TYPES.TOPIC_FAVORITED, (data: TopicInteractionEvent) => {
+        get().updateTopicInteraction(data.topicId, { isFavorited: true });
+      });
+      unsubscribers.push(unsubscribe);
+    }
+    
+    if (homeRelevantEvents.has(EVENT_TYPES.TOPIC_UNFAVORITED)) {
+      const unsubscribe = eventBus.on(EVENT_TYPES.TOPIC_UNFAVORITED, (data: TopicInteractionEvent) => {
+        get().updateTopicInteraction(data.topicId, { isFavorited: false });
+      });
+      unsubscribers.push(unsubscribe);
+    }
+    
+    if (homeRelevantEvents.has(EVENT_TYPES.TOPIC_COMMENTED)) {
+      const unsubscribe = eventBus.on(EVENT_TYPES.TOPIC_COMMENTED, (data: CommentEvent) => {
+        get().updateTopicInteraction(data.topicId, { commentCount: data.commentCount });
+      });
+      unsubscribers.push(unsubscribe);
+    }
+    
+    if (homeRelevantEvents.has(EVENT_TYPES.TOPIC_CREATED)) {
+      const unsubscribe = eventBus.on(EVENT_TYPES.TOPIC_CREATED, (data: TopicEvent) => {
+        // Add new topic to the beginning of the list
+        set(state => {
+          const newTopic: Topic = {
+            ...data.topic,
+            distance: 0, // Will be calculated properly on next fetch
+            commentCount: 0,
+            participantCount: 1,
+            isFavorited: false,
+            isLiked: false,
+            likesCount: 0
+          };
+          
+          return {
+            topics: [newTopic, ...state.topics],
+            filteredTopics: state.searchQuery 
+              ? state.filteredTopics
+              : [newTopic, ...state.filteredTopics]
+          };
+        });
+      });
+      unsubscribers.push(unsubscribe);
+    }
+    
+    // Return cleanup function
     return () => {
-      unsubscribeLike();
-      unsubscribeUnlike();
-      unsubscribeFavorite();
-      unsubscribeUnfavorite();
-      unsubscribeComment();
-      unsubscribeMessage();
-      unsubscribeTopicCreated();
+      unsubscribers.forEach(unsubscribe => {
+        try {
+          unsubscribe();
+        } catch (error) {
+          console.error('[HomeTopicsStore] Error during event cleanup:', error);
+        }
+      });
     };
   };
   
@@ -109,20 +139,13 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
   error: null,
   searchQuery: '',
   nextCursor: undefined,
-  lastRequestTime: 0,
 
   fetchNearbyTopics: async (latitude, longitude, refresh = false) => {
-    const now = Date.now();
-    const { lastRequestTime } = get();
-    
-    // 1秒以内の重複リクエストを防ぐ
-    if (!refresh && now - lastRequestTime < 1000) {
-      return;
-    }
-    
-    set({ isLoading: true, error: null, lastRequestTime: now });
+    set({ currentLocation: { latitude, longitude } });
     
     if (refresh) {
+      // Clear cache and reset pagination for refresh
+      cacheManager.invalidateCache(STORE_KEY, 'fetchNearbyTopics');
       set({ 
         hasMore: true,
         topics: [],
@@ -131,49 +154,141 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
       });
     }
     
+    const queryParams: GeoQueryParams = {
+      latitude,
+      longitude,
+      radiusKm: 5, // 5km radius for nearby topics
+      limit: 10,
+      cursor: refresh ? undefined : get().nextCursor,
+      sortBy: 'distance'
+    };
+
+    // Use unified caching system
+    const deduplicationResult = cacheManager.checkRequestDeduplication<any>(
+      STORE_KEY,
+      'fetchNearbyTopics',
+      queryParams,
+      { latitude, longitude }
+    );
+
     try {
-      // Use the new geographic query function
-      const queryParams: GeoQueryParams = {
-        latitude,
-        longitude,
-        radiusKm: 5, // 5km radius for nearby topics
-        limit: 10,
-        cursor: refresh ? undefined : get().nextCursor,
-        sortBy: 'distance'
-      };
+      // If we shouldn't make a request, handle cached data or wait for pending request
+      if (!deduplicationResult.shouldRequest) {
+        if (deduplicationResult.cachedData) {
+          const result = deduplicationResult.cachedData;
+          
+          // Apply cached data to state
+          set({ 
+            topics: result.topics,
+            filteredTopics: result.topics,
+            hasMore: result.hasMore,
+            nextCursor: result.nextCursor,
+            isLoading: false,
+            error: null
+          });
+          
+          // Still check user interactions for cached data
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user?.id && result.topics.length > 0) {
+            const topicIds = result.topics.map(t => t.id);
+            await get().checkFavoriteStatus(topicIds, user.id);
+            await get().checkLikeStatus(topicIds, user.id);
+          }
+          
+          return;
+        }
+        
+        if (deduplicationResult.pendingPromise) {
+          // Wait for the pending request
+          set({ isLoading: true, error: null });
+          
+          try {
+            const result = await deduplicationResult.pendingPromise;
+            
+            set({ 
+              topics: result.topics,
+              filteredTopics: result.topics,
+              hasMore: result.hasMore,
+              nextCursor: result.nextCursor,
+              isLoading: false 
+            });
+            
+            // Check user interactions
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user?.id && result.topics.length > 0) {
+              const topicIds = result.topics.map(t => t.id);
+              await get().checkFavoriteStatus(topicIds, user.id);
+              await get().checkLikeStatus(topicIds, user.id);
+            }
+          } catch (error) {
+            set({ isLoading: false, error: '近くのトピックの取得に失敗しました' });
+          }
+          
+          return;
+        }
+        
+        // In debounce period, don't execute request
+        return;
+      }
+
+      // Execute new request with caching
+      set({ isLoading: true, error: null });
       
-      await withNetworkRetry(async () => {
+      const requestPromise = withNetworkRetry(async () => {
         const result = await fetchNearbyTopics(queryParams);
         
-        // Cache the topics for faster access later
+        // Cache individual topics for faster access
         result.topics.forEach(topic => {
           if (cacheUtils.shouldCache(topic)) {
             topicCache.set(topic);
           }
         });
         
-        set({ 
-          topics: result.topics,
-          filteredTopics: result.topics,
-          hasMore: result.hasMore,
-          nextCursor: result.nextCursor,
-          isLoading: false 
-        });
-        
-        // Check favorite and like status
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user?.id && result.topics.length > 0) {
-          const topicIds = result.topics.map(t => t.id);
-          await get().checkFavoriteStatus(topicIds, user.id);
-          await get().checkLikeStatus(topicIds, user.id);
-        }
-        
-        // 検索状態を再適用
-        const { searchQuery } = get();
-        if (searchQuery) {
-          get().searchTopics(searchQuery);
-        }
+        return result;
       });
+      
+      // Register the pending request
+      cacheManager.registerPendingRequest(
+        STORE_KEY,
+        'fetchNearbyTopics',
+        queryParams,
+        requestPromise
+      );
+      
+      // Wait for request completion
+      const result = await requestPromise;
+      
+      // Cache the result
+      cacheManager.cacheResult(
+        STORE_KEY,
+        'fetchNearbyTopics',
+        queryParams,
+        result,
+        { latitude, longitude }
+      );
+      
+      set({ 
+        topics: result.topics,
+        filteredTopics: result.topics,
+        hasMore: result.hasMore,
+        nextCursor: result.nextCursor,
+        isLoading: false 
+      });
+      
+      // Check favorite and like status
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.id && result.topics.length > 0) {
+        const topicIds = result.topics.map(t => t.id);
+        await get().checkFavoriteStatus(topicIds, user.id);
+        await get().checkLikeStatus(topicIds, user.id);
+      }
+      
+      // Re-apply search state
+      const { searchQuery } = get();
+      if (searchQuery) {
+        get().searchTopics(searchQuery);
+      }
+      
     } catch (error: any) {
       console.error('Failed to fetch nearby topics:', error);
       const errorMessage = isNetworkError(error) 
@@ -183,6 +298,9 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
         error: errorMessage, 
         isLoading: false 
       });
+    } finally {
+      // Cleanup
+      deduplicationResult.cleanup();
     }
   },
 
@@ -191,32 +309,108 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
     
     if (isLoadingMore || !hasMore || !nextCursor) return;
     
-    set({ isLoadingMore: true, error: null });
-    
+    const queryParams: GeoQueryParams = {
+      latitude,
+      longitude,
+      radiusKm: 5,
+      limit: 10,
+      cursor: nextCursor,
+      sortBy: 'distance'
+    };
+
+    // Use unified caching for pagination as well
+    const deduplicationResult = cacheManager.checkRequestDeduplication<any>(
+      STORE_KEY,
+      'loadMoreTopics',
+      queryParams,
+      { latitude, longitude }
+    );
+
     try {
-      // Use cursor-based pagination for loading more
-      const queryParams: GeoQueryParams = {
-        latitude,
-        longitude,
-        radiusKm: 5,
-        limit: 10,
-        cursor: nextCursor,
-        sortBy: 'distance'
-      };
+      if (!deduplicationResult.shouldRequest) {
+        if (deduplicationResult.cachedData) {
+          const result = deduplicationResult.cachedData;
+          
+          // Merge cached data with existing topics
+          const existingTopicIds = new Set(topics.map(t => t.id));
+          const uniqueNewTopics = result.topics.filter(topic => !existingTopicIds.has(topic.id));
+          const allTopics = [...topics, ...uniqueNewTopics];
+          
+          set({ 
+            topics: allTopics,
+            filteredTopics: allTopics,
+            hasMore: result.hasMore,
+            nextCursor: result.nextCursor,
+            isLoadingMore: false,
+            error: null
+          });
+          
+          return;
+        }
+        
+        if (deduplicationResult.pendingPromise) {
+          set({ isLoadingMore: true, error: null });
+          
+          try {
+            const result = await deduplicationResult.pendingPromise;
+            const existingTopicIds = new Set(topics.map(t => t.id));
+            const uniqueNewTopics = result.topics.filter(topic => !existingTopicIds.has(topic.id));
+            const allTopics = [...topics, ...uniqueNewTopics];
+            
+            set({ 
+              topics: allTopics,
+              filteredTopics: allTopics,
+              hasMore: result.hasMore,
+              nextCursor: result.nextCursor,
+              isLoadingMore: false 
+            });
+          } catch (error) {
+            set({ isLoadingMore: false, error: 'さらなるトピックの取得に失敗しました' });
+          }
+          
+          return;
+        }
+        
+        return;
+      }
+
+      set({ isLoadingMore: true, error: null });
       
-      const result = await fetchNearbyTopics(queryParams);
+      const requestPromise = (async () => {
+        const result = await fetchNearbyTopics(queryParams);
+        
+        // Cache new topics
+        result.topics.forEach(topic => {
+          if (cacheUtils.shouldCache(topic)) {
+            topicCache.set(topic);
+          }
+        });
+        
+        return result;
+      })();
+      
+      // Register pending request
+      cacheManager.registerPendingRequest(
+        STORE_KEY,
+        'loadMoreTopics',
+        queryParams,
+        requestPromise
+      );
+      
+      const result = await requestPromise;
+      
+      // Cache result
+      cacheManager.cacheResult(
+        STORE_KEY,
+        'loadMoreTopics',
+        queryParams,
+        result,
+        { latitude, longitude }
+      );
       
       // Merge with existing topics, avoiding duplicates
       const existingTopicIds = new Set(topics.map(t => t.id));
       const uniqueNewTopics = result.topics.filter(topic => !existingTopicIds.has(topic.id));
-      
-      // Cache new topics
-      uniqueNewTopics.forEach(topic => {
-        if (cacheUtils.shouldCache(topic)) {
-          topicCache.set(topic);
-        }
-      });
-      
       const allTopics = [...topics, ...uniqueNewTopics];
       
       set({ 
@@ -235,16 +429,19 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
         await get().checkLikeStatus(newTopicIds, user.id);
       }
       
-      // 検索状態を再適用
+      // Re-apply search state
       const { searchQuery } = get();
       if (searchQuery) {
         get().searchTopics(searchQuery);
       }
+      
     } catch (error: any) {
       set({ 
         error: "さらなるトピックの取得に失敗しました", 
         isLoadingMore: false 
       });
+    } finally {
+      deduplicationResult.cleanup();
     }
   },
 
@@ -376,6 +573,14 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
     } catch (error: any) {
       console.error('Error checking like status:', error);
     }
+  },
+
+  cacheStats: () => {
+    return cacheManager.getCacheStats(STORE_KEY);
+  },
+
+  invalidateCache: (method?: string) => {
+    cacheManager.invalidateCache(STORE_KEY, method);
   }
   });
 });
