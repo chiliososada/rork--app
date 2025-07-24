@@ -120,7 +120,7 @@ export default function NearbyScreen() {
         subtitle={`📍 ${getLocationText()}`}
       />
       
-      <SafeAreaView style={styles.content} edges={['left', 'right', 'bottom']}>
+      <SafeAreaView style={styles.content} edges={['left', 'right']}>
         <SearchBar
           value={searchQuery}
           onChangeText={handleSearch}
@@ -132,7 +132,7 @@ export default function NearbyScreen() {
           data={filteredTopics}
           renderItem={renderTopic}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: 100 }]}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -267,7 +267,7 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    bottom: 20,
+    bottom: 100, // タブバーとの重複を避けるため
     right: 20,
     width: 56,
     height: 56,

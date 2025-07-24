@@ -154,7 +154,7 @@ export default function ChatsScreen() {
         subtitle={`💬 ${getActiveChatsCount} 件のアクティブなチャット • ${filteredTopics.length} 件のトピック`}
       />
       
-      <SafeAreaView style={styles.content} edges={['left', 'right', 'bottom']}>
+      <SafeAreaView style={styles.content} edges={['left', 'right']}>
         <SearchBar
           value={searchQuery}
           onChangeText={handleSearch}
@@ -166,7 +166,7 @@ export default function ChatsScreen() {
           data={filteredTopics}
           renderItem={renderChatItem}
           keyExtractor={keyExtractor}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: 100 }]}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

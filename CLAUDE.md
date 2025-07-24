@@ -188,14 +188,153 @@ ALTER TABLE public.topics ADD COLUMN image_aspect_ratio TEXT CHECK (image_aspect
     unique(topic_id, user_id)
   );
 
+
   -- 创建索引以提高查询性能
   create index topic_favorites_topic_id_idx on public.topic_favorites(topic_id);
   create index topic_favorites_user_id_idx on public.topic_favorites(user_id);
 
 REACT_APP_SUPABASE_URL=https://nkhomvyrlkxhuafikyuu.supabase.co
 REACT_APP_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5raG9tdnlybGt4aHVhZmlreXV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE4NjYxOTIsImV4cCI6MjA2NzQ0MjE5Mn0.8mse6qzWK7Q0XfGXyNcP8jRjQPRmZTg_K9jymo2dydA
+-- 创建获取话题交互数据的RPC函数
+CREATE OR REPLACE FUNCTION get_topic_interaction_counts(topic_ids UUID[])
+RETURNS TABLE (
+  topic_id UUID,
+  likes_count INTEGER,
+  favorites_count INTEGER,
+  comments_count INTEGER
+) 
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    t.id as topic_id,
+    COALESCE(likes.count, 0) as likes_count,
+    COALESCE(favorites.count, 0) as favorites_count,
+    COALESCE(comments.count, 0) as comments_count
+  FROM 
+    unnest(topic_ids) AS t(id)
+  LEFT JOIN (
+    SELECT topic_id, COUNT(*)::INTEGER as count
+    FROM topic_likes 
+    WHERE topic_id = ANY(topic_ids)
+    GROUP BY topic_id
+  ) likes ON t.id = likes.topic_id
+  LEFT JOIN (
+    SELECT topic_id, COUNT(*)::INTEGER as count
+    FROM topic_favorites 
+    WHERE topic_id = ANY(topic_ids)
+    GROUP BY topic_id
+  ) favorites ON t.id = favorites.topic_id
+  LEFT JOIN (
+    SELECT topic_id, COUNT(*)::INTEGER as count
+    FROM comments 
+    WHERE topic_id = ANY(topic_ids)
+    GROUP BY topic_id
+  ) comments ON t.id = comments.topic_id;
+END;
+$$;
 
+-- 批量检查用户点赞状态
+CREATE OR REPLACE FUNCTION check_user_likes(user_id_param UUID, topic_ids UUID[])
+RETURNS TABLE (
+  topic_id UUID,
+  is_liked BOOLEAN
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    t.id as topic_id,
+    (tl.id IS NOT NULL) as is_liked
+  FROM 
+    unnest(topic_ids) AS t(id)
+  LEFT JOIN topic_likes tl ON t.id = tl.topic_id AND tl.user_id = user_id_param;
+END;
+$$;
+
+-- 批量检查用户收藏状态
+CREATE OR REPLACE FUNCTION check_user_favorites(user_id_param UUID, topic_ids UUID[])
+RETURNS TABLE (
+  topic_id UUID,
+  is_favorited BOOLEAN
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    t.id as topic_id,
+    (tf.id IS NOT NULL) as is_favorited
+  FROM 
+    unnest(topic_ids) AS t(id)
+  LEFT JOIN topic_favorites tf ON t.id = tf.topic_id AND tf.user_id = user_id_param;
+END;
+$$;
+
+-- 获取附近话题（优化版）
+CREATE OR REPLACE FUNCTION get_nearby_topics(
+  user_lat DOUBLE PRECISION,
+  user_lng DOUBLE PRECISION,
+  radius_km DOUBLE PRECISION DEFAULT 10,
+  limit_count INTEGER DEFAULT 20,
+  offset_count INTEGER DEFAULT 0
+)
+RETURNS TABLE (
+  id UUID,
+  title TEXT,
+  description TEXT,
+  user_id UUID,
+  latitude DOUBLE PRECISION,
+  longitude DOUBLE PRECISION,
+  location_name TEXT,
+  created_at TIMESTAMP WITH TIME ZONE,
+  image_url TEXT,
+  image_aspect_ratio TEXT,
+  distance_meters DOUBLE PRECISION
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    t.id,
+    t.title,
+    t.description,
+    t.user_id,
+    t.latitude,
+    t.longitude,
+    t.location_name,
+    t.created_at,
+    t.image_url,
+    t.image_aspect_ratio,
+    -- 计算距离（单位：米）
+    (6371000 * acos(
+      cos(radians(user_lat)) * 
+      cos(radians(t.latitude)) * 
+      cos(radians(t.longitude) - radians(user_lng)) + 
+      sin(radians(user_lat)) * 
+      sin(radians(t.latitude))
+    )) as distance_meters
+  FROM topics t
+  WHERE 
+    -- 使用地理位置过滤（粗筛选提高性能）
+    t.latitude BETWEEN user_lat - (radius_km / 111.0) AND user_lat + (radius_km / 111.0)
+    AND t.longitude BETWEEN user_lng - (radius_km / (111.0 * cos(radians(user_lat)))) 
+                          AND user_lng + (radius_km / (111.0 * cos(radians(user_lat))))
+    -- 排除隐藏的内容
+    AND (t.is_hidden IS NULL OR t.is_hidden = false)
+  ORDER BY distance_meters ASC, t.created_at DESC
+  LIMIT limit_count
+  OFFSET offset_count;
+END;
+$$;
 
 如果设计到文本都使用日语
 
 我偏向于ios和安卓 web端可以降低比重
+
+需要上线appstore 和 Google store
+
+

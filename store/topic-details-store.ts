@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { Topic, Comment } from '@/types';
 import { supabase } from '@/lib/supabase';
 import { withNetworkRetry, isNetworkError } from '@/lib/retry';
+import { getCachedBatchTopicInteractionStatus } from '@/lib/database-optimizers';
 
 /**
  * 专门处理话题详情的 Store
@@ -17,10 +18,18 @@ interface TopicDetailsState {
   // 用户收藏的话题列表
   favoriteTopics: Topic[];
   
+  // 用户发布的话题列表
+  userTopics: Topic[];
+  
+  // 用户点赞的话题列表
+  likedTopics: Topic[];
+  
   // 加载状态
   isLoading: boolean;
   isFavoriteLoading: boolean;
   isLikeLoading: boolean;
+  isUserTopicsLoading: boolean;
+  isLikedTopicsLoading: boolean;
   
   // 错误状态
   error: string | null;
@@ -46,22 +55,35 @@ interface TopicDetailsState {
   // 收藏列表管理
   fetchFavoriteTopics: (userId: string) => Promise<void>;
   
+  // 用户投稿管理
+  fetchUserTopics: (userId: string) => Promise<void>;
+  
+  // 用户点赞管理
+  fetchLikedTopics: (userId: string) => Promise<void>;
+  
+  // 话题删除
+  deleteTopic: (topicId: string, userId: string) => Promise<void>;
+  
   // 状态检查工具方法
-  checkFavoriteStatus: (topicIds: string[], userId: string) => Promise<void>;
-  checkLikeStatus: (topicIds: string[], userId: string) => Promise<void>;
+  checkInteractionStatus: (topicIds: string[], userId: string) => Promise<void>;
   
   // 清理方法
   clearCurrentTopic: () => void;
   clearComments: () => void;
+  cleanup: () => void;
 }
 
 export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
   currentTopic: null,
   comments: [],
   favoriteTopics: [],
+  userTopics: [],
+  likedTopics: [],
   isLoading: false,
   isFavoriteLoading: false,
   isLikeLoading: false,
+  isUserTopicsLoading: false,
+  isLikedTopicsLoading: false,
   error: null,
   profileStatsVersion: 0,
 
@@ -112,37 +134,27 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
         return;
       }
 
-      // Check favorite status
+      // Check interaction status using optimized batch query
       let isFavorited = false;
-      if (currentUserId) {
-        const { data: favoriteData } = await supabase
-          .from('topic_favorites')
-          .select('id')
-          .eq('topic_id', id)
-          .eq('user_id', currentUserId)
-          .single();
-        
-        isFavorited = !!favoriteData;
-      }
-
-      // Check like status
       let isLiked = false;
+      let likesCount = 0;
+      
       if (currentUserId) {
-        const { data: likeData } = await supabase
+        const interactionStatuses = await getCachedBatchTopicInteractionStatus([id], currentUserId);
+        const status = interactionStatuses[0];
+        if (status) {
+          isFavorited = status.isFavorited;
+          isLiked = status.isLiked;
+          likesCount = status.likesCount;
+        }
+      } else {
+        // Get just the likes count for anonymous users
+        const { count } = await supabase
           .from('topic_likes')
-          .select('id')
-          .eq('topic_id', id)
-          .eq('user_id', currentUserId)
-          .single();
-        
-        isLiked = !!likeData;
+          .select('*', { count: 'exact', head: true })
+          .eq('topic_id', id);
+        likesCount = count || 0;
       }
-
-      // Get likes count
-      const { count: likesCount } = await supabase
-        .from('topic_likes')
-        .select('*', { count: 'exact', head: true })
-        .eq('topic_id', id);
 
       // Calculate participant count from unique users who have sent messages
       const uniqueParticipants = new Set(topicData.chat_messages?.map((msg: any) => msg.user_id) || []);
@@ -744,69 +756,71 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
     }
   },
 
-  checkFavoriteStatus: async (topicIds, userId) => {
+  checkInteractionStatus: async (topicIds, userId) => {
     try {
-      const { data: favoritesData, error: favoritesError } = await supabase
-        .from('topic_favorites')
-        .select('topic_id')
-        .eq('user_id', userId)
-        .in('topic_id', topicIds);
-
-      if (favoritesError) {
-        throw favoritesError;
-      }
-
-      const favoritedTopicIds = new Set(favoritesData?.map(f => f.topic_id) || []);
+      // Use optimized batch query
+      const interactionStatuses = await getCachedBatchTopicInteractionStatus(topicIds, userId);
+      const statusMap = new Map(
+        interactionStatuses.map(status => [status.topicId, status])
+      );
       
       // Only update current topic if it's in the list being checked
       set(state => ({
         currentTopic: state.currentTopic && topicIds.includes(state.currentTopic.id) ? {
           ...state.currentTopic,
-          isFavorited: favoritedTopicIds.has(state.currentTopic.id)
-        } : state.currentTopic
+          isFavorited: statusMap.get(state.currentTopic.id)?.isFavorited ?? state.currentTopic.isFavorited,
+          isLiked: statusMap.get(state.currentTopic.id)?.isLiked ?? state.currentTopic.isLiked,
+          likesCount: statusMap.get(state.currentTopic.id)?.likesCount ?? state.currentTopic.likesCount ?? 0,
+          commentCount: statusMap.get(state.currentTopic.id)?.commentsCount ?? state.currentTopic.commentCount
+        } : state.currentTopic,
+        
+        // Also update favorite topics list if needed
+        favoriteTopics: state.favoriteTopics.map(topic => {
+          if (!topicIds.includes(topic.id)) return topic;
+          const status = statusMap.get(topic.id);
+          if (!status) return topic;
+          
+          return {
+            ...topic,
+            isFavorited: status.isFavorited,
+            isLiked: status.isLiked,
+            likesCount: status.likesCount,
+            commentCount: status.commentsCount
+          };
+        }),
+        
+        // Also update user topics list if needed
+        userTopics: state.userTopics.map(topic => {
+          if (!topicIds.includes(topic.id)) return topic;
+          const status = statusMap.get(topic.id);
+          if (!status) return topic;
+          
+          return {
+            ...topic,
+            isFavorited: status.isFavorited,
+            isLiked: status.isLiked,
+            likesCount: status.likesCount,
+            commentCount: status.commentsCount
+          };
+        }),
+        
+        // Also update liked topics list if needed
+        likedTopics: state.likedTopics.map(topic => {
+          if (!topicIds.includes(topic.id)) return topic;
+          const status = statusMap.get(topic.id);
+          if (!status) return topic;
+          
+          return {
+            ...topic,
+            isFavorited: status.isFavorited,
+            isLiked: status.isLiked,
+            likesCount: status.likesCount,
+            commentCount: status.commentsCount
+          };
+        })
       }));
     } catch (error: any) {
-      console.error('Error checking favorite status:', error);
-    }
-  },
-
-  checkLikeStatus: async (topicIds, userId) => {
-    try {
-      // Check user's like status
-      const { data: likesData, error: likesError } = await supabase
-        .from('topic_likes')
-        .select('topic_id')
-        .eq('user_id', userId)
-        .in('topic_id', topicIds);
-
-      if (likesError) {
-        throw likesError;
-      }
-
-      const likedTopicIds = new Set(likesData?.map(l => l.topic_id) || []);
-
-      // Get likes count for each topic
-      const likesCountPromises = topicIds.map(async (topicId) => {
-        const { count } = await supabase
-          .from('topic_likes')
-          .select('*', { count: 'exact', head: true })
-          .eq('topic_id', topicId);
-        return { topicId, count: count || 0 };
-      });
-
-      const likesCountResults = await Promise.all(likesCountPromises);
-      const likesCountMap = new Map(likesCountResults.map(r => [r.topicId, r.count]));
-      
-      // Only update current topic if it's in the list being checked
-      set(state => ({
-        currentTopic: state.currentTopic && topicIds.includes(state.currentTopic.id) ? {
-          ...state.currentTopic,
-          isLiked: likedTopicIds.has(state.currentTopic.id),
-          likesCount: likesCountMap.get(state.currentTopic.id) ?? state.currentTopic.likesCount ?? 0
-        } : state.currentTopic
-      }));
-    } catch (error: any) {
-      console.error('Error checking like status:', error);
+      console.error('Error checking interaction status:', error);
     }
   },
 
@@ -816,5 +830,247 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
 
   clearComments: () => {
     set({ comments: [] });
+  },
+
+  fetchUserTopics: async (userId) => {
+    set({ isUserTopicsLoading: true, error: null });
+    
+    try {
+      const { data: userTopicsData, error: userTopicsError } = await supabase
+        .from('topics')
+        .select(`
+          *,
+          users!topics_user_id_fkey (
+            id,
+            nickname,
+            avatar_url,
+            email
+          ),
+          comments!comments_topic_id_fkey (count)
+        `)
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (userTopicsError) {
+        throw userTopicsError;
+      }
+
+      // Transform data to Topic array
+      const userTopics: Topic[] = (userTopicsData || []).map(topic => ({
+        id: topic.id,
+        title: topic.title,
+        description: topic.description || '',
+        createdAt: topic.created_at,
+        author: {
+          id: topic.users.id,
+          name: topic.users.nickname,
+          avatar: topic.users.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(topic.users.nickname)}&background=random`,
+          email: topic.users.email
+        },
+        location: {
+          latitude: topic.latitude,
+          longitude: topic.longitude,
+          name: topic.location_name || undefined
+        },
+        commentCount: topic.comments?.[0]?.count || 0,
+        participantCount: 1, // Will be calculated if needed
+        imageUrl: topic.image_url || undefined,
+        aspectRatio: topic.image_aspect_ratio as '1:1' | '4:5' | '1.91:1' | undefined,
+        isFavorited: false, // Will be updated by interaction status check
+        isLiked: false,
+        likesCount: 0
+      }));
+
+      set({ 
+        userTopics,
+        isUserTopicsLoading: false 
+      });
+      
+      // Check interaction status for user's own topics if needed
+      if (userTopics.length > 0) {
+        const topicIds = userTopics.map(t => t.id);
+        await get().checkInteractionStatus(topicIds, userId);
+      }
+    } catch (error: any) {
+      const errorMessage = isNetworkError(error) 
+        ? 'ネットワーク接続を確認してください' 
+        : '投稿の取得に失敗しました';
+      set({ 
+        error: errorMessage, 
+        isUserTopicsLoading: false 
+      });
+    }
+  },
+
+  fetchLikedTopics: async (userId) => {
+    set({ isLikedTopicsLoading: true, error: null });
+    
+    try {
+      const { data: likedTopicsData, error: likedTopicsError } = await supabase
+        .from('topic_likes')
+        .select(`
+          created_at,
+          topics!topic_likes_topic_id_fkey (
+            *,
+            users!topics_user_id_fkey (
+              id,
+              nickname,
+              avatar_url,
+              email
+            ),
+            comments!comments_topic_id_fkey (count)
+          )
+        `)
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (likedTopicsError) {
+        throw likedTopicsError;
+      }
+
+      // Transform data to Topic array
+      const likedTopics: Topic[] = (likedTopicsData || []).map(likeRecord => {
+        const topic = likeRecord.topics;
+        return {
+          id: topic.id,
+          title: topic.title,
+          description: topic.description || '',
+          createdAt: topic.created_at,
+          author: {
+            id: topic.users.id,
+            name: topic.users.nickname,
+            avatar: topic.users.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(topic.users.nickname)}&background=random`,
+            email: topic.users.email
+          },
+          location: {
+            latitude: topic.latitude,
+            longitude: topic.longitude,
+            name: topic.location_name || undefined
+          },
+          commentCount: topic.comments?.[0]?.count || 0,
+          participantCount: 1, // Will be calculated if needed
+          imageUrl: topic.image_url || undefined,
+          aspectRatio: topic.image_aspect_ratio as '1:1' | '4:5' | '1.91:1' | undefined,
+          isFavorited: false, // Will be updated by interaction status check
+          isLiked: true, // These are liked topics
+          likesCount: 0 // Will be updated by interaction status check
+        };
+      });
+
+      set({ 
+        likedTopics,
+        isLikedTopicsLoading: false 
+      });
+      
+      // Check interaction status for liked topics
+      if (likedTopics.length > 0) {
+        const topicIds = likedTopics.map(t => t.id);
+        await get().checkInteractionStatus(topicIds, userId);
+      }
+    } catch (error: any) {
+      const errorMessage = isNetworkError(error) 
+        ? 'ネットワーク接続を確認してください' 
+        : 'いいねした投稿の取得に失敗しました';
+      set({ 
+        error: errorMessage, 
+        isLikedTopicsLoading: false 
+      });
+    }
+  },
+
+  deleteTopic: async (topicId, userId) => {
+    try {
+      // 执行级联删除操作
+      // 1. 删除评论的点赞
+      const { error: commentLikesError } = await supabase
+        .rpc('delete_comment_likes_by_topic', { topic_id: topicId });
+      
+      if (commentLikesError) {
+        console.warn('Failed to delete comment likes:', commentLikesError);
+      }
+      
+      // 2. 删除评论
+      const { error: commentsError } = await supabase
+        .from('comments')
+        .delete()
+        .eq('topic_id', topicId);
+        
+      if (commentsError) {
+        console.warn('Failed to delete comments:', commentsError);
+      }
+      
+      // 3. 删除话题点赞
+      const { error: topicLikesError } = await supabase
+        .from('topic_likes')
+        .delete()
+        .eq('topic_id', topicId);
+        
+      if (topicLikesError) {
+        console.warn('Failed to delete topic likes:', topicLikesError);
+      }
+      
+      // 4. 删除话题收藏
+      const { error: favoritesError } = await supabase
+        .from('topic_favorites')
+        .delete()
+        .eq('topic_id', topicId);
+        
+      if (favoritesError) {
+        console.warn('Failed to delete favorites:', favoritesError);
+      }
+      
+      // 5. 删除聊天消息
+      const { error: messagesError } = await supabase
+        .from('chat_messages')
+        .delete()
+        .eq('topic_id', topicId);
+        
+      if (messagesError) {
+        console.warn('Failed to delete chat messages:', messagesError);
+      }
+      
+      // 6. 最后删除话题本身（添加用户权限验证）
+      const { error: topicError } = await supabase
+        .from('topics')
+        .delete()
+        .eq('id', topicId)
+        .eq('user_id', userId); // 确保只能删除自己的话题
+        
+      if (topicError) {
+        throw topicError;
+      }
+      
+      // 从本地状态中移除已删除的话题
+      set(state => ({
+        userTopics: state.userTopics.filter(topic => topic.id !== topicId),
+        favoriteTopics: state.favoriteTopics.filter(topic => topic.id !== topicId),
+        likedTopics: state.likedTopics.filter(topic => topic.id !== topicId),
+        // 如果当前查看的是被删除的话题，清空它
+        currentTopic: state.currentTopic?.id === topicId ? null : state.currentTopic,
+        comments: state.currentTopic?.id === topicId ? [] : state.comments,
+        // 增加 profileStatsVersion 触发 Profile 页面统计刷新
+        profileStatsVersion: state.profileStatsVersion + 1
+      }));
+      
+    } catch (error: any) {
+      const errorMessage = isNetworkError(error) 
+        ? 'ネットワーク接続を確認してください' 
+        : '投稿の削除に失敗しました';
+      set({ error: errorMessage });
+      throw error; // Re-throw so the UI can handle it
+    }
+  },
+
+  cleanup: () => {
+    // Clear all topic-specific data
+    set({ 
+      currentTopic: null,
+      comments: [],
+      favoriteTopics: [],
+      userTopics: [],
+      likedTopics: [],
+      error: null
+    });
+    console.log('[TopicDetailsStore] Cleanup completed');
   }
 }));

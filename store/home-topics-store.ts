@@ -33,6 +33,7 @@ interface HomeTopicsState {
   updateTopicInteraction: (topicId: string, updates: Partial<Topic>) => void;
   checkInteractionStatus: (topicIds: string[], userId: string) => Promise<void>;
   invalidateCache: (method?: string) => void;
+  cleanup: () => void;
 }
 
 const TOPICS_PER_PAGE = 10;
@@ -528,6 +529,12 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
 
   invalidateCache: (method?: string) => {
     cacheManager.invalidateCache(STORE_KEY, method);
+  },
+
+  cleanup: () => {
+    // Cleanup is handled by the cleanup function returned from setupEventListeners
+    cleanup();
+    console.log('[HomeTopicsStore] Cleanup completed');
   }
   });
 });

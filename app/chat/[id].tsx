@@ -369,6 +369,7 @@ export default function ChatRoomScreen() {
             <TextInput
               style={styles.input}
               placeholder="メッセージを入力..."
+              placeholderTextColor="#999999"
               value={messageText}
               onChangeText={handleTextChange}
               onFocus={() => {
@@ -381,6 +382,7 @@ export default function ChatRoomScreen() {
                 }
               }}
               multiline
+              selectionColor="#007AFF"
             />
             <TouchableOpacity 
               style={[
@@ -559,35 +561,57 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     flexDirection: "row",
-    padding: 12,
-    paddingBottom: Platform.OS === "ios" ? 12 : 12,
-    backgroundColor: Colors.card,
+    padding: 16,
+    paddingBottom: Platform.OS === "ios" ? 16 : 16,
+    backgroundColor: '#FAFAFA',
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: '#E8E8E8',
     alignItems: "flex-end",
   },
   input: {
     flex: 1,
-    backgroundColor: Colors.background,
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
     maxHeight: 80,
     fontSize: 16,
-    minHeight: 40,
+    minHeight: 44,
+    borderWidth: 1.5,
+    borderColor: '#E0E0E0',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
+    color: Colors.text.primary,
   },
   sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.primary,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#007AFF',
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: 10,
-    marginBottom: 2,
+    marginLeft: 12,
+    marginBottom: 0,
+    shadowColor: '#007AFF',
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 6,
   },
   sendButtonDisabled: {
-    backgroundColor: Colors.inactive,
+    backgroundColor: '#C7C7CC',
+    shadowColor: '#C7C7CC',
+    shadowOpacity: 0.1,
+    elevation: 2,
   },
   typingContainer: {
     paddingHorizontal: 16,

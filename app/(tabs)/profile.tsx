@@ -60,10 +60,10 @@ export default function ProfileScreen() {
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user.id);
       
-      // ユーザーが受け取ったいいね数を取得（话题の点赞数 + コメントの点赞数）
-      let totalLikes = 0;
+      // ユーザーが受け取ったいいね数を取得（话题の点赞数のみ）
+      let topicLikes = 0;
       
-      // 1. 用户话题获得的点赞数
+      // 用户话题获得的点赞数
       const { data: userTopics } = await supabase
         .from('topics')
         .select('id')
@@ -73,31 +73,15 @@ export default function ProfileScreen() {
         const topicIds = userTopics.map(t => t.id);
         
         // 统计用户话题的点赞数
-        const { count: topicLikes } = await supabase
+        const { count } = await supabase
           .from('topic_likes')
           .select('*', { count: 'exact', head: true })
           .in('topic_id', topicIds);
         
-        totalLikes += topicLikes || 0;
+        topicLikes = count || 0;
       }
       
-      // 2. 用户所有评论获得的点赞数
-      const { data: userComments } = await supabase
-        .from('comments')
-        .select('id')
-        .eq('user_id', user.id);
-      
-      if (userComments && userComments.length > 0) {
-        const commentIds = userComments.map(c => c.id);
-        const { count: commentLikes } = await supabase
-          .from('comment_likes')
-          .select('*', { count: 'exact', head: true })
-          .in('comment_id', commentIds);
-        
-        totalLikes += commentLikes || 0;
-      }
-      
-      setLikeCount(totalLikes);
+      setLikeCount(topicLikes);
       
       // ユーザーの収藏数を取得
       const { count: favorites } = await supabase
@@ -173,8 +157,11 @@ export default function ProfileScreen() {
         subtitle={`👋 おかえりなさい、${user?.name || 'LocalTalkユーザー'}さん`}
       />
       
-      <SafeAreaView style={styles.content} edges={['left', 'right', 'bottom']}>
-        <ScrollView>
+      <SafeAreaView style={styles.content} edges={['left', 'right']}>
+        <ScrollView 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 100 }}
+        >
           <View style={styles.profileHeader}>
             <View style={styles.profileSection}>
               <AvatarPicker
@@ -188,17 +175,25 @@ export default function ProfileScreen() {
               <Text style={styles.email}>{user?.email || "メールアドレスなし"}</Text>
               
               <View style={styles.statsContainer}>
-                <View style={styles.statItem}>
+                <TouchableOpacity 
+                  style={styles.statItem}
+                  onPress={() => router.push('/my-topics')}
+                  activeOpacity={0.7}
+                >
                   <MessageSquare size={20} color={Colors.text.secondary} />
                   <Text style={styles.statNumber}>{topicCount}</Text>
                   <Text style={styles.statLabel}>投稿</Text>
-                </View>
+                </TouchableOpacity>
                 <View style={styles.statDivider} />
-                <View style={styles.statItem}>
+                <TouchableOpacity 
+                  style={styles.statItem}
+                  onPress={() => router.push('/liked-topics')}
+                  activeOpacity={0.7}
+                >
                   <Heart size={20} color={Colors.text.secondary} />
                   <Text style={styles.statNumber}>{likeCount}</Text>
                   <Text style={styles.statLabel}>いいね</Text>
-                </View>
+                </TouchableOpacity>
                 <View style={styles.statDivider} />
                 <TouchableOpacity 
                   style={styles.statItem}

@@ -36,7 +36,9 @@ export default function TabLayout() {
         <Tabs.Screen name="chats" />
         <Tabs.Screen name="profile" />
       </Tabs>
-      <CustomTabBar />
+      <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
+        <CustomTabBar />
+      </View>
     </View>
   );
 }

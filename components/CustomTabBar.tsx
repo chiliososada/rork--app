@@ -144,7 +144,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
-    paddingTop: 8,
   },
   content: {
     flexDirection: 'row',
@@ -155,11 +154,11 @@ const styles = StyleSheet.create({
   tab: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 4,
+    paddingVertical: 2,
   },
   iconContainer: {
     width: 48,
-    height: 32,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',

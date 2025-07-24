@@ -251,9 +251,11 @@ export default function TopicDetailScreen() {
           <TextInput
             style={styles.input}
             placeholder="コメントを追加..."
+            placeholderTextColor="#999999"
             value={commentText}
             onChangeText={setCommentText}
             multiline
+            selectionColor="#007AFF"
           />
           <TouchableOpacity 
             style={[
@@ -462,42 +464,56 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     padding: 16,
     paddingBottom: Platform.OS === "ios" ? 16 : 16,
-    backgroundColor: Colors.card,
+    backgroundColor: '#FAFAFA',
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: '#E8E8E8',
+    alignItems: 'flex-end',
   },
   input: {
     flex: 1,
-    backgroundColor: Colors.background,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
     maxHeight: 100,
-    minHeight: 40,
-    fontSize: 14,
+    minHeight: 44,
+    fontSize: 16,
     textAlignVertical: 'top',
-  },
-  sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#007AFF',
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: 8,
-    shadowColor: '#007AFF',
+    borderWidth: 1.5,
+    borderColor: '#E0E0E0',
+    shadowColor: '#000',
     shadowOffset: {
       width: 0,
       height: 2,
     },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
+    color: Colors.text.primary,
+  },
+  sendButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#007AFF',
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 12,
+    marginBottom: 0,
+    shadowColor: '#007AFF',
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 6,
   },
   sendButtonDisabled: {
-    backgroundColor: Colors.inactive,
-    shadowOpacity: 0,
-    elevation: 0,
+    backgroundColor: '#C7C7CC',
+    shadowColor: '#C7C7CC',
+    shadowOpacity: 0.1,
+    elevation: 2,
   },
   chatButton: {
     padding: 8,
