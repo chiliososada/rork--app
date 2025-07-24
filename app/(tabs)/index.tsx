@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { StyleSheet, Text, View, FlatList, RefreshControl, ActivityIndicator, TouchableOpacity } from "react-native";
+import React, { useEffect, useState, useCallback } from "react";
+import { StyleSheet, Text, View, FlatList, RefreshControl, ActivityIndicator, TouchableOpacity, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MapPin, Plus } from "lucide-react-native";
 import { useRouter } from "expo-router";
@@ -16,7 +16,7 @@ import { Topic } from "@/types";
 
 export default function NearbyScreen() {
   const router = useRouter();
-  const { currentLocation, permissionStatus, requestPermission } = useLocationStore();
+  const { currentLocation, permissionStatus, requestPermission, getCurrentLocation, isLoading: locationLoading, error: locationError } = useLocationStore();
   const { 
     filteredTopics, 
     fetchNearbyTopics, 
@@ -34,6 +34,7 @@ export default function NearbyScreen() {
   } = useHomeTopicsStore();
   const [refreshing, setRefreshing] = useState(false);
   const [settingsModalVisible, setSettingsModalVisible] = useState(false);
+  const [lastLocationRefresh, setLastLocationRefresh] = useState(0);
   
   useEffect(() => {
     if (currentLocation) {
@@ -85,6 +86,37 @@ export default function NearbyScreen() {
       loadTopics();
     }
   };
+
+  // 手动刷新位置功能
+  const handleLocationRefresh = useCallback(async () => {
+    // 防止频繁点击 - 3秒内只能刷新一次
+    const now = Date.now();
+    if (now - lastLocationRefresh < 3000) {
+      Alert.alert('お待ちください', '位置情報を更新中です。しばらくお待ちください');
+      return;
+    }
+    
+    try {
+      setLastLocationRefresh(now);
+      
+      // 先获取最新位置
+      await getCurrentLocation();
+      
+      // 获取更新后的位置信息
+      const updatedLocation = useLocationStore.getState().currentLocation;
+      
+      // 使用最新位置重新获取话题
+      if (updatedLocation) {
+        await fetchNearbyTopics(updatedLocation.latitude, updatedLocation.longitude, true);
+      }
+      
+      // 显示成功提示
+      Alert.alert('位置更新完了', '最新の位置情報を取得しました');
+    } catch (error) {
+      console.error('Location refresh failed:', error);
+      Alert.alert('位置更新に失敗', '位置情報を取得できませんでした。位置情報の権限設定をご確認ください');
+    }
+  }, [getCurrentLocation, fetchNearbyTopics, lastLocationRefresh]);
   
   const renderTopic = ({ item }: { item: Topic }) => {
     return <TopicCard topic={item} />;
@@ -137,9 +169,27 @@ export default function NearbyScreen() {
   }
   
   const getLocationText = () => {
-    if (!currentLocation) return "Location not available";
-    // You can replace this with actual location name from reverse geocoding
-    return "Tokyo, Japan";
+    // 位置加载中
+    if (locationLoading) return "位置を取得中...";
+    
+    // 位置获取失败
+    if (locationError) return "位置の取得に失敗しました";
+    
+    // 没有位置信息
+    if (!currentLocation) return "位置情報なし";
+    
+    // 使用真实的地理位置名称
+    if (currentLocation.name && currentLocation.name !== '現在地') {
+      return currentLocation.name;
+    }
+    
+    // 如果有完整地址，使用地址
+    if (currentLocation.address) {
+      return currentLocation.address;
+    }
+    
+    // 降备方案：显示坐标
+    return `${currentLocation.latitude.toFixed(4)}, ${currentLocation.longitude.toFixed(4)}`;
   };
 
   return (
@@ -147,6 +197,9 @@ export default function NearbyScreen() {
       <CustomHeader
         title="近くのトピック"
         subtitle={`📍 ${getLocationText()}`}
+        showLocationRefresh={permissionStatus === 'granted'}
+        onLocationRefresh={handleLocationRefresh}
+        isLocationRefreshing={locationLoading}
       />
       
       <SafeAreaView style={styles.content} edges={['left', 'right']}>
