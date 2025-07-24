@@ -57,7 +57,7 @@ const MINIMUM_MAP_TOPICS = 30;
 const STORE_KEY = 'map-topics';
 
 // Search debounce timeout for map topics
-let mapSearchDebounceTimeout: NodeJS.Timeout | null = null;
+let mapSearchDebounceTimeout: ReturnType<typeof setTimeout> | null = null;
 
 // 初始化缓存配置
 cacheManager.registerConfig(STORE_KEY, {
@@ -176,7 +176,7 @@ export const useMapTopicsStore = create<MapTopicsState>((set, get) => {
           // Check user interactions for cached data
           const { data: { user } } = await supabase.auth.getUser();
           if (user?.id && result.topics.length > 0) {
-            const topicIds = result.topics.map(t => t.id);
+            const topicIds = result.topics.map((t: any) => t.id);
             await get().checkInteractionStatus(topicIds, user.id);
           }
           
@@ -200,7 +200,7 @@ export const useMapTopicsStore = create<MapTopicsState>((set, get) => {
             // Check user interactions
             const { data: { user } } = await supabase.auth.getUser();
             if (user?.id && result.topics.length > 0) {
-              const topicIds = result.topics.map(t => t.id);
+              const topicIds = result.topics.map((t: any) => t.id);
               await get().checkInteractionStatus(topicIds, user.id);
             }
           } catch (error) {
@@ -309,7 +309,7 @@ export const useMapTopicsStore = create<MapTopicsState>((set, get) => {
         if (deduplicationResult.cachedData) {
           const result = deduplicationResult.cachedData;
           const existingTopicIds = new Set(topics.map(t => t.id));
-          const uniqueNewTopics = result.topics.filter(topic => !existingTopicIds.has(topic.id));
+          const uniqueNewTopics = result.topics.filter((topic: any) => !existingTopicIds.has(topic.id));
           const allTopics = [...topics, ...uniqueNewTopics];
           
           set({ 
@@ -330,7 +330,7 @@ export const useMapTopicsStore = create<MapTopicsState>((set, get) => {
           try {
             const result = await deduplicationResult.pendingPromise;
             const existingTopicIds = new Set(topics.map(t => t.id));
-            const uniqueNewTopics = result.topics.filter(topic => !existingTopicIds.has(topic.id));
+            const uniqueNewTopics = result.topics.filter((topic: any) => !existingTopicIds.has(topic.id));
             const allTopics = [...topics, ...uniqueNewTopics];
             
             set({ 

@@ -286,7 +286,7 @@ export default function ChatsScreen() {
           disableLeftSwipe={false}
           directionalDistanceChangeThreshold={10}
           swipeGestureBegan={() => {}}
-          swipeValueChanged={() => {}}
+          onSwipeValueChange={() => {}}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               {searchQuery ? (

@@ -1,7 +1,7 @@
 type EventCallback = (data: any) => void;
 
 interface DebouncedEvent {
-  timeout: NodeJS.Timeout;
+  timeout: ReturnType<typeof setTimeout>;
   data: any;
 }
 

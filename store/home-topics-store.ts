@@ -49,7 +49,7 @@ const TOPICS_PER_PAGE = 10;
 const STORE_KEY = 'home-topics';
 
 // Search debounce timeout
-let searchDebounceTimeout: NodeJS.Timeout | null = null;
+let searchDebounceTimeout: ReturnType<typeof setTimeout> | null = null;
 
 // 初始化缓存配置
 cacheManager.registerConfig(STORE_KEY, {
@@ -215,7 +215,7 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
           // Still check user interactions for cached data
           const { data: { user } } = await supabase.auth.getUser();
           if (user?.id && result.topics.length > 0) {
-            const topicIds = result.topics.map(t => t.id);
+            const topicIds = result.topics.map((t: any) => t.id);
             await get().checkInteractionStatus(topicIds, user.id);
           }
           
@@ -240,7 +240,7 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
             // Check user interactions
             const { data: { user } } = await supabase.auth.getUser();
             if (user?.id && result.topics.length > 0) {
-              const topicIds = result.topics.map(t => t.id);
+              const topicIds = result.topics.map((t: any) => t.id);
               await get().checkInteractionStatus(topicIds, user.id);
             }
           } catch (error) {
@@ -356,8 +356,8 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
           const result = deduplicationResult.cachedData;
           
           // Merge cached data with existing topics
-          const existingTopicIds = new Set(topics.map(t => t.id));
-          const uniqueNewTopics = result.topics.filter(topic => !existingTopicIds.has(topic.id));
+          const existingTopicIds = new Set(topics.map((t: any) => t.id));
+          const uniqueNewTopics = result.topics.filter((topic: any) => !existingTopicIds.has(topic.id));
           const allTopics = [...topics, ...uniqueNewTopics];
           
           set({ 
@@ -377,8 +377,8 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
           
           try {
             const result = await deduplicationResult.pendingPromise;
-            const existingTopicIds = new Set(topics.map(t => t.id));
-            const uniqueNewTopics = result.topics.filter(topic => !existingTopicIds.has(topic.id));
+            const existingTopicIds = new Set(topics.map((t: any) => t.id));
+            const uniqueNewTopics = result.topics.filter((topic: any) => !existingTopicIds.has(topic.id));
             const allTopics = [...topics, ...uniqueNewTopics];
             
             set({ 
@@ -444,7 +444,7 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
       // Check interaction status for new topics
       const { data: { user } } = await supabase.auth.getUser();
       if (user?.id && uniqueNewTopics.length > 0) {
-        const newTopicIds = uniqueNewTopics.map(t => t.id);
+        const newTopicIds = uniqueNewTopics.map((t: any) => t.id);
         await get().checkInteractionStatus(newTopicIds, user.id);
       }
       

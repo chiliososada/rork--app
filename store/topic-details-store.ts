@@ -46,7 +46,7 @@ interface TopicDetailsState {
   likeComment: (commentId: string, userId: string) => Promise<void>;
   
   // 话题创建
-  createTopic: (topic: Omit<Topic, 'id' | 'createdAt' | 'commentCount' | 'participantCount'>) => Promise<void>;
+  createTopic: (topic: Omit<Topic, 'id' | 'createdAt' | 'commentCount' | 'participantCount'>) => Promise<Topic>;
   
   // 互动功能（点赞/收藏）
   toggleFavorite: (topicId: string, userId: string) => Promise<void>;
@@ -935,7 +935,7 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
       }
 
       // Transform data to Topic array
-      const likedTopics: Topic[] = (likedTopicsData || []).map(likeRecord => {
+      const likedTopics: Topic[] = (likedTopicsData || []).map((likeRecord: any) => {
         const topic = likeRecord.topics;
         return {
           id: topic.id,

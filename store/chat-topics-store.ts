@@ -192,7 +192,7 @@ export const useChatTopicsStore = create<ChatTopicsState>((set, get) => {
 
         // 构建参与话题ID集合
         const participatedTopicIds = new Set<string>();
-        (topicsData || []).forEach(topic => {
+        (topicsData || []).forEach((topic: any) => {
           if (topic.is_creator || topic.is_participant) {
             participatedTopicIds.add(topic.id);
           }
@@ -201,7 +201,7 @@ export const useChatTopicsStore = create<ChatTopicsState>((set, get) => {
         set({ userParticipatedTopicIds: participatedTopicIds });
 
         // Transform data
-        const topics: Topic[] = (topicsData || []).map(topic => {
+        const topics: Topic[] = (topicsData || []).map((topic: any) => {
           return {
             id: topic.id,
             title: topic.title,
@@ -317,12 +317,12 @@ export const useChatTopicsStore = create<ChatTopicsState>((set, get) => {
         if (deduplicationResult.cachedData) {
           const result = deduplicationResult.cachedData;
           const existingTopicIds = new Set(topics.map(t => t.id));
-          const uniqueNewTopics = result.topics.filter(topic => !existingTopicIds.has(topic.id));
+          const uniqueNewTopics = result.topics.filter((topic: any) => !existingTopicIds.has(topic.id));
           const allTopics = [...topics, ...uniqueNewTopics];
           
           // 参与状態を更新（データベースで既にソート済み）
-          const updatedParticipatedIds = new Set(state.userParticipatedTopicIds);
-          uniqueNewTopics.forEach(topic => {
+          const updatedParticipatedIds = new Set(get().userParticipatedTopicIds);
+          uniqueNewTopics.forEach((topic: any) => {
             if (topic.isParticipated) {
               updatedParticipatedIds.add(topic.id);
             }
@@ -347,12 +347,12 @@ export const useChatTopicsStore = create<ChatTopicsState>((set, get) => {
           try {
             const result = await deduplicationResult.pendingPromise;
             const existingTopicIds = new Set(topics.map(t => t.id));
-            const uniqueNewTopics = result.topics.filter(topic => !existingTopicIds.has(topic.id));
+            const uniqueNewTopics = result.topics.filter((topic: any) => !existingTopicIds.has(topic.id));
             const allTopics = [...topics, ...uniqueNewTopics];
             
             // 参与状態を更新（データベースで既にソート済み）
-            const updatedParticipatedIds = new Set(state.userParticipatedTopicIds);
-            uniqueNewTopics.forEach(topic => {
+            const updatedParticipatedIds = new Set(get().userParticipatedTopicIds);
+            uniqueNewTopics.forEach((topic: any) => {
               if (topic.isParticipated) {
                 updatedParticipatedIds.add(topic.id);
               }
@@ -407,7 +407,7 @@ export const useChatTopicsStore = create<ChatTopicsState>((set, get) => {
         }
 
         // Transform data
-        const newTopics: Topic[] = (topicsData || []).map(topic => {
+        const newTopics: Topic[] = (topicsData || []).map((topic: any) => {
           return {
             id: topic.id,
             title: topic.title,
@@ -472,8 +472,8 @@ export const useChatTopicsStore = create<ChatTopicsState>((set, get) => {
       const allTopics = [...topics, ...uniqueNewTopics];
       
       // 参与状態を更新
-      const updatedParticipatedIds = new Set(state.userParticipatedTopicIds);
-      uniqueNewTopics.forEach(topic => {
+      const updatedParticipatedIds = new Set(get().userParticipatedTopicIds);
+      uniqueNewTopics.forEach((topic: any) => {
         if (topic.isParticipated) {
           updatedParticipatedIds.add(topic.id);
         }
@@ -761,13 +761,13 @@ export const useChatTopicsStore = create<ChatTopicsState>((set, get) => {
         topics: state.topics.map(topic => {
           if (!topicIds.includes(topic.id)) return topic;
           
-          const isParticipated = statusMap.get(topic.id) || false;
+          const isParticipated = Boolean(statusMap.get(topic.id)) || false;
           return { ...topic, isParticipated };
         }),
         filteredTopics: state.filteredTopics.map(topic => {
           if (!topicIds.includes(topic.id)) return topic;
           
-          const isParticipated = statusMap.get(topic.id) || false;
+          const isParticipated = Boolean(statusMap.get(topic.id)) || false;
           return { ...topic, isParticipated };
         })
       }));

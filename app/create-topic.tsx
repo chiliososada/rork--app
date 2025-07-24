@@ -101,7 +101,7 @@ export default function CreateTopicScreen() {
     
     try {
       let imageUrl: string | undefined;
-      let imageAspectRatio: string | undefined;
+      let imageAspectRatio: '1:1' | '4:5' | '1.91:1' | undefined;
       
       // Upload image if selected
       let originalWidth: number | undefined;
@@ -149,7 +149,7 @@ export default function CreateTopicScreen() {
 
   const proceedWithTopicCreation = async (
     imageUrl?: string, 
-    imageAspectRatio?: string,
+    imageAspectRatio?: '1:1' | '4:5' | '1.91:1',
     originalWidth?: number,
     originalHeight?: number
   ) => {

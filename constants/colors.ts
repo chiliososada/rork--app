@@ -9,6 +9,7 @@ export default {
     primary: "#000000",  // Black - primary text
     secondary: "#666666", // Medium gray - secondary text
     light: "#FFFFFF",    // White - text on dark backgrounds
+    disabled: "#CCCCCC", // Light gray - disabled text
   },
   border: "#E0E0E0",     // Light gray - borders
   success: "#28A745",    // Green - success states

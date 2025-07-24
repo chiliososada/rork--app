@@ -34,7 +34,7 @@ export class RequestDeduplicator {
     averageTime: number;
     lastRequestTime: number;
   }>();
-  private cleanupInterval: NodeJS.Timeout | null = null;
+  private cleanupInterval: ReturnType<typeof setInterval> | null = null;
   private isDestroyed = false;
 
   private constructor() {

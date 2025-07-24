@@ -82,10 +82,6 @@ export default function MapViewComponent({
         }}
         showsUserLocation
         showsMyLocationButton={true}
-        myLocationButtonStyle={{
-          marginBottom: 40,
-          marginRight: 16,
-        }}
         onMapReady={() => setMapReady(true)}
         onRegionChangeComplete={(region) => setMapRegion(region)}
         loadingEnabled={true}

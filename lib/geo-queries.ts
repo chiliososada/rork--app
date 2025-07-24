@@ -333,16 +333,16 @@ export async function fetchParticipatedTopics(userId: string, params: Omit<GeoQu
     // First, get topics user has participated in
     const { data: participatedData, error: participatedError } = await supabase
       .from('chat_messages')
-      .select('topic_id, MAX(created_at) as last_message_time')
+      .select('topic_id, created_at')
       .eq('user_id', userId)
-      .group('topic_id');
+      .order('created_at', { ascending: false });
 
     if (participatedError) {
       throw participatedError;
     }
 
-    const participatedTopicIds = new Set(participatedData?.map(d => d.topic_id) || []);
-    const lastMessageTimes = new Map(participatedData?.map(d => [d.topic_id, d.last_message_time]) || []);
+    const participatedTopicIds = new Set(participatedData?.map((d: any) => d.topic_id) || []);
+    const lastMessageTimes = new Map(participatedData?.map((d: any) => [d.topic_id, d.created_at]) || []);
 
     // Get topics user created
     const { data: createdTopicsData, error: createdError } = await supabase

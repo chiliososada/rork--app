@@ -51,7 +51,7 @@ export class CacheManager {
   private pendingRequests = new Map<string, PendingRequest>();
   private lastRequestTimes = new Map<string, number>();
   private configs = new Map<string, CacheConfig>();
-  private cleanupInterval: NodeJS.Timeout | null = null;
+  private cleanupInterval: ReturnType<typeof setInterval> | null = null;
   private isDestroyed = false;
 
   private constructor() {

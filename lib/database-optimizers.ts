@@ -65,7 +65,7 @@ export async function getBatchTopicInteractionStatus(
     const countsMap = new Map(
       (countsResult.data || []).map((item: any) => [
         item.topic_id, 
-        { likesCount: item.likes_count, commentsCount: item.comments_count }
+        { likesCount: item.likes_count || 0, commentsCount: item.comments_count || 0 }
       ])
     );
 
@@ -74,8 +74,8 @@ export async function getBatchTopicInteractionStatus(
       topicId,
       isLiked: likedTopicIds.has(topicId),
       isFavorited: favoritedTopicIds.has(topicId),
-      likesCount: countsMap.get(topicId)?.likesCount || 0,
-      commentsCount: countsMap.get(topicId)?.commentsCount || 0
+      likesCount: (countsMap.get(topicId) as any)?.likesCount || 0,
+      commentsCount: (countsMap.get(topicId) as any)?.commentsCount || 0
     }));
 
   } catch (error) {
