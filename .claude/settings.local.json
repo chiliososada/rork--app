@@ -9,7 +9,8 @@
       "Bash(npm start)",
       "Bash(npx tsc:*)",
       "Bash(npm run:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(npm install:*)"
     ],
     "deny": []
   }

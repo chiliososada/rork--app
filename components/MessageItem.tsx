@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Modal } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Modal, Alert } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { Message } from '@/types';
 import Colors from '@/constants/colors';
 import { useAuthStore } from '@/store/auth-store';
 import { useChatStore } from '@/store/chat-store';
-import { Quote } from 'lucide-react-native';
+import { Quote, Copy } from 'lucide-react-native';
 import { formatMessageTime } from '@/lib/utils/timeUtils';
 
 interface MessageItemProps {
@@ -16,6 +17,18 @@ export default function MessageItem({ message }: MessageItemProps) {
   const { setQuotedMessage } = useChatStore();
   const [showContextMenu, setShowContextMenu] = useState(false);
   const isCurrentUser = user?.id === message.author.id;
+  
+  // コピー機能
+  const handleCopyMessage = async () => {
+    try {
+      await Clipboard.setStringAsync(message.text);
+      setShowContextMenu(false);
+      Alert.alert('コピーしました', 'メッセージがクリップボードにコピーされました');
+    } catch (error) {
+      console.error('Copy failed:', error);
+      Alert.alert('エラー', 'コピーに失敗しました');
+    }
+  };
   
   // URLを検出する関数
   const detectUrls = (text: string) => {
@@ -106,6 +119,13 @@ export default function MessageItem({ message }: MessageItemProps) {
           onPress={() => setShowContextMenu(false)}
         >
           <View style={styles.contextMenu}>
+            <TouchableOpacity
+              style={styles.contextMenuItem}
+              onPress={handleCopyMessage}
+            >
+              <Copy size={18} color={Colors.text.primary} />
+              <Text style={styles.contextMenuText}>コピー</Text>
+            </TouchableOpacity>
             <TouchableOpacity
               style={styles.contextMenuItem}
               onPress={() => {
