@@ -124,6 +124,7 @@ const styles = StyleSheet.create({
   },
   mapWrapper: {
     flex: 1,
+    paddingBottom: 32,
   },
   loadingContainer: {
     flex: 1,

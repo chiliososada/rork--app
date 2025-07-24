@@ -36,10 +36,14 @@ export const useTopicDetailStore = create<TopicDetailState>((set, get) => ({
   error: null,
 
   fetchTopicById: async (id) => {
-    // Direct fetch - caching is now handled by the unified cache system
-    // at the component level for better control
+    // Check if we already have this topic loaded to prevent unnecessary flashing
+    const { currentTopic } = get();
     
-    set({ isLoading: true, error: null });
+    // Only show loading state if we don't have any topic or it's a different topic
+    if (!currentTopic || currentTopic.id !== id) {
+      set({ isLoading: true, error: null });
+    }
+    
     await get().fetchFreshTopicData(id);
   },
 
@@ -182,7 +186,9 @@ export const useTopicDetailStore = create<TopicDetailState>((set, get) => ({
   },
 
   clearCurrentTopic: () => {
-    set({ currentTopic: null, comments: [], error: null });
+    // Don't immediately clear topic to prevent flashing
+    // Only clear comments and error, keep currentTopic for smooth transitions
+    set({ comments: [], error: null });
   },
 
   fetchComments: async (topicId) => {

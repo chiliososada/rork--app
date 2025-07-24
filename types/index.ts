@@ -26,6 +26,8 @@ export interface Topic {
   lastMessageTime?: string; // Time of the last message in this topic
   imageUrl?: string; // URL of the topic image
   aspectRatio?: '1:1' | '4:5' | '1.91:1'; // Image aspect ratio
+  originalWidth?: number; // Original image width in pixels
+  originalHeight?: number; // Original image height in pixels
   
   // 点赞相关
   isLiked?: boolean; // Whether current user has liked this topic

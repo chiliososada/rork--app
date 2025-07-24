@@ -81,7 +81,11 @@ export default function MapViewComponent({
           longitudeDelta: 0.0421,
         }}
         showsUserLocation
-        showsMyLocationButton
+        showsMyLocationButton={true}
+        myLocationButtonStyle={{
+          marginBottom: 40,
+          marginRight: 16,
+        }}
         onMapReady={() => setMapReady(true)}
         onRegionChangeComplete={(region) => setMapRegion(region)}
         loadingEnabled={true}

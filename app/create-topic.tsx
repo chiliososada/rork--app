@@ -10,7 +10,7 @@ import ImagePicker from "@/components/ImagePicker";
 import { useLocationStore } from "@/store/location-store";
 import { useTopicDetailsStore } from "@/store/topic-details-store";
 import { useAuthStore } from "@/store/auth-store";
-import { AspectRatio, uploadTopicImage } from "@/lib/image-upload";
+import { uploadTopicImage } from "@/lib/image-upload";
 
 export default function CreateTopicScreen() {
   const router = useRouter();
@@ -27,7 +27,6 @@ export default function CreateTopicScreen() {
   
   // Image states
   const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
-  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('1:1');
   const [uploadingImage, setUploadingImage] = useState(false);
   
   useEffect(() => {
@@ -56,9 +55,8 @@ export default function CreateTopicScreen() {
     return isValid;
   };
   
-  const handleImageSelected = (uri: string, ratio: AspectRatio) => {
+  const handleImageSelected = (uri: string) => {
     setSelectedImageUri(uri);
-    setAspectRatio(ratio);
   };
 
   const handleRemoveImage = () => {
@@ -92,15 +90,20 @@ export default function CreateTopicScreen() {
     
     try {
       let imageUrl: string | undefined;
-      let imageAspectRatio: AspectRatio | undefined;
+      let imageAspectRatio: string | undefined;
       
       // Upload image if selected
+      let originalWidth: number | undefined;
+      let originalHeight: number | undefined;
+      
       if (selectedImageUri) {
         setUploadingImage(true);
         try {
-          const uploadResult = await uploadTopicImage(selectedImageUri, aspectRatio);
+          const uploadResult = await uploadTopicImage(selectedImageUri);
           imageUrl = uploadResult.url;
           imageAspectRatio = uploadResult.aspectRatio;
+          originalWidth = uploadResult.originalWidth;
+          originalHeight = uploadResult.originalHeight;
         } catch (imageError: any) {
           setUploadingImage(false);
           console.error('Image upload error details:', imageError);
@@ -111,7 +114,7 @@ export default function CreateTopicScreen() {
               { text: "キャンセル", style: "cancel" },
               { 
                 text: "画像なしで投稿", 
-                onPress: () => proceedWithTopicCreation(undefined, undefined)
+                onPress: () => proceedWithTopicCreation(undefined, undefined, undefined, undefined)
               }
             ]
           );
@@ -120,7 +123,7 @@ export default function CreateTopicScreen() {
         setUploadingImage(false);
       }
       
-      await proceedWithTopicCreation(imageUrl, imageAspectRatio);
+      await proceedWithTopicCreation(imageUrl, imageAspectRatio, originalWidth, originalHeight);
     } catch (error) {
       setUploadingImage(false);
       Alert.alert(
@@ -133,7 +136,12 @@ export default function CreateTopicScreen() {
     }
   };
 
-  const proceedWithTopicCreation = async (imageUrl?: string, imageAspectRatio?: AspectRatio) => {
+  const proceedWithTopicCreation = async (
+    imageUrl?: string, 
+    imageAspectRatio?: string,
+    originalWidth?: number,
+    originalHeight?: number
+  ) => {
     await createTopic({
       title,
       description,
@@ -141,6 +149,8 @@ export default function CreateTopicScreen() {
       location: currentLocation!,
       imageUrl,
       aspectRatio: imageAspectRatio,
+      originalWidth,
+      originalHeight,
     });
     
     router.push("/(tabs)");
@@ -214,8 +224,6 @@ export default function CreateTopicScreen() {
           {/* Image Picker */}
           <ImagePicker
             onImageSelected={handleImageSelected}
-            aspectRatio={aspectRatio}
-            onAspectRatioChange={setAspectRatio}
             selectedImageUri={selectedImageUri || undefined}
             onRemoveImage={handleRemoveImage}
           />
@@ -244,7 +252,11 @@ export default function CreateTopicScreen() {
           </View>
           
           <Button
-            title={uploadingImage ? "画像をアップロード中..." : "トピックを作成"}
+            title={
+              uploadingImage ? "画像を最適化中..." : 
+              isLoading ? "トピックを作成中..." : 
+              "トピックを作成"
+            }
             onPress={handleCreateTopic}
             isLoading={isLoading || uploadingImage}
             style={styles.createButton}

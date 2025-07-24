@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform } from "react-native";
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MapPin, MessageCircle, Users, Send, ChevronLeft, Heart, Bookmark } from "lucide-react-native";
@@ -37,7 +37,7 @@ export default function TopicDetailScreen() {
       fetchComments(id);
     }
     
-    // Cleanup when component unmounts
+    // Cleanup when component unmounts - only clear comments to prevent flashing
     return () => {
       clearCurrentTopic();
     };
@@ -111,6 +111,7 @@ export default function TopicDetailScreen() {
     }
   };
   
+  // Show loading only when there's no topic data at all and we're loading
   if (!currentTopic && isLoading) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
@@ -119,12 +120,18 @@ export default function TopicDetailScreen() {
     );
   }
   
-  if (!currentTopic) {
+  // Show error only when we're not loading and have no topic
+  if (!currentTopic && !isLoading) {
     return (
       <SafeAreaView style={styles.errorContainer}>
         <Text style={styles.errorText}>トピックが見つかりません</Text>
       </SafeAreaView>
     );
+  }
+  
+  // If we have no current topic but we're not loading, return null to prevent flashing
+  if (!currentTopic) {
+    return null;
   }
   
   return (
@@ -154,6 +161,13 @@ export default function TopicDetailScreen() {
             fill={currentTopic.isFavorited ? '#007AFF' : 'transparent'}
           />
         </TouchableOpacity>
+        
+        {/* Loading indicator for topic refresh */}
+        {isLoading && currentTopic && currentTopic.id !== id && (
+          <View style={styles.headerLoadingIndicator}>
+            <ActivityIndicator size="small" color={Colors.primary} />
+          </View>
+        )}
       </View>
       
       <KeyboardAvoidingView
@@ -296,6 +310,12 @@ const styles = StyleSheet.create({
   },
   favoriteButton: {
     padding: 8,
+  },
+  headerLoadingIndicator: {
+    position: 'absolute',
+    right: 60,
+    top: '50%',
+    marginTop: -10,
   },
   container: {
     flex: 1,

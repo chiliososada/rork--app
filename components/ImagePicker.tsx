@@ -7,17 +7,16 @@ import {
   Alert,
   Modal,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { Camera, Image as ImageIcon, X } from 'lucide-react-native';
+import { Camera, Image as ImageIcon, X, ZoomIn } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import Button from '@/components/Button';
-import { AspectRatio, pickImage, takePicture } from '@/lib/image-upload';
+import { pickImage, takePicture } from '@/lib/image-upload';
 
 interface ImagePickerProps {
-  onImageSelected: (uri: string, aspectRatio: AspectRatio) => void;
-  aspectRatio: AspectRatio;
-  onAspectRatioChange: (ratio: AspectRatio) => void;
+  onImageSelected: (uri: string) => void;
   selectedImageUri?: string;
   onRemoveImage?: () => void;
 }
@@ -27,40 +26,27 @@ const previewWidth = screenWidth - 48; // Account for padding
 
 export default function ImagePicker({
   onImageSelected,
-  aspectRatio,
-  onAspectRatioChange,
   selectedImageUri,
   onRemoveImage,
 }: ImagePickerProps) {
   const [showImageOptions, setShowImageOptions] = useState(false);
-
-  const aspectRatioOptions = [
-    { value: '1:1' as const, label: '正方形 (1:1)', description: 'SNS投稿に最適' },
-    { value: '4:5' as const, label: '縦長 (4:5)', description: 'Instagram風' },
-    { value: '1.91:1' as const, label: '横長 (1.91:1)', description: 'パノラマ風' },
-  ];
-
-  const getPreviewHeight = () => {
-    switch (aspectRatio) {
-      case '1:1':
-        return previewWidth;
-      case '4:5':
-        return previewWidth * 1.25;
-      case '1.91:1':
-        return previewWidth / 1.91;
-      default:
-        return previewWidth;
-    }
-  };
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('');
+  const [showFullScreen, setShowFullScreen] = useState(false);
 
   const handleImagePick = async (useCamera: boolean = false) => {
     try {
       setShowImageOptions(false);
+      setIsLoading(true);
+      setLoadingMessage(useCamera ? 'カメラを起動中...' : '画像を選択中...');
       
       const result = useCamera ? await takePicture() : await pickImage();
       
       if (result && !result.canceled && result.assets?.[0]) {
-        onImageSelected(result.assets[0].uri, aspectRatio);
+        setLoadingMessage('画像を処理中...');
+        // 短暂延迟以显示处理状态
+        await new Promise(resolve => setTimeout(resolve, 500));
+        onImageSelected(result.assets[0].uri);
       }
     } catch (error: any) {
       Alert.alert(
@@ -68,6 +54,9 @@ export default function ImagePicker({
         error.message || '画像の選択に失敗しました。もう一度お試しください。',
         [{ text: 'OK' }]
       );
+    } finally {
+      setIsLoading(false);
+      setLoadingMessage('');
     }
   };
 
@@ -94,60 +83,32 @@ export default function ImagePicker({
 
   return (
     <View style={styles.container}>
-      {/* Aspect Ratio Selection */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>アスペクト比を選択</Text>
-        <View style={styles.aspectRatioContainer}>
-          {aspectRatioOptions.map((option) => (
-            <TouchableOpacity
-              key={option.value}
-              style={[
-                styles.aspectRatioOption,
-                aspectRatio === option.value && styles.aspectRatioOptionActive,
-              ]}
-              onPress={() => onAspectRatioChange(option.value)}
-            >
-              <Text
-                style={[
-                  styles.aspectRatioLabel,
-                  aspectRatio === option.value && styles.aspectRatioLabelActive,
-                ]}
-              >
-                {option.label}
-              </Text>
-              <Text
-                style={[
-                  styles.aspectRatioDescription,
-                  aspectRatio === option.value && styles.aspectRatioDescriptionActive,
-                ]}
-              >
-                {option.description}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
       {/* Image Preview or Picker */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>写真を選択</Text>
         
-        {selectedImageUri ? (
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+            <Text style={styles.loadingText}>{loadingMessage}</Text>
+          </View>
+        ) : selectedImageUri ? (
           <View style={styles.imagePreviewContainer}>
-            <View
-              style={[
-                styles.imagePreview,
-                { 
-                  width: previewWidth, 
-                  height: getPreviewHeight(),
-                },
-              ]}
+            <TouchableOpacity 
+              style={styles.imagePreview}
+              onPress={() => setShowFullScreen(true)}
+              activeOpacity={0.8}
             >
               <Image
                 source={{ uri: selectedImageUri }}
                 style={styles.previewImage}
-                contentFit="cover"
+                contentFit="contain"
               />
+              
+              {/* Zoom indicator */}
+              <View style={styles.zoomIndicator}>
+                <ZoomIn size={16} color={Colors.card} />
+              </View>
               
               {/* Remove Image Button */}
               {onRemoveImage && (
@@ -158,37 +119,64 @@ export default function ImagePicker({
                   <X size={20} color={Colors.card} />
                 </TouchableOpacity>
               )}
-            </View>
+            </TouchableOpacity>
             
             {/* Change Image Button */}
             <TouchableOpacity
               style={styles.changeImageButton}
               onPress={showImagePickerOptions}
+              disabled={isLoading}
             >
               <Text style={styles.changeImageButtonText}>写真を変更</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <TouchableOpacity
-            style={[
-              styles.imagePickerButton,
-              {
-                width: previewWidth,
-                height: getPreviewHeight(),
-              },
-            ]}
+            style={styles.imagePickerButton}
             onPress={showImagePickerOptions}
+            disabled={isLoading}
           >
             <ImageIcon size={40} color={Colors.text.secondary} />
             <Text style={styles.imagePickerText}>
               写真を選択またはカメラで撮影
             </Text>
             <Text style={styles.imagePickerSubtext}>
-              タップして {aspectRatioOptions.find(opt => opt.value === aspectRatio)?.description} の写真を追加
+              原図の比例を保持して表示されます
             </Text>
           </TouchableOpacity>
         )}
       </View>
+      
+      {/* Full Screen Image Modal */}
+      {selectedImageUri && (
+        <Modal
+          visible={showFullScreen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowFullScreen(false)}
+        >
+          <View style={styles.fullScreenContainer}>
+            <TouchableOpacity
+              style={styles.fullScreenOverlay}
+              activeOpacity={1}
+              onPress={() => setShowFullScreen(false)}
+            >
+              <Image
+                source={{ uri: selectedImageUri }}
+                style={styles.fullScreenImage}
+                contentFit="contain"
+              />
+              
+              <TouchableOpacity
+                style={styles.fullScreenCloseButton}
+                onPress={() => setShowFullScreen(false)}
+              >
+                <X size={24} color={Colors.card} />
+              </TouchableOpacity>
+            </TouchableOpacity>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 }
@@ -206,36 +194,6 @@ const styles = StyleSheet.create({
     color: Colors.text.primary,
     marginBottom: 12,
   },
-  aspectRatioContainer: {
-    gap: 8,
-  },
-  aspectRatioOption: {
-    backgroundColor: Colors.card,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: Colors.border,
-  },
-  aspectRatioOptionActive: {
-    borderColor: Colors.primary,
-    backgroundColor: '#E3F2FD',
-  },
-  aspectRatioLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.text.primary,
-    marginBottom: 4,
-  },
-  aspectRatioLabelActive: {
-    color: Colors.primary,
-  },
-  aspectRatioDescription: {
-    fontSize: 12,
-    color: Colors.text.secondary,
-  },
-  aspectRatioDescriptionActive: {
-    color: Colors.primary,
-  },
   imagePickerButton: {
     backgroundColor: Colors.card,
     borderRadius: 12,
@@ -245,6 +203,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
+    minHeight: 160,
   },
   imagePickerText: {
     fontSize: 16,
@@ -263,10 +222,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   imagePreview: {
+    width: previewWidth,
+    maxHeight: 400,
     borderRadius: 12,
     overflow: 'hidden',
     position: 'relative',
     backgroundColor: Colors.border,
+    minHeight: 160,
   },
   previewImage: {
     width: '100%',
@@ -293,5 +255,51 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.primary,
     fontWeight: '500',
+  },
+  loadingContainer: {
+    minHeight: 160,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderStyle: 'dashed',
+    padding: 24,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  zoomIndicator: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 12,
+    padding: 6,
+  },
+  fullScreenContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+  },
+  fullScreenOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullScreenImage: {
+    width: '100%',
+    height: '100%',
+  },
+  fullScreenCloseButton: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 20,
+    padding: 8,
   },
 });

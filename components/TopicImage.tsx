@@ -5,6 +5,8 @@ import { ImageIcon } from 'lucide-react-native';
 import { Topic } from '@/types';
 import Colors from '@/constants/colors';
 
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
 interface TopicImageProps {
   topic: Topic;
   size?: 'small' | 'medium' | 'large' | 'full';
@@ -13,7 +15,6 @@ interface TopicImageProps {
   showPlaceholder?: boolean;
 }
 
-const { width: screenWidth } = Dimensions.get('window');
 
 export default function TopicImage({ 
   topic, 
@@ -28,6 +29,45 @@ export default function TopicImage({
   }
 
   const getImageDimensions = () => {
+    // 如果有原图尺寸信息，优先使用
+    if (topic.originalWidth && topic.originalHeight) {
+      const originalRatio = topic.originalWidth / topic.originalHeight;
+      
+      let maxWidth: number;
+      switch (size) {
+        case 'small':
+          maxWidth = 80;
+          break;
+        case 'medium':
+          maxWidth = 120;
+          break;
+        case 'large':
+          maxWidth = screenWidth - 48; // Account for padding
+          break;
+        case 'full':
+          maxWidth = screenWidth;
+          break;
+        default:
+          maxWidth = 120;
+      }
+      
+      // 保持原图比例，但限制最大宽度
+      let width = Math.min(topic.originalWidth, maxWidth);
+      let height = width / originalRatio;
+      
+      // 为large尺寸设置最大高度，避免图片过长
+      if (size === 'large') {
+        const maxHeight = Math.min(screenHeight * 0.6, screenWidth * 1.5); // 最大高度为屏幕高度的60%或屏幕宽度的1.5倍，取较小值
+        if (height > maxHeight) {
+          height = maxHeight;
+          width = height * originalRatio;
+        }
+      }
+      
+      return { width, height };
+    }
+    
+    // 回退到原有逻辑（用于兼容旧数据）
     const aspectRatio = topic.aspectRatio || '1:1';
     let baseWidth: number;
     
@@ -39,7 +79,7 @@ export default function TopicImage({
         baseWidth = 120;
         break;
       case 'large':
-        baseWidth = screenWidth - 48; // Account for padding
+        baseWidth = screenWidth - 48;
         break;
       case 'full':
         baseWidth = screenWidth;
@@ -54,10 +94,10 @@ export default function TopicImage({
         height = baseWidth;
         break;
       case '4:5':
-        height = baseWidth * 1.25; // 4:5 ratio
+        height = baseWidth * 1.25;
         break;
       case '1.91:1':
-        height = baseWidth / 1.91; // 1.91:1 ratio
+        height = baseWidth / 1.91;
         break;
       default:
         height = baseWidth;
@@ -101,7 +141,7 @@ export default function TopicImage({
       <Image
         source={{ uri: topic.imageUrl }}
         style={styles.image}
-        contentFit="cover"
+        contentFit="contain"
         transition={200}
       />
     </View>
@@ -164,7 +204,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cardImage: {
-    marginBottom: 16,
+    marginBottom: 8,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,

@@ -190,6 +190,8 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
         lastMessageTime,
         imageUrl: topicData.image_url || undefined,
         aspectRatio: topicData.image_aspect_ratio as '1:1' | '4:5' | '1.91:1' | undefined,
+        originalWidth: topicData.original_width || undefined,
+        originalHeight: topicData.original_height || undefined,
         isFavorited,
         isLiked,
         likesCount: likesCount || 0
@@ -439,7 +441,9 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
             longitude: topicData.location.longitude,
             location_name: topicData.location.name,
             image_url: topicData.imageUrl,
-            image_aspect_ratio: topicData.aspectRatio
+            image_aspect_ratio: topicData.aspectRatio,
+            original_width: topicData.originalWidth,
+            original_height: topicData.originalHeight
           }
         ])
         .select(`
@@ -479,6 +483,8 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
         lastMessageTime: undefined,
         imageUrl: insertedTopic.image_url || undefined,
         aspectRatio: insertedTopic.image_aspect_ratio as '1:1' | '4:5' | '1.91:1' | undefined,
+        originalWidth: insertedTopic.original_width || undefined,
+        originalHeight: insertedTopic.original_height || undefined,
         isFavorited: false,
         isLiked: false,
         likesCount: 0

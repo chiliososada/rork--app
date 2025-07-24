@@ -331,6 +331,11 @@ BEGIN
 END;
 $$;
 
+
+ ALTER TABLE public.topics
+  ADD COLUMN original_width INTEGER,
+  ADD COLUMN original_height INTEGER;
+  
 如果设计到文本都使用日语
 
 我偏向于ios和安卓 web端可以降低比重
