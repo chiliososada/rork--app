@@ -36,13 +36,21 @@ export const useTopicDetailStore = create<TopicDetailState>((set, get) => ({
   error: null,
 
   fetchTopicById: async (id) => {
-    // Check if we already have this topic loaded to prevent unnecessary flashing
     const { currentTopic } = get();
     
-    // Only show loading state if we don't have any topic or it's a different topic
-    if (!currentTopic || currentTopic.id !== id) {
+    // If switching to a different topic, clear current state immediately to prevent flashing
+    if (currentTopic && currentTopic.id !== id) {
+      set({ 
+        currentTopic: null,
+        comments: [],
+        isLoading: true, 
+        error: null 
+      });
+    } else if (!currentTopic) {
+      // No current topic, just set loading
       set({ isLoading: true, error: null });
     }
+    // If we already have the correct topic, don't set loading to prevent unnecessary re-renders
     
     await get().fetchFreshTopicData(id);
   },
@@ -186,9 +194,14 @@ export const useTopicDetailStore = create<TopicDetailState>((set, get) => ({
   },
 
   clearCurrentTopic: () => {
-    // Don't immediately clear topic to prevent flashing
-    // Only clear comments and error, keep currentTopic for smooth transitions
-    set({ comments: [], error: null });
+    // Clear all state to prevent showing stale data when switching topics
+    set({ 
+      currentTopic: null,
+      comments: [], 
+      error: null,
+      isLoading: false,
+      isLoadingComments: false
+    });
   },
 
   fetchComments: async (topicId) => {

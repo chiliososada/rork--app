@@ -141,7 +141,7 @@ export default function TopicImage({
       <Image
         source={{ uri: topic.imageUrl }}
         style={styles.image}
-        contentFit="contain"
+        contentFit="cover"
         transition={200}
       />
     </View>
@@ -192,14 +192,14 @@ export function TopicThumbnail({ topic, style }: { topic: Topic; style?: any }) 
 const styles = StyleSheet.create({
   container: {
     overflow: 'hidden',
-    backgroundColor: Colors.border,
+    backgroundColor: 'transparent',
   },
   image: {
     width: '100%',
     height: '100%',
   },
   placeholder: {
-    backgroundColor: Colors.border,
+    backgroundColor: Colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },

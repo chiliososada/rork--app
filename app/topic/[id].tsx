@@ -27,7 +27,8 @@ export default function TopicDetailScreen() {
     toggleLike, 
     isLoading, 
     isLoadingComments,
-    clearCurrentTopic
+    clearCurrentTopic,
+    error
   } = useTopicDetailStore();
   const [commentText, setCommentText] = useState("");
   
@@ -37,7 +38,7 @@ export default function TopicDetailScreen() {
       fetchComments(id);
     }
     
-    // Cleanup when component unmounts - only clear comments to prevent flashing
+    // Cleanup when component unmounts
     return () => {
       clearCurrentTopic();
     };
@@ -111,8 +112,8 @@ export default function TopicDetailScreen() {
     }
   };
   
-  // Show loading only when there's no topic data at all and we're loading
-  if (!currentTopic && isLoading) {
+  // Show loading state
+  if (isLoading) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
         <Text style={styles.loadingText}>トピックを読み込み中...</Text>
@@ -120,8 +121,8 @@ export default function TopicDetailScreen() {
     );
   }
   
-  // Show error only when we're not loading and have no topic
-  if (!currentTopic && !isLoading) {
+  // Show error state
+  if (!currentTopic && error) {
     return (
       <SafeAreaView style={styles.errorContainer}>
         <Text style={styles.errorText}>トピックが見つかりません</Text>
@@ -129,9 +130,22 @@ export default function TopicDetailScreen() {
     );
   }
   
-  // If we have no current topic but we're not loading, return null to prevent flashing
+  // Show loading if no topic data yet (but no error)
   if (!currentTopic) {
-    return null;
+    return (
+      <SafeAreaView style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>トピックを読み込み中...</Text>
+      </SafeAreaView>
+    );
+  }
+  
+  // If we have a topic but it's not the one we're looking for, show loading
+  if (currentTopic.id !== id) {
+    return (
+      <SafeAreaView style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>トピックを読み込み中...</Text>
+      </SafeAreaView>
+    );
   }
   
   return (
@@ -162,12 +176,7 @@ export default function TopicDetailScreen() {
           />
         </TouchableOpacity>
         
-        {/* Loading indicator for topic refresh */}
-        {isLoading && currentTopic && currentTopic.id !== id && (
-          <View style={styles.headerLoadingIndicator}>
-            <ActivityIndicator size="small" color={Colors.primary} />
-          </View>
-        )}
+        {/* Loading indicator for topic refresh - removed since we now show full loading screen */}
       </View>
       
       <KeyboardAvoidingView
