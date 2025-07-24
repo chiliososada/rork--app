@@ -60,7 +60,19 @@ export async function fetchNearbyTopics(params: GeoQueryParams): Promise<QueryRe
     timeRange = 'all'
   } = params;
 
+
   try {
+    // Calculate geographic bounds
+    const latBounds = {
+      min: latitude - (radiusKm / 111.0),
+      max: latitude + (radiusKm / 111.0)
+    };
+    const lonBounds = {
+      min: longitude - (radiusKm / (111.0 * Math.cos(latitude * Math.PI / 180))),
+      max: longitude + (radiusKm / (111.0 * Math.cos(latitude * Math.PI / 180)))
+    };
+    
+
     // Build the query with geographic distance calculation
     let query = supabase
       .from('topics')
@@ -79,10 +91,10 @@ export async function fetchNearbyTopics(params: GeoQueryParams): Promise<QueryRe
         )
       `)
       // Use PostGIS to filter by distance (radius in meters)
-      .gte('latitude', latitude - (radiusKm / 111.0)) // Rough lat degree approximation
-      .lte('latitude', latitude + (radiusKm / 111.0))
-      .gte('longitude', longitude - (radiusKm / (111.0 * Math.cos(latitude * Math.PI / 180))))
-      .lte('longitude', longitude + (radiusKm / (111.0 * Math.cos(latitude * Math.PI / 180))));
+      .gte('latitude', latBounds.min)
+      .lte('latitude', latBounds.max)
+      .gte('longitude', lonBounds.min)
+      .lte('longitude', lonBounds.max);
 
     // Add time range filtering
     const timeFilterStart = getTimeRangeStartDate(timeRange);
@@ -90,22 +102,25 @@ export async function fetchNearbyTopics(params: GeoQueryParams): Promise<QueryRe
       query = query.gte('created_at', timeFilterStart.toISOString());
     }
 
-    // Add cursor-based pagination
+    // Use offset-based pagination instead of cursor for reliability
+    let offset = 0;
     if (cursor) {
-      query = query.gt('created_at', cursor);
+      // Parse offset from cursor
+      offset = parseInt(cursor) || 0;
     }
 
-    // Execute query with limit
+    // Execute query with limit and offset
     const { data: topicsData, error: topicsError } = await query
       .order('created_at', { ascending: false })
-      .limit(limit + 1); // Fetch one extra to check if there are more
+      .range(offset, offset + limit - 1); // Use range for offset-based pagination
 
     if (topicsError) {
       throw topicsError;
     }
 
+
     // Transform and calculate exact distances
-    const topics: Topic[] = (topicsData || []).slice(0, limit).map(topic => {
+    const topics: Topic[] = (topicsData || []).map(topic => {
       const distance = calculateDistance(
         latitude, 
         longitude, 
@@ -161,11 +176,9 @@ export async function fetchNearbyTopics(params: GeoQueryParams): Promise<QueryRe
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
 
-    // Determine next cursor and hasMore
-    const hasMore = topicsData ? topicsData.length > limit : false;
-    const nextCursor = hasMore && sortedTopics.length > 0 
-      ? sortedTopics[sortedTopics.length - 1].createdAt 
-      : undefined;
+    // Determine next cursor and hasMore for offset-based pagination
+    const hasMore = topicsData ? topicsData.length === limit : false;
+    const nextCursor = hasMore ? (offset + limit).toString() : undefined;
 
     return {
       topics: sortedTopics,

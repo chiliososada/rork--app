@@ -285,6 +285,7 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
         { latitude, longitude }
       );
       
+
       set({ 
         topics: result.topics,
         filteredTopics: result.topics,
@@ -324,7 +325,9 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
   loadMoreTopics: async (latitude, longitude) => {
     const { isLoadingMore, hasMore, nextCursor, topics } = get();
     
-    if (isLoadingMore || !hasMore || !nextCursor) return;
+    if (isLoadingMore || !hasMore || !nextCursor) {
+      return;
+    }
     
     // Get search radius from settings store
     const searchSettings = useSearchSettingsStore.getState().settings;
@@ -428,6 +431,7 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
       const existingTopicIds = new Set(topics.map(t => t.id));
       const uniqueNewTopics = result.topics.filter(topic => !existingTopicIds.has(topic.id));
       const allTopics = [...topics, ...uniqueNewTopics];
+      
       
       set({ 
         topics: allTopics,

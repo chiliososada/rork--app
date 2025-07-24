@@ -9,6 +9,7 @@ import { useAuthStore } from "@/store/auth-store";
 import { useLocationStore } from "@/store/location-store";
 import CommentItem from "@/components/CommentItem";
 import TopicImage from "@/components/TopicImage";
+import JoinChatButton from "@/components/JoinChatButton";
 import { formatMessageTime } from "@/lib/utils/timeUtils";
 
 export default function TopicDetailScreen() {
@@ -98,6 +99,16 @@ export default function TopicDetailScreen() {
     if (id) {
       router.push(`/chat/${id}`);
     }
+  };
+  
+  const handleJoinTopic = () => {
+    // 加入成功后可以自动跳转到聊天室
+    handleJoinChat();
+  };
+  
+  const handleLeaveTopic = () => {
+    // 退出后的处理，可以显示提示或返回上一页
+    // 这里暂时不做特殊处理
   };
   
   const handleFavoritePress = async () => {
@@ -246,12 +257,13 @@ export default function TopicDetailScreen() {
           <View style={styles.commentsSection}>
             <View style={styles.commentHeader}>
               <Text style={styles.commentTitle}>コメント</Text>
-              <TouchableOpacity 
-                style={styles.chatRoomButton}
-                onPress={handleJoinChat}
-              >
-                <Text style={styles.chatRoomText}>チャットルームに参加</Text>
-              </TouchableOpacity>
+              <JoinChatButton
+                topicId={id || ''}
+                isCreator={user?.id === currentTopic.author.id}
+                isParticipated={currentTopic.isParticipated || false}
+                onJoin={handleJoinTopic}
+                onLeave={handleLeaveTopic}
+              />
             </View>
             
             {comments.length === 0 ? (

@@ -119,6 +119,26 @@ export const useTopicDetailStore = create<TopicDetailState>((set, get) => ({
           
           isLiked = !!likeData;
         }
+        
+        // Check participation status
+        let isParticipated = false;
+        if (currentUserId) {
+          // 用户是创建者或在topic_participants表中有活跃记录
+          const isCreator = topicData.user_id === currentUserId;
+          if (isCreator) {
+            isParticipated = true;
+          } else {
+            const { data: participantData } = await supabase
+              .from('topic_participants')
+              .select('id')
+              .eq('topic_id', id)
+              .eq('user_id', currentUserId)
+              .eq('is_active', true)
+              .single();
+            
+            isParticipated = !!participantData;
+          }
+        }
 
         // Get likes count
         const { count: likesCount } = await supabase
@@ -161,7 +181,8 @@ export const useTopicDetailStore = create<TopicDetailState>((set, get) => ({
           aspectRatio: topicData.image_aspect_ratio as '1:1' | '4:5' | '1.91:1' | undefined,
           isFavorited,
           isLiked,
-          likesCount: likesCount || 0
+          likesCount: likesCount || 0,
+          isParticipated
         };
         
         // Topic caching is now handled by the unified cache system

@@ -11,7 +11,7 @@ export default {
     light: "#FFFFFF",    // White - text on dark backgrounds
   },
   border: "#E0E0E0",     // Light gray - borders
-  success: "#000000",    // Black - success states
+  success: "#28A745",    // Green - success states
   error: "#000000",      // Black - error states
   inactive: "#CCCCCC",   // Light gray - inactive states
 };

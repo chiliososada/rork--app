@@ -335,7 +335,41 @@ $$;
  ALTER TABLE public.topics
   ADD COLUMN original_width INTEGER,
   ADD COLUMN original_height INTEGER;
-  
+    -- 创建话题参与者表
+  CREATE TABLE public.topic_participants (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    topic_id UUID REFERENCES public.topics(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+    joined_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    is_active BOOLEAN DEFAULT TRUE, -- 支持"退出聊天"功能
+    UNIQUE(topic_id, user_id)
+  );
+
+  -- 创建索引以提高查询性能
+  CREATE INDEX topic_participants_topic_id_idx ON public.topic_participants(topic_id);
+  CREATE INDEX topic_participants_user_id_idx ON public.topic_participants(user_id);
+  CREATE INDEX topic_participants_active_idx ON public.topic_participants(topic_id, user_id) WHERE is_active = TRUE;
+
+  -- 可选：创建RPC函数用于批量检查参与状态
+  CREATE OR REPLACE FUNCTION check_user_participation(user_id_param UUID, topic_ids UUID[])
+  RETURNS TABLE (
+    topic_id UUID,
+    is_participant BOOLEAN,
+    joined_at TIMESTAMP WITH TIME ZONE
+  )
+  LANGUAGE plpgsql
+  AS $$
+  BEGIN
+    RETURN QUERY
+    SELECT
+      t.id as topic_id,
+      (tp.id IS NOT NULL AND tp.is_active = TRUE) as is_participant,
+      tp.joined_at
+    FROM
+      unnest(topic_ids) AS t(id)
+    LEFT JOIN topic_participants tp ON t.id = tp.topic_id AND tp.user_id = user_id_param;
+  END;
+  $$;
 如果设计到文本都使用日语
 
 我偏向于ios和安卓 web端可以降低比重

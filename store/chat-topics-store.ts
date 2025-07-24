@@ -35,6 +35,9 @@ interface ChatTopicsState {
   updateLastMessageTime: (topicId: string, messageTime: string) => void;
   markAsParticipated: (topicId: string) => void;
   checkInteractionStatus: (topicIds: string[], userId: string) => Promise<void>;
+  joinTopic: (topicId: string, userId: string) => Promise<void>;
+  leaveTopic: (topicId: string, userId: string) => Promise<void>;
+  checkParticipationStatus: (topicIds: string[], userId: string) => Promise<void>;
   invalidateCache: (method?: string) => void;
   cleanup: () => void;
 }
@@ -163,130 +166,80 @@ export const useChatTopicsStore = create<ChatTopicsState>((set, get) => {
       set({ isLoading: true, error: null, lastRefreshTime: Date.now() });
     
       const requestPromise = withNetworkRetry(async () => {
-        // まず、ユーザーが参加したトピックを取得（メッセージを送信したトピック）
-        const { data: participatedData, error: participatedError } = await supabase
-          .from('chat_messages')
-          .select('topic_id')
-          .eq('user_id', userId);
-
-        if (participatedError) {
-          throw participatedError;
-        }
-
-        const participatedTopicIds = new Set(participatedData?.map(d => d.topic_id) || []);
+        // 使用RPC函数获取用户的聊天话题
+        const offset = refresh ? 0 : (get().nextCursor ? parseInt(get().nextCursor!) : 0);
         
-        // ユーザーが作成したトピックも含める
-        const { data: createdTopicsData, error: createdError } = await supabase
-          .from('topics')
-          .select('id')
-          .eq('user_id', userId);
-
-        if (createdError) {
-          throw createdError;
-        }
-
-        createdTopicsData?.forEach(topic => participatedTopicIds.add(topic.id));
-        
-        set({ userParticipatedTopicIds: participatedTopicIds });
-
-        // すべてのトピックを取得（参加していないものも表示）
         const { data: topicsData, error: topicsError } = await supabase
-          .from('topics')
-          .select(`
-            *,
-            users!topics_user_id_fkey (
-              id,
-              nickname,
-              avatar_url,
-              email
-            ),
-            comments!comments_topic_id_fkey (count),
-            chat_messages!chat_messages_topic_id_fkey (
-              user_id,
-              created_at,
-              message
-            )
-          `)
-          .order('created_at', { ascending: false })
-          .range(0, TOPICS_PER_PAGE - 1);
+          .rpc('get_user_chat_topics', {
+            user_id_param: userId,
+            limit_count: TOPICS_PER_PAGE,
+            offset_count: offset
+          });
 
         if (topicsError) {
           throw topicsError;
         }
 
+        // 获取总数以判断是否有更多数据
+        const { data: totalCount, error: countError } = await supabase
+          .rpc('get_user_chat_topics_count', {
+            user_id_param: userId
+          });
+
+        if (countError) {
+          console.error('Failed to get topics count:', countError);
+        }
+
+        // 构建参与话题ID集合
+        const participatedTopicIds = new Set<string>();
+        (topicsData || []).forEach(topic => {
+          if (topic.is_creator || topic.is_participant) {
+            participatedTopicIds.add(topic.id);
+          }
+        });
+        
+        set({ userParticipatedTopicIds: participatedTopicIds });
+
         // Transform data
         const topics: Topic[] = (topicsData || []).map(topic => {
-          // Calculate participant count
-          const uniqueParticipants = new Set(topic.chat_messages?.map((msg: any) => msg.user_id) || []);
-          uniqueParticipants.add(topic.user_id);
-          
-          // Find the latest message time
-          const lastMessageTime = topic.chat_messages && topic.chat_messages.length > 0
-            ? topic.chat_messages
-                .map((msg: any) => msg.created_at)
-                .sort((a: string, b: string) => new Date(b).getTime() - new Date(a).getTime())[0]
-            : undefined;
-          
-          // 最新メッセージのプレビュー（オプション）
-          const lastMessage = topic.chat_messages && topic.chat_messages.length > 0
-            ? topic.chat_messages
-                .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
-            : null;
-          
           return {
             id: topic.id,
             title: topic.title,
             description: topic.description || '',
             createdAt: topic.created_at,
             author: {
-              id: topic.users.id,
-              name: topic.users.nickname,
-              avatar: topic.users.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(topic.users.nickname)}&background=random`,
-              email: topic.users.email
+              id: topic.user_id,
+              name: topic.user_nickname,
+              avatar: topic.user_avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(topic.user_nickname)}&background=random`,
+              email: topic.user_email
             },
             location: {
               latitude: topic.latitude,
               longitude: topic.longitude,
               name: topic.location_name || undefined
             },
-            commentCount: topic.comments?.[0]?.count || 0,
-            participantCount: uniqueParticipants.size,
-            lastMessageTime,
+            commentCount: Number(topic.comment_count) || 0,
+            participantCount: Number(topic.participant_count) || 1,
+            lastMessageTime: topic.last_message_time || undefined,
             imageUrl: topic.image_url || undefined,
             aspectRatio: topic.image_aspect_ratio as '1:1' | '4:5' | '1.91:1' | undefined,
             isFavorited: false,
             isLiked: false,
             likesCount: 0,
             // チャット用追加フィールド
-            isParticipated: participatedTopicIds.has(topic.id),
-            lastMessagePreview: lastMessage?.message
+            isParticipated: topic.is_creator || topic.is_participant,
+            lastMessagePreview: topic.last_message_preview,
+            joinedAt: topic.joined_at
           };
         });
 
-        // チャットリストは最終メッセージ時間でソート（参加しているものを優先）
-        const sortedTopics = topics.sort((a, b) => {
-          // まず参加状態で分ける
-          if (a.isParticipated && !b.isParticipated) return -1;
-          if (!a.isParticipated && b.isParticipated) return 1;
-          
-          // 両方参加している場合は最終メッセージ時間でソート
-          if (a.isParticipated && b.isParticipated) {
-            if (a.lastMessageTime && b.lastMessageTime) {
-              return new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime();
-            }
-            if (a.lastMessageTime) return -1;
-            if (b.lastMessageTime) return 1;
-          }
-          
-          // どちらも参加していない場合は作成日時でソート
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-        });
+        const hasMore = totalCount ? (offset + topics.length) < totalCount : false;
+        const nextOffset = offset + TOPICS_PER_PAGE;
         
         const result = {
-          topics: sortedTopics,
-          hasMore: topicsData?.length === TOPICS_PER_PAGE,
-          nextCursor: topicsData?.length === TOPICS_PER_PAGE ? 
-            `${TOPICS_PER_PAGE}` : undefined, // Simple offset-based cursor
+          topics: topics,
+          hasMore: hasMore,
+          nextCursor: hasMore ? `${nextOffset}` : undefined,
           userParticipatedTopicIds: participatedTopicIds
         };
         
@@ -367,27 +320,20 @@ export const useChatTopicsStore = create<ChatTopicsState>((set, get) => {
           const uniqueNewTopics = result.topics.filter(topic => !existingTopicIds.has(topic.id));
           const allTopics = [...topics, ...uniqueNewTopics];
           
-          // Apply same sorting logic
-          const sortedTopics = allTopics.sort((a, b) => {
-            if (a.isParticipated && !b.isParticipated) return -1;
-            if (!a.isParticipated && b.isParticipated) return 1;
-            
-            if (a.isParticipated && b.isParticipated) {
-              if (a.lastMessageTime && b.lastMessageTime) {
-                return new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime();
-              }
-              if (a.lastMessageTime) return -1;
-              if (b.lastMessageTime) return 1;
+          // 参与状態を更新（データベースで既にソート済み）
+          const updatedParticipatedIds = new Set(state.userParticipatedTopicIds);
+          uniqueNewTopics.forEach(topic => {
+            if (topic.isParticipated) {
+              updatedParticipatedIds.add(topic.id);
             }
-            
-            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
           });
           
           set({ 
-            topics: sortedTopics,
-            filteredTopics: sortedTopics,
+            topics: allTopics,
+            filteredTopics: allTopics,
             hasMore: result.hasMore,
             nextCursor: result.nextCursor,
+            userParticipatedTopicIds: updatedParticipatedIds,
             isLoadingMore: false,
             error: null
           });
@@ -404,26 +350,20 @@ export const useChatTopicsStore = create<ChatTopicsState>((set, get) => {
             const uniqueNewTopics = result.topics.filter(topic => !existingTopicIds.has(topic.id));
             const allTopics = [...topics, ...uniqueNewTopics];
             
-            const sortedTopics = allTopics.sort((a, b) => {
-              if (a.isParticipated && !b.isParticipated) return -1;
-              if (!a.isParticipated && b.isParticipated) return 1;
-              
-              if (a.isParticipated && b.isParticipated) {
-                if (a.lastMessageTime && b.lastMessageTime) {
-                  return new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime();
-                }
-                if (a.lastMessageTime) return -1;
-                if (b.lastMessageTime) return 1;
+            // 参与状態を更新（データベースで既にソート済み）
+            const updatedParticipatedIds = new Set(state.userParticipatedTopicIds);
+            uniqueNewTopics.forEach(topic => {
+              if (topic.isParticipated) {
+                updatedParticipatedIds.add(topic.id);
               }
-              
-              return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
             });
             
             set({ 
-              topics: sortedTopics,
-              filteredTopics: sortedTopics,
+              topics: allTopics,
+              filteredTopics: allTopics,
               hasMore: result.hasMore,
               nextCursor: result.nextCursor,
+              userParticipatedTopicIds: updatedParticipatedIds,
               isLoadingMore: false 
             });
           } catch (error) {
@@ -444,81 +384,66 @@ export const useChatTopicsStore = create<ChatTopicsState>((set, get) => {
       const to = from + TOPICS_PER_PAGE - 1;
       
       const requestPromise = (async () => {
-        // Fetch more topics
+        // 使用RPC函数获取用户的聊天话题
         const { data: topicsData, error: topicsError } = await supabase
-          .from('topics')
-          .select(`
-            *,
-            users!topics_user_id_fkey (
-              id,
-              nickname,
-              avatar_url,
-              email
-            ),
-            comments!comments_topic_id_fkey (count),
-            chat_messages!chat_messages_topic_id_fkey (
-              user_id,
-              created_at,
-              message
-            )
-          `)
-          .order('created_at', { ascending: false })
-          .range(from, to);
+          .rpc('get_user_chat_topics', {
+            user_id_param: userId,
+            limit_count: TOPICS_PER_PAGE,
+            offset_count: currentOffset
+          });
 
         if (topicsError) {
           throw topicsError;
         }
 
-        // Transform data (same as before)
+        // 获取总数以判断是否有更多数据
+        const { data: totalCount, error: countError } = await supabase
+          .rpc('get_user_chat_topics_count', {
+            user_id_param: userId
+          });
+
+        if (countError) {
+          console.error('Failed to get topics count:', countError);
+        }
+
+        // Transform data
         const newTopics: Topic[] = (topicsData || []).map(topic => {
-          const uniqueParticipants = new Set(topic.chat_messages?.map((msg: any) => msg.user_id) || []);
-          uniqueParticipants.add(topic.user_id);
-          
-          const lastMessageTime = topic.chat_messages && topic.chat_messages.length > 0
-            ? topic.chat_messages
-                .map((msg: any) => msg.created_at)
-                .sort((a: string, b: string) => new Date(b).getTime() - new Date(a).getTime())[0]
-            : undefined;
-          
-          const lastMessage = topic.chat_messages && topic.chat_messages.length > 0
-            ? topic.chat_messages
-                .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
-            : null;
-          
           return {
             id: topic.id,
             title: topic.title,
             description: topic.description || '',
             createdAt: topic.created_at,
             author: {
-              id: topic.users.id,
-              name: topic.users.nickname,
-              avatar: topic.users.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(topic.users.nickname)}&background=random`,
-              email: topic.users.email
+              id: topic.user_id,
+              name: topic.user_nickname,
+              avatar: topic.user_avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(topic.user_nickname)}&background=random`,
+              email: topic.user_email
             },
             location: {
               latitude: topic.latitude,
               longitude: topic.longitude,
               name: topic.location_name || undefined
             },
-            commentCount: topic.comments?.[0]?.count || 0,
-            participantCount: uniqueParticipants.size,
-            lastMessageTime,
+            commentCount: Number(topic.comment_count) || 0,
+            participantCount: Number(topic.participant_count) || 1,
+            lastMessageTime: topic.last_message_time || undefined,
             imageUrl: topic.image_url || undefined,
             aspectRatio: topic.image_aspect_ratio as '1:1' | '4:5' | '1.91:1' | undefined,
             isFavorited: false,
             isLiked: false,
             likesCount: 0,
-            isParticipated: userParticipatedTopicIds.has(topic.id),
-            lastMessagePreview: lastMessage?.message
+            isParticipated: topic.is_creator || topic.is_participant,
+            lastMessagePreview: topic.last_message_preview,
+            joinedAt: topic.joined_at
           };
         });
 
+        const hasMore = totalCount ? (currentOffset + newTopics.length) < totalCount : false;
+        
         return {
           topics: newTopics,
-          hasMore: topicsData?.length === TOPICS_PER_PAGE,
-          nextCursor: topicsData?.length === TOPICS_PER_PAGE ? 
-            `${currentOffset + TOPICS_PER_PAGE}` : undefined
+          hasMore: hasMore,
+          nextCursor: hasMore ? `${currentOffset + TOPICS_PER_PAGE}` : undefined
         };
       })();
       
@@ -540,32 +465,26 @@ export const useChatTopicsStore = create<ChatTopicsState>((set, get) => {
         result
       );
       
-      // 重複を避けて結合
+      // 重複を避けて結合（データベースで既にソート済み）
       const existingTopicIds = new Set(topics.map(t => t.id));
       const uniqueNewTopics = result.topics.filter(topic => !existingTopicIds.has(topic.id));
       
       const allTopics = [...topics, ...uniqueNewTopics];
-      // 同じソートロジックを適用
-      const sortedTopics = allTopics.sort((a, b) => {
-        if (a.isParticipated && !b.isParticipated) return -1;
-        if (!a.isParticipated && b.isParticipated) return 1;
-        
-        if (a.isParticipated && b.isParticipated) {
-          if (a.lastMessageTime && b.lastMessageTime) {
-            return new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime();
-          }
-          if (a.lastMessageTime) return -1;
-          if (b.lastMessageTime) return 1;
+      
+      // 参与状態を更新
+      const updatedParticipatedIds = new Set(state.userParticipatedTopicIds);
+      uniqueNewTopics.forEach(topic => {
+        if (topic.isParticipated) {
+          updatedParticipatedIds.add(topic.id);
         }
-        
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
       
       set({ 
-        topics: sortedTopics,
-        filteredTopics: sortedTopics,
+        topics: allTopics,
+        filteredTopics: allTopics,
         hasMore: result.hasMore,
         nextCursor: result.nextCursor,
+        userParticipatedTopicIds: updatedParticipatedIds,
         isLoadingMore: false 
       });
       
@@ -635,35 +554,27 @@ export const useChatTopicsStore = create<ChatTopicsState>((set, get) => {
     set(state => {
       const updatedTopics = state.topics.map(topic => 
         topic.id === topicId 
-          ? { ...topic, lastMessageTime: messageTime, participantCount: topic.participantCount + 1 }
+          ? { ...topic, lastMessageTime: messageTime }
           : topic
       );
       
-      // 再ソート
-      const sortedTopics = updatedTopics.sort((a, b) => {
-        if (a.isParticipated && !b.isParticipated) return -1;
-        if (!a.isParticipated && b.isParticipated) return 1;
-        
-        if (a.isParticipated && b.isParticipated) {
-          if (a.lastMessageTime && b.lastMessageTime) {
-            return new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime();
-          }
-          if (a.lastMessageTime) return -1;
-          if (b.lastMessageTime) return 1;
-        }
-        
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      });
+      // 新しいメッセージがあるトピックを最上部に移動
+      const targetTopicIndex = updatedTopics.findIndex(t => t.id === topicId);
+      if (targetTopicIndex > 0) {
+        const targetTopic = updatedTopics[targetTopicIndex];
+        updatedTopics.splice(targetTopicIndex, 1);
+        updatedTopics.unshift(targetTopic);
+      }
       
       return {
-        topics: sortedTopics,
+        topics: updatedTopics,
         filteredTopics: state.searchQuery 
           ? state.filteredTopics.map(topic => 
               topic.id === topicId 
-                ? { ...topic, lastMessageTime: messageTime, participantCount: topic.participantCount + 1 }
+                ? { ...topic, lastMessageTime: messageTime }
                 : topic
             )
-          : sortedTopics
+          : updatedTopics
       };
     });
   },
@@ -677,30 +588,14 @@ export const useChatTopicsStore = create<ChatTopicsState>((set, get) => {
         topic.id === topicId ? { ...topic, isParticipated: true } : topic
       );
       
-      // 再ソート
-      const sortedTopics = updatedTopics.sort((a, b) => {
-        if (a.isParticipated && !b.isParticipated) return -1;
-        if (!a.isParticipated && b.isParticipated) return 1;
-        
-        if (a.isParticipated && b.isParticipated) {
-          if (a.lastMessageTime && b.lastMessageTime) {
-            return new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime();
-          }
-          if (a.lastMessageTime) return -1;
-          if (b.lastMessageTime) return 1;
-        }
-        
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      });
-      
       return {
         userParticipatedTopicIds: newParticipatedIds,
-        topics: sortedTopics,
+        topics: updatedTopics,
         filteredTopics: state.searchQuery 
           ? state.filteredTopics.map(topic => 
               topic.id === topicId ? { ...topic, isParticipated: true } : topic
             )
-          : sortedTopics
+          : updatedTopics
       };
     });
     
@@ -755,6 +650,129 @@ export const useChatTopicsStore = create<ChatTopicsState>((set, get) => {
       }));
     } catch (error: any) {
       console.error('Error checking interaction status:', error);
+    }
+  },
+
+  joinTopic: async (topicId, userId) => {
+    try {
+      // 插入或更新参与记录
+      const { error } = await supabase
+        .from('topic_participants')
+        .upsert(
+          { topic_id: topicId, user_id: userId, is_active: true },
+          { onConflict: 'topic_id,user_id' }
+        );
+
+      if (error) {
+        throw error;
+      }
+
+      // 更新本地状態（次回のリフレッシュで正しい順序になる）
+      set(state => {
+        const newParticipatedIds = new Set(state.userParticipatedTopicIds);
+        newParticipatedIds.add(topicId);
+        
+        const updatedTopics = state.topics.map(topic => 
+          topic.id === topicId ? { ...topic, isParticipated: true } : topic
+        );
+        
+        return {
+          userParticipatedTopicIds: newParticipatedIds,
+          topics: updatedTopics,
+          filteredTopics: state.searchQuery 
+            ? state.filteredTopics.map(topic => 
+                topic.id === topicId ? { ...topic, isParticipated: true } : topic
+              )
+            : updatedTopics
+        };
+      });
+    } catch (error: any) {
+      console.error('Failed to join topic:', error);
+      throw error;
+    }
+  },
+
+  leaveTopic: async (topicId, userId) => {
+    try {
+      // 将is_active设为false而不是删除记录
+      const { error } = await supabase
+        .from('topic_participants')
+        .update({ is_active: false })
+        .eq('topic_id', topicId)
+        .eq('user_id', userId);
+
+      if (error) {
+        throw error;
+      }
+
+      // 更新本地状态：从列表中移除话题（除非是创建者）
+      set(state => {
+        const newParticipatedIds = new Set(state.userParticipatedTopicIds);
+        newParticipatedIds.delete(topicId);
+        
+        // 如果用户不是创建者，则从列表中移除
+        const topicToUpdate = state.topics.find(t => t.id === topicId);
+        const isCreator = topicToUpdate?.author.id === userId;
+        
+        let updatedTopics: Topic[];
+        if (isCreator) {
+          // 创建者只更新状态，不移除
+          updatedTopics = state.topics.map(topic => 
+            topic.id === topicId ? { ...topic, isParticipated: false } : topic
+          );
+        } else {
+          // 非创建者，从列表中移除
+          updatedTopics = state.topics.filter(topic => topic.id !== topicId);
+        }
+        
+        return {
+          userParticipatedTopicIds: newParticipatedIds,
+          topics: updatedTopics,
+          filteredTopics: state.searchQuery 
+            ? state.filteredTopics.filter(topic => isCreator || topic.id !== topicId)
+            : updatedTopics
+        };
+      });
+    } catch (error: any) {
+      console.error('Failed to leave topic:', error);
+      throw error;
+    }
+  },
+
+  checkParticipationStatus: async (topicIds, userId) => {
+    try {
+      // 使用RPC函数批量检查参与状态
+      const { data: participationStatuses, error } = await supabase
+        .rpc('check_user_participation', {
+          user_id_param: userId,
+          topic_ids: topicIds
+        });
+
+      if (error) {
+        console.error('Error checking participation status:', error);
+        return;
+      }
+
+      const statusMap = new Map(
+        participationStatuses?.map((status: any) => [status.topic_id, status.is_participant]) || []
+      );
+      
+      set(state => ({
+        topics: state.topics.map(topic => {
+          if (!topicIds.includes(topic.id)) return topic;
+          
+          const isParticipated = statusMap.get(topic.id) || false;
+          return { ...topic, isParticipated };
+        }),
+        filteredTopics: state.filteredTopics.map(topic => {
+          if (!topicIds.includes(topic.id)) return topic;
+          
+          const isParticipated = statusMap.get(topic.id) || false;
+          return { ...topic, isParticipated };
+        })
+      }));
+    } catch (error: any) {
+      console.error('Error checking participation status:', error);
     }
   },
 

@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useCallback, useState } from "react";
-import { StyleSheet, Text, View, FlatList, TouchableOpacity, Image, RefreshControl } from "react-native";
+import { StyleSheet, Text, View, TouchableOpacity, Image, RefreshControl, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { MessageCircle, Clock } from "lucide-react-native";
+import { MessageCircle, Clock, LogOut } from "lucide-react-native";
+import { SwipeListView } from 'react-native-swipe-list-view';
 import Colors from "@/constants/colors";
 import { useChatTopicsStore } from "@/store/chat-topics-store";
 import { useChatStore } from "@/store/chat-store";
@@ -19,17 +20,18 @@ export default function ChatsScreen() {
     fetchChatTopics, 
     searchQuery, 
     searchTopics, 
-    clearSearch 
+    clearSearch,
+    leaveTopic 
   } = useChatTopicsStore();
   const { user } = useAuthStore();
   const { 
     getUnreadCount, 
-    refreshUnreadCounts,
     fetchUnreadCountsForTopics,
     subscribeToMultipleTopics,
     cleanupUnusedSubscriptions
   } = useChatStore();
   const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<'my' | 'others'>('others');
   
   useEffect(() => {
     if (user) {
@@ -91,6 +93,37 @@ export default function ChatsScreen() {
     }
   }, [user, fetchChatTopics, fetchUnreadCountsForTopics, filteredTopics]);
   
+  const handleLeaveTopic = useCallback((topicId: string, topicTitle: string) => {
+    if (!user) return;
+    
+    Alert.alert(
+      "チャット退出",
+      `「${topicTitle}」のチャットから退出しますか？`,
+      [
+        {
+          text: "キャンセル",
+          style: "cancel"
+        },
+        {
+          text: "退出",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await leaveTopic(topicId, user.id);
+              // 退出成功後にリストを強制更新
+              await fetchChatTopics(user.id, true);
+              Alert.alert("完了", "チャットから退出しました");
+            } catch (error) {
+              console.error('Failed to leave topic:', error);
+              Alert.alert("エラー", "チャットの退出に失敗しました");
+            }
+          }
+        }
+      ]
+    );
+  }, [user, leaveTopic, fetchChatTopics]);
+
+  
   
   // Memoize chat item renderer for performance
   const renderChatItem = useCallback(({ item }: { item: Topic }) => {
@@ -139,19 +172,77 @@ export default function ChatsScreen() {
     );
   }, [getUnreadCount, handleChatPress]);
   
+  // Render hidden item (swipe actions)
+  const renderHiddenItem = useCallback(({ item }: { item: Topic }) => {
+    // Don't show swipe actions for "my" tab
+    if (activeTab === 'my') {
+      return null;
+    }
+    
+    return (
+      <View style={styles.hiddenItemContainer}>
+        <TouchableOpacity 
+          style={styles.leaveButton}
+          onPress={() => handleLeaveTopic(item.id, item.title)}
+          activeOpacity={0.7}
+        >
+          <LogOut size={20} color="white" />
+          <Text style={styles.actionButtonText}>退出</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }, [handleLeaveTopic, activeTab]);
+  
+  // Filter topics based on active tab
+  const tabFilteredTopics = useMemo(() => {
+    if (!user) return [];
+    
+    return filteredTopics.filter(topic => {
+      if (activeTab === 'my') {
+        return topic.author.id === user.id;
+      } else {
+        return topic.author.id !== user.id;
+      }
+    });
+  }, [filteredTopics, activeTab, user]);
+
   // Memoize expensive calculations
   const getActiveChatsCount = useMemo(() => {
-    return filteredTopics.filter(topic => topic.lastMessageTime).length;
-  }, [filteredTopics]);
+    return tabFilteredTopics.filter(topic => topic.lastMessageTime).length;
+  }, [tabFilteredTopics]);
   
   // Memoize key extractor
   const keyExtractor = useCallback((item: Topic) => item.id, []);
+
+  // Tab component
+  const renderTabs = () => (
+    <View style={styles.tabContainer}>
+      <TouchableOpacity
+        style={[styles.tab, activeTab === 'others' && styles.activeTab]}
+        onPress={() => setActiveTab('others')}
+        activeOpacity={0.7}
+      >
+        <Text style={[styles.tabText, activeTab === 'others' && styles.activeTabText]}>
+          その他
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.tab, activeTab === 'my' && styles.activeTab]}
+        onPress={() => setActiveTab('my')}
+        activeOpacity={0.7}
+      >
+        <Text style={[styles.tabText, activeTab === 'my' && styles.activeTabText]}>
+          私が発表した
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   return (
     <View style={styles.container}>
       <CustomHeader
         title="チャットルーム"
-        subtitle={`💬 ${getActiveChatsCount} 件のアクティブなチャット • ${filteredTopics.length} 件のトピック`}
+        subtitle={`💬 ${getActiveChatsCount} 件のアクティブなチャット • ${tabFilteredTopics.length} 件の${activeTab === 'my' ? '発表した' : '参加中'}トピック`}
       />
       
       <SafeAreaView style={styles.content} edges={['left', 'right']}>
@@ -162,9 +253,12 @@ export default function ChatsScreen() {
           placeholder="チャットルームを検索..."
         />
         
-        <FlatList
-          data={filteredTopics}
+        {renderTabs()}
+        
+        <SwipeListView
+          data={tabFilteredTopics.map(topic => ({ key: topic.id, ...topic }))}
           renderItem={renderChatItem}
+          renderHiddenItem={renderHiddenItem}
           keyExtractor={keyExtractor}
           contentContainerStyle={[styles.listContent, { paddingBottom: 100 }]}
           refreshControl={
@@ -175,16 +269,24 @@ export default function ChatsScreen() {
               tintColor={Colors.primary}
             />
           }
+          rightOpenValue={-75}
+          disableRightSwipe={true}
           removeClippedSubviews={true}
-          maxToRenderPerBatch={10}
-          updateCellsBatchingPeriod={50}
-          initialNumToRender={10}
-          windowSize={10}
-          getItemLayout={(data, index) => ({
-            length: 80, // Approximate item height
-            offset: 80 * index,
-            index,
-          })}
+          leftOpenValue={75}
+          stopLeftSwipe={75}
+          stopRightSwipe={0}
+          swipeRowStyle={{ backgroundColor: 'transparent' }}
+          swipeToOpenPercent={40}
+          swipeToClosePercent={70}
+          closeOnRowPress={true}
+          closeOnScroll={true}
+          closeOnRowBeginSwipe={true}
+          closeOnRowOpen={false}
+          recalculateHiddenLayout={false}
+          disableLeftSwipe={false}
+          directionalDistanceChangeThreshold={10}
+          swipeGestureBegan={() => {}}
+          swipeValueChanged={() => {}}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               {searchQuery ? (
@@ -194,11 +296,18 @@ export default function ChatsScreen() {
                     検索条件を変更するか、クリアしてすべてのチャットルームを表示してください。
                   </Text>
                 </>
+              ) : activeTab === 'my' ? (
+                <>
+                  <Text style={styles.emptyTitle}>発表したトピックがありません</Text>
+                  <Text style={styles.emptyText}>
+                    新しいトピックを作成して、他の人とチャットを始めましょう。
+                  </Text>
+                </>
               ) : (
                 <>
-                  <Text style={styles.emptyTitle}>アクティブなチャットルームがありません</Text>
+                  <Text style={styles.emptyTitle}>参加中のチャットルームがありません</Text>
                   <Text style={styles.emptyText}>
-                    新しいトピックを作成してチャットルームを始めましょう！
+                    既存のトピックの詳細ページで「チャットに参加」ボタンをタップして参加してください。
                   </Text>
                 </>
               )}
@@ -217,6 +326,35 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: Colors.background,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 12,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activeTab: {
+    backgroundColor: Colors.primary,
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text.secondary,
+  },
+  activeTabText: {
+    color: 'white',
   },
   listContent: {
     padding: 16,
@@ -317,5 +455,35 @@ const styles = StyleSheet.create({
   unreadChatTitle: {
     fontWeight: '700',
     color: Colors.text.primary,
+  },
+  hiddenItemContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    backgroundColor: Colors.background,
+    marginBottom: 12,
+    paddingRight: 16,
+  },
+  leaveButton: {
+    width: 75,
+    height: '100%',
+    backgroundColor: '#FF3B30',
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'column',
+  },
+  actionButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  leaveButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 4,
   },
 });

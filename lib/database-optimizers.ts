@@ -25,6 +25,7 @@ export async function getBatchTopicInteractionStatus(
     return [];
   }
 
+
   try {
     // 1. 批量查询用户点赞状态
     const [likesResult, favoritesResult, countsResult] = await Promise.all([
@@ -47,6 +48,7 @@ export async function getBatchTopicInteractionStatus(
         .rpc('get_topic_interaction_counts', { topic_ids: topicIds })
     ]);
 
+
     // 处理错误
     if (likesResult.error) throw likesResult.error;
     if (favoritesResult.error) throw favoritesResult.error;
@@ -66,6 +68,7 @@ export async function getBatchTopicInteractionStatus(
         { likesCount: item.likes_count, commentsCount: item.comments_count }
       ])
     );
+
 
     return topicIds.map(topicId => ({
       topicId,

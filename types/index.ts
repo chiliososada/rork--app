@@ -36,6 +36,10 @@ export interface Topic {
   // 收藏相关
   isFavorited?: boolean; // Whether current user has favorited this topic
   favoritesCount?: number; // Total number of favorites (optional)
+  
+  // 聊天参与相关
+  isParticipated?: boolean; // Whether current user has joined this topic's chat
+  lastMessagePreview?: string; // Preview of the last message (for chat list)
 }
 
 export interface Comment {
