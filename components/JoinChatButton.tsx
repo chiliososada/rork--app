@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { TouchableOpacity, Text, StyleSheet, ActivityIndicator } from 'react-native';
-import { MessageCircle, MessageCircleOff, Check } from 'lucide-react-native';
+import { MessageCircle, Check } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useChatTopicsStore } from '@/store/chat-topics-store';
 import { useAuthStore } from '@/store/auth-store';
@@ -23,23 +23,24 @@ export default function JoinChatButton({
   style
 }: JoinChatButtonProps) {
   const { user } = useAuthStore();
-  const { joinTopic, leaveTopic } = useChatTopicsStore();
+  const { joinTopic } = useChatTopicsStore();
   const [isLoading, setIsLoading] = useState(false);
 
   const handlePress = async () => {
     if (!user) return;
     
+    // 如果已参加，不执行任何操作（仅显示状态）
+    if (isParticipated) {
+      onJoin?.(); // 直接进入聊天室
+      return;
+    }
+    
     setIsLoading(true);
     try {
-      if (isParticipated) {
-        await leaveTopic(topicId, user.id);
-        onLeave?.();
-      } else {
-        await joinTopic(topicId, user.id);
-        onJoin?.();
-      }
+      await joinTopic(topicId, user.id);
+      onJoin?.();
     } catch (error) {
-      console.error('Failed to update participation:', error);
+      console.error('Failed to join topic:', error);
       // TODO: Show error toast
     } finally {
       setIsLoading(false);
@@ -64,10 +65,10 @@ export default function JoinChatButton({
     : [styles.buttonText, styles.joinText];
 
   const icon = isParticipated 
-    ? <MessageCircleOff size={16} color={Colors.text.secondary} />
+    ? <Check size={16} color={Colors.text.secondary} />
     : <MessageCircle size={16} color={Colors.text.light} />;
 
-  const text = isParticipated ? 'チャットを退出' : 'チャットに参加';
+  const text = isParticipated ? '参加済みのチャットルーム' : 'チャットに参加';
 
   return (
     <TouchableOpacity 
