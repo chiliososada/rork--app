@@ -2,11 +2,12 @@ import { create } from 'zustand';
 import { Topic } from '@/types';
 import { withNetworkRetry, isNetworkError } from '@/lib/retry';
 import { eventBus, EVENT_TYPES, TopicInteractionEvent, CommentEvent, MessageEvent, TopicEvent } from '@/lib/event-bus';
-import { fetchMapTopics, fetchTopicsInBounds, GeoQueryParams } from '@/lib/geo-queries';
+import { fetchMapTopics, fetchTopicsInBounds, searchMapTopics, GeoQueryParams } from '@/lib/geo-queries';
 import { supabase } from '@/lib/supabase';
 import { cacheManager } from '@/lib/cache/cache-manager';
 import { CACHE_PRESETS } from '@/lib/cache/base-store';
 import { getCachedBatchTopicInteractionStatus } from '@/lib/database-optimizers';
+import { useSearchSettingsStore } from './search-settings-store';
 
 interface MapTopicsState {
   topics: Topic[];
@@ -16,6 +17,13 @@ interface MapTopicsState {
   hasMore: boolean;
   error: string | null;
   searchQuery: string;
+  
+  // Search-specific state
+  isSearching: boolean;
+  searchResults: Topic[];
+  searchHasMore: boolean;
+  searchNextCursor?: string;
+  isSearchMode: boolean; // Whether we're in search mode or normal browsing
   
   // Cursor-based pagination
   nextCursor?: string;
@@ -35,7 +43,8 @@ interface MapTopicsState {
   fetchMapTopics: (latitude: number, longitude: number, refresh?: boolean) => Promise<void>;
   fetchTopicsInViewport: (bounds: { north: number; south: number; east: number; west: number }) => Promise<void>;
   loadMoreTopics: (latitude: number, longitude: number) => Promise<void>;
-  searchTopics: (query: string) => void;
+  searchTopics: (query: string) => Promise<void>;
+  loadMoreSearchResults: () => Promise<void>;
   clearSearch: () => void;
   updateTopicInteraction: (topicId: string, updates: Partial<Topic>) => void;
   checkInteractionStatus: (topicIds: string[], userId: string) => Promise<void>;
@@ -46,6 +55,9 @@ interface MapTopicsState {
 const TOPICS_PER_PAGE = 10;
 const MINIMUM_MAP_TOPICS = 30;
 const STORE_KEY = 'map-topics';
+
+// Search debounce timeout for map topics
+let mapSearchDebounceTimeout: NodeJS.Timeout | null = null;
 
 // 初始化缓存配置
 cacheManager.registerConfig(STORE_KEY, {
@@ -100,6 +112,14 @@ export const useMapTopicsStore = create<MapTopicsState>((set, get) => {
   hasMore: true,
   error: null,
   searchQuery: '',
+  
+  // Search-specific state
+  isSearching: false,
+  searchResults: [],
+  searchHasMore: false,
+  searchNextCursor: undefined,
+  isSearchMode: false,
+  
   nextCursor: undefined,
   currentBounds: undefined,
 
@@ -117,10 +137,14 @@ export const useMapTopicsStore = create<MapTopicsState>((set, get) => {
       });
     }
     
+    // Get search settings from settings store
+    const searchSettings = useSearchSettingsStore.getState().settings;
+    
     const queryParams = {
       latitude,
       longitude,
-      radiusKm: 10, // Larger radius for map view
+      radiusKm: searchSettings.radiusKm * 2, // Larger radius for map view
+      timeRange: searchSettings.timeRange,
       limit: Math.max(TOPICS_PER_PAGE, MINIMUM_MAP_TOPICS),
       cursor: refresh ? undefined : get().nextCursor,
       sortBy: 'activity' as const
@@ -259,10 +283,14 @@ export const useMapTopicsStore = create<MapTopicsState>((set, get) => {
     
     if (isLoadingMore || !hasMore || !nextCursor) return;
     
+    // Get search settings from settings store
+    const searchSettings = useSearchSettingsStore.getState().settings;
+    
     const queryParams = {
       latitude,
       longitude,
-      radiusKm: 10,
+      radiusKm: searchSettings.radiusKm * 2, // Larger radius for map view
+      timeRange: searchSettings.timeRange,
       limit: TOPICS_PER_PAGE,
       cursor: nextCursor,
       sortBy: 'activity' as const
@@ -384,38 +412,169 @@ export const useMapTopicsStore = create<MapTopicsState>((set, get) => {
     }
   },
 
-  searchTopics: (query) => {
-    const { topics } = get();
-    const normalizedQuery = query.toLowerCase().trim();
+  searchTopics: async (query) => {
+    const normalizedQuery = query.trim();
     
+    // Update search query immediately for UI responsiveness
+    set({ searchQuery: query });
+    
+    // Clear previous debounce timeout
+    if (mapSearchDebounceTimeout) {
+      clearTimeout(mapSearchDebounceTimeout);
+    }
+    
+    // If empty query, clear search and return to normal browsing
     if (!normalizedQuery) {
-      set({ 
-        filteredTopics: topics,
-        searchQuery: query 
+      set({
+        isSearchMode: false,
+        isSearching: false,
+        searchResults: [],
+        searchHasMore: false,
+        searchNextCursor: undefined,
+        filteredTopics: get().topics
       });
       return;
     }
     
-    const filtered = topics.filter(topic => {
-      const titleMatch = topic.title.toLowerCase().includes(normalizedQuery);
-      const descriptionMatch = topic.description.toLowerCase().includes(normalizedQuery);
-      const authorMatch = topic.author.name.toLowerCase().includes(normalizedQuery);
-      const locationMatch = topic.location.name?.toLowerCase().includes(normalizedQuery) || false;
+    // Debounce search requests
+    mapSearchDebounceTimeout = setTimeout(async () => {
+      const { currentLocation } = get();
       
-      return titleMatch || descriptionMatch || authorMatch || locationMatch;
-    });
+      if (!currentLocation) {
+        console.warn('No current location available for map search');
+        return;
+      }
+      
+      set({ 
+        isSearching: true, 
+        isSearchMode: true,
+        error: null 
+      });
+      
+      try {
+        // Get search settings
+        const searchSettings = useSearchSettingsStore.getState().settings;
+        
+        const searchParams = {
+          latitude: currentLocation.latitude,
+          longitude: currentLocation.longitude,
+          radiusKm: searchSettings.radiusKm * 2, // Larger radius for map
+          timeRange: searchSettings.timeRange,
+          searchQuery: normalizedQuery,
+          limit: 30 // More results for map
+        };
+        
+        const result = await withNetworkRetry(async () => {
+          return await searchMapTopics(searchParams);
+        });
+        
+        set({
+          searchResults: result.topics,
+          filteredTopics: result.topics,
+          searchHasMore: result.hasMore,
+          searchNextCursor: result.nextCursor,
+          isSearching: false
+        });
+        
+        // Check user interaction status for search results
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.id && result.topics.length > 0) {
+          const topicIds = result.topics.map(t => t.id);
+          await get().checkInteractionStatus(topicIds, user.id);
+        }
+        
+      } catch (error: any) {
+        console.error('Failed to search map topics:', error);
+        const errorMessage = isNetworkError(error) 
+          ? 'ネットワーク接続を確認してください' 
+          : '地図検索に失敗しました';
+        set({ 
+          error: errorMessage, 
+          isSearching: false,
+          searchResults: [],
+          filteredTopics: []
+        });
+      }
+    }, 500); // 500ms debounce
+  },
+  
+  loadMoreSearchResults: async () => {
+    const { 
+      isSearching, 
+      searchHasMore, 
+      searchNextCursor, 
+      searchResults, 
+      searchQuery,
+      currentLocation 
+    } = get();
     
-    set({ 
-      filteredTopics: filtered,
-      searchQuery: query 
-    });
+    if (isSearching || !searchHasMore || !searchNextCursor || !currentLocation || !searchQuery.trim()) {
+      return;
+    }
+    
+    set({ isSearching: true, error: null });
+    
+    try {
+      const searchSettings = useSearchSettingsStore.getState().settings;
+      
+      const searchParams = {
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude,
+        radiusKm: searchSettings.radiusKm * 2,
+        timeRange: searchSettings.timeRange,
+        searchQuery: searchQuery.trim(),
+        cursor: searchNextCursor,
+        limit: 30
+      };
+      
+      const result = await searchMapTopics(searchParams);
+      
+      // Merge with existing search results, avoiding duplicates
+      const existingIds = new Set(searchResults.map(t => t.id));
+      const newTopics = result.topics.filter(topic => !existingIds.has(topic.id));
+      const allSearchResults = [...searchResults, ...newTopics];
+      
+      set({
+        searchResults: allSearchResults,
+        filteredTopics: allSearchResults,
+        searchHasMore: result.hasMore,
+        searchNextCursor: result.nextCursor,
+        isSearching: false
+      });
+      
+      // Check interaction status for new topics
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.id && newTopics.length > 0) {
+        const newTopicIds = newTopics.map(t => t.id);
+        await get().checkInteractionStatus(newTopicIds, user.id);
+      }
+      
+    } catch (error: any) {
+      console.error('Failed to load more map search results:', error);
+      set({ 
+        error: 'さらなる検索結果の取得に失敗しました', 
+        isSearching: false 
+      });
+    }
   },
 
   clearSearch: () => {
     const { topics } = get();
+    
+    // Clear any pending search debounce
+    if (mapSearchDebounceTimeout) {
+      clearTimeout(mapSearchDebounceTimeout);
+      mapSearchDebounceTimeout = null;
+    }
+    
     set({ 
       filteredTopics: topics,
-      searchQuery: '' 
+      searchQuery: '',
+      isSearchMode: false,
+      isSearching: false,
+      searchResults: [],
+      searchHasMore: false,
+      searchNextCursor: undefined
     });
   },
 

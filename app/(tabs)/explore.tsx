@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from "react";
+import React, { useEffect, useCallback, useState } from "react";
 import { StyleSheet, Text, View, TouchableWithoutFeedback, Keyboard, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -6,6 +6,8 @@ import Colors from "@/constants/colors";
 import { useLocationStore } from "@/store/location-store";
 import { useMapTopicsStore } from "@/store/map-topics-store";
 import SearchBar from "@/components/SearchBar";
+import SearchFilterBar from "@/components/SearchFilterBar";
+import SearchSettingsModal from "@/components/SearchSettingsModal";
 import MapViewComponent from "@/components/MapView";
 import CustomHeader from "@/components/CustomHeader";
 
@@ -21,8 +23,11 @@ export default function ExploreScreen() {
     isLoadingMore,
     searchQuery, 
     searchTopics, 
-    clearSearch 
+    clearSearch,
+    isSearching,
+    isSearchMode
   } = useMapTopicsStore();
+  const [settingsModalVisible, setSettingsModalVisible] = useState(false);
   
   // 初期データ読み込み：位置情報取得後にマップ用データを取得
   useEffect(() => {
@@ -54,13 +59,27 @@ export default function ExploreScreen() {
   const handleClearSearch = () => {
     clearSearch();
   };
+
+  const handleSettingsPress = () => {
+    setSettingsModalVisible(true);
+  };
+
+  const handleSettingsChanged = () => {
+    // Refresh map topics when search settings change
+    if (currentLocation) {
+      fetchMapTopics(currentLocation.latitude, currentLocation.longitude, true);
+    }
+  };
   
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <View style={styles.container}>
         <CustomHeader
           title="地図で探索"
-          subtitle={`🗺️ 地図上のトピックを発見 • ${filteredTopics.length} 件のトピック`}
+          subtitle={isSearchMode 
+            ? `🔍 "${searchQuery}" の検索結果 • ${filteredTopics.length} 件のトピック`
+            : `🗺️ 地図上のトピックを発見 • ${filteredTopics.length} 件のトピック`
+          }
         />
         
         <SafeAreaView style={styles.content} edges={['left', 'right', 'bottom']}>
@@ -69,7 +88,10 @@ export default function ExploreScreen() {
             onChangeText={handleSearch}
             onClear={handleClearSearch}
             placeholder="地図上でトピックを検索..."
+            isLoading={isSearching}
           />
+          
+          <SearchFilterBar onSettingsPress={handleSettingsPress} />
           
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <View style={styles.mapWrapper}>
@@ -81,21 +103,14 @@ export default function ExploreScreen() {
                     onMarkerPress={handleMarkerPress}
                     onRegionChange={handleMapRegionChange}
                   />
-                  {/* 初期データ読み込み中のインジケーター */}
-                  {isLoading && filteredTopics.length === 0 && (
+                  {/* データ読み込み中のインジケーター */}
+                  {((isLoading && filteredTopics.length === 0) || isLoadingMore) && (
                     <View style={styles.loadingOverlay}>
                       <View style={styles.loadingIndicator}>
                         <ActivityIndicator size="small" color={Colors.primary} style={{ marginRight: 8 }} />
-                        <Text style={styles.loadingText}>地図上のトピックを読み込んでいます...</Text>
-                      </View>
-                    </View>
-                  )}
-                  {/* 追加データ読み込み中のインジケーター */}
-                  {isLoadingMore && (
-                    <View style={styles.loadingOverlay}>
-                      <View style={styles.loadingIndicator}>
-                        <ActivityIndicator size="small" color={Colors.primary} style={{ marginRight: 8 }} />
-                        <Text style={styles.loadingText}>さらにトピックを読み込んでいます...</Text>
+                        <Text style={styles.loadingText}>
+                          {isSearchMode ? '検索結果を読み込んでいます...' : '地図上のトピックを読み込んでいます...'}
+                        </Text>
                       </View>
                     </View>
                   )}
@@ -109,6 +124,12 @@ export default function ExploreScreen() {
             </View>
           </TouchableWithoutFeedback>
         </SafeAreaView>
+
+        <SearchSettingsModal
+          visible={settingsModalVisible}
+          onClose={() => setSettingsModalVisible(false)}
+          onSettingsChanged={handleSettingsChanged}
+        />
       </View>
     </TouchableWithoutFeedback>
   );

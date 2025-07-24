@@ -3,7 +3,7 @@ import { Topic } from '@/types';
 import { withNetworkRetry, isNetworkError } from '@/lib/retry';
 import { eventBus, EVENT_TYPES, TopicInteractionEvent, CommentEvent, MessageEvent, TopicEvent, PAGE_EVENT_RELEVANCE } from '@/lib/event-bus';
 // Removed topicCache import - now using unified caching system
-import { fetchNearbyTopics, GeoQueryParams } from '@/lib/geo-queries';
+import { fetchNearbyTopics, searchNearbyTopics, GeoQueryParams } from '@/lib/geo-queries';
 import { supabase } from '@/lib/supabase';
 import { cacheManager } from '@/lib/cache/cache-manager';
 import { CACHE_PRESETS } from '@/lib/cache/base-store';
@@ -20,6 +20,13 @@ interface HomeTopicsState {
   error: string | null;
   searchQuery: string;
   
+  // Search-specific state
+  isSearching: boolean;
+  searchResults: Topic[];
+  searchHasMore: boolean;
+  searchNextCursor?: string;
+  isSearchMode: boolean; // Whether we're in search mode or normal browsing
+  
   // Cursor-based pagination
   nextCursor?: string;
   
@@ -29,7 +36,8 @@ interface HomeTopicsState {
   
   fetchNearbyTopics: (latitude: number, longitude: number, refresh?: boolean) => Promise<void>;
   loadMoreTopics: (latitude: number, longitude: number) => Promise<void>;
-  searchTopics: (query: string) => void;
+  searchTopics: (query: string) => Promise<void>;
+  loadMoreSearchResults: () => Promise<void>;
   clearSearch: () => void;
   updateTopicInteraction: (topicId: string, updates: Partial<Topic>) => void;
   checkInteractionStatus: (topicIds: string[], userId: string) => Promise<void>;
@@ -39,6 +47,9 @@ interface HomeTopicsState {
 
 const TOPICS_PER_PAGE = 10;
 const STORE_KEY = 'home-topics';
+
+// Search debounce timeout
+let searchDebounceTimeout: NodeJS.Timeout | null = null;
 
 // 初始化缓存配置
 cacheManager.registerConfig(STORE_KEY, {
@@ -140,6 +151,14 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
   hasMore: true,
   error: null,
   searchQuery: '',
+  
+  // Search-specific state
+  isSearching: false,
+  searchResults: [],
+  searchHasMore: false,
+  searchNextCursor: undefined,
+  isSearchMode: false,
+  
   nextCursor: undefined,
 
   fetchNearbyTopics: async (latitude, longitude, refresh = false) => {
@@ -163,6 +182,7 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
       latitude,
       longitude,
       radiusKm: searchSettings.radiusKm,
+      timeRange: searchSettings.timeRange,
       limit: 10,
       cursor: refresh ? undefined : get().nextCursor,
       sortBy: 'distance'
@@ -313,6 +333,7 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
       latitude,
       longitude,
       radiusKm: searchSettings.radiusKm,
+      timeRange: searchSettings.timeRange,
       limit: 10,
       cursor: nextCursor,
       sortBy: 'distance'
@@ -439,38 +460,169 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
     }
   },
 
-  searchTopics: (query) => {
-    const { topics } = get();
-    const normalizedQuery = query.toLowerCase().trim();
+  searchTopics: async (query) => {
+    const normalizedQuery = query.trim();
     
+    // Update search query immediately for UI responsiveness
+    set({ searchQuery: query });
+    
+    // Clear previous debounce timeout
+    if (searchDebounceTimeout) {
+      clearTimeout(searchDebounceTimeout);
+    }
+    
+    // If empty query, clear search and return to normal browsing
     if (!normalizedQuery) {
-      set({ 
-        filteredTopics: topics,
-        searchQuery: query 
+      set({
+        isSearchMode: false,
+        isSearching: false,
+        searchResults: [],
+        searchHasMore: false,
+        searchNextCursor: undefined,
+        filteredTopics: get().topics
       });
       return;
     }
     
-    const filtered = topics.filter(topic => {
-      const titleMatch = topic.title.toLowerCase().includes(normalizedQuery);
-      const descriptionMatch = topic.description.toLowerCase().includes(normalizedQuery);
-      const authorMatch = topic.author.name.toLowerCase().includes(normalizedQuery);
-      const locationMatch = topic.location.name?.toLowerCase().includes(normalizedQuery) || false;
+    // Debounce search requests
+    searchDebounceTimeout = setTimeout(async () => {
+      const { currentLocation } = get();
       
-      return titleMatch || descriptionMatch || authorMatch || locationMatch;
-    });
+      if (!currentLocation) {
+        console.warn('No current location available for search');
+        return;
+      }
+      
+      set({ 
+        isSearching: true, 
+        isSearchMode: true,
+        error: null 
+      });
+      
+      try {
+        // Get search settings
+        const searchSettings = useSearchSettingsStore.getState().settings;
+        
+        const searchParams = {
+          latitude: currentLocation.latitude,
+          longitude: currentLocation.longitude,
+          radiusKm: searchSettings.radiusKm,
+          timeRange: searchSettings.timeRange,
+          searchQuery: normalizedQuery,
+          limit: 20 // More results for search
+        };
+        
+        const result = await withNetworkRetry(async () => {
+          return await searchNearbyTopics(searchParams);
+        });
+        
+        set({
+          searchResults: result.topics,
+          filteredTopics: result.topics,
+          searchHasMore: result.hasMore,
+          searchNextCursor: result.nextCursor,
+          isSearching: false
+        });
+        
+        // Check user interaction status for search results
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.id && result.topics.length > 0) {
+          const topicIds = result.topics.map(t => t.id);
+          await get().checkInteractionStatus(topicIds, user.id);
+        }
+        
+      } catch (error: any) {
+        console.error('Failed to search topics:', error);
+        const errorMessage = isNetworkError(error) 
+          ? 'ネットワーク接続を確認してください' 
+          : '検索に失敗しました';
+        set({ 
+          error: errorMessage, 
+          isSearching: false,
+          searchResults: [],
+          filteredTopics: []
+        });
+      }
+    }, 500); // 500ms debounce
+  },
+  
+  loadMoreSearchResults: async () => {
+    const { 
+      isSearching, 
+      searchHasMore, 
+      searchNextCursor, 
+      searchResults, 
+      searchQuery,
+      currentLocation 
+    } = get();
     
-    set({ 
-      filteredTopics: filtered,
-      searchQuery: query 
-    });
+    if (isSearching || !searchHasMore || !searchNextCursor || !currentLocation || !searchQuery.trim()) {
+      return;
+    }
+    
+    set({ isSearching: true, error: null });
+    
+    try {
+      const searchSettings = useSearchSettingsStore.getState().settings;
+      
+      const searchParams = {
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude,
+        radiusKm: searchSettings.radiusKm,
+        timeRange: searchSettings.timeRange,
+        searchQuery: searchQuery.trim(),
+        cursor: searchNextCursor,
+        limit: 20
+      };
+      
+      const result = await searchNearbyTopics(searchParams);
+      
+      // Merge with existing search results, avoiding duplicates
+      const existingIds = new Set(searchResults.map(t => t.id));
+      const newTopics = result.topics.filter(topic => !existingIds.has(topic.id));
+      const allSearchResults = [...searchResults, ...newTopics];
+      
+      set({
+        searchResults: allSearchResults,
+        filteredTopics: allSearchResults,
+        searchHasMore: result.hasMore,
+        searchNextCursor: result.nextCursor,
+        isSearching: false
+      });
+      
+      // Check interaction status for new topics
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.id && newTopics.length > 0) {
+        const newTopicIds = newTopics.map(t => t.id);
+        await get().checkInteractionStatus(newTopicIds, user.id);
+      }
+      
+    } catch (error: any) {
+      console.error('Failed to load more search results:', error);
+      set({ 
+        error: 'さらなる検索結果の取得に失敗しました', 
+        isSearching: false 
+      });
+    }
   },
 
   clearSearch: () => {
     const { topics } = get();
+    
+    // Clear any pending search debounce
+    if (searchDebounceTimeout) {
+      clearTimeout(searchDebounceTimeout);
+      searchDebounceTimeout = null;
+    }
+    
     set({ 
       filteredTopics: topics,
-      searchQuery: '' 
+      searchQuery: '',
+      isSearchMode: false,
+      isSearching: false,
+      searchResults: [],
+      searchHasMore: false,
+      searchNextCursor: undefined
     });
   },
 

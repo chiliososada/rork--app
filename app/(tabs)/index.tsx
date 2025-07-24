@@ -26,7 +26,11 @@ export default function NearbyScreen() {
     hasMore,
     searchQuery, 
     searchTopics, 
-    clearSearch 
+    clearSearch,
+    isSearching,
+    isSearchMode,
+    searchHasMore,
+    loadMoreSearchResults
   } = useHomeTopicsStore();
   const [refreshing, setRefreshing] = useState(false);
   const [settingsModalVisible, setSettingsModalVisible] = useState(false);
@@ -50,8 +54,16 @@ export default function NearbyScreen() {
   };
 
   const handleLoadMore = async () => {
-    if (currentLocation && hasMore && !isLoadingMore) {
-      await loadMoreTopics(currentLocation.latitude, currentLocation.longitude);
+    if (isSearchMode) {
+      // Load more search results
+      if (searchHasMore && !isSearching) {
+        await loadMoreSearchResults();
+      }
+    } else {
+      // Load more normal topics
+      if (currentLocation && hasMore && !isLoadingMore) {
+        await loadMoreTopics(currentLocation.latitude, currentLocation.longitude);
+      }
     }
   };
   
@@ -79,12 +91,15 @@ export default function NearbyScreen() {
   };
 
   const renderFooter = () => {
-    if (!isLoadingMore) return null;
+    const isLoadingFooter = isSearchMode ? isSearching : isLoadingMore;
+    if (!isLoadingFooter) return null;
     
     return (
       <View style={styles.loadingFooter}>
         <ActivityIndicator size="small" color={Colors.primary} />
-        <Text style={styles.loadingFooterText}>さらに読み込み中...</Text>
+        <Text style={styles.loadingFooterText}>
+          {isSearchMode ? '検索結果を読み込み中...' : 'さらに読み込み中...'}
+        </Text>
       </View>
     );
   };
@@ -140,6 +155,7 @@ export default function NearbyScreen() {
           onChangeText={handleSearch}
           onClear={handleClearSearch}
           placeholder="近くのトピックを検索..."
+          isLoading={isSearching}
         />
         
         <SearchFilterBar onSettingsPress={handleSettingsPress} />
@@ -162,9 +178,9 @@ export default function NearbyScreen() {
           ListFooterComponent={renderFooter}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              {searchQuery ? (
+              {isSearchMode ? (
                 <>
-                  <Text style={styles.emptyTitle}>トピックが見つかりません</Text>
+                  <Text style={styles.emptyTitle}>検索結果が見つかりません</Text>
                   <Text style={styles.emptyText}>
                     検索条件を変更するか、クリアして近くのすべてのトピックを表示してください。
                   </Text>

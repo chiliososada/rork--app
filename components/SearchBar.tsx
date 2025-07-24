@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { View, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
 import { Search, X } from 'lucide-react-native';
 import Input from '@/components/Input';
 import Colors from '@/constants/colors';
@@ -9,13 +9,15 @@ interface SearchBarProps {
   onChangeText: (text: string) => void;
   onClear: () => void;
   placeholder?: string;
+  isLoading?: boolean;
 }
 
 export default function SearchBar({ 
   value, 
   onChangeText, 
   onClear, 
-  placeholder = "Search topics..." 
+  placeholder = "Search topics...",
+  isLoading = false
 }: SearchBarProps) {
   const inputRef = useRef<TextInput>(null);
   
@@ -27,7 +29,11 @@ export default function SearchBar({
   return (
     <View style={styles.container}>
       <View style={styles.searchContainer}>
-        <Search size={20} color={Colors.text.secondary} style={styles.searchIcon} />
+        {isLoading ? (
+          <ActivityIndicator size="small" color={Colors.primary} style={styles.searchIcon} />
+        ) : (
+          <Search size={20} color={Colors.text.secondary} style={styles.searchIcon} />
+        )}
         <Input
           ref={inputRef}
           value={value}
