@@ -11,6 +11,7 @@ import { useLocationStore } from "@/store/location-store";
 import { useTopicDetailsStore } from "@/store/topic-details-store";
 import { useAuthStore } from "@/store/auth-store";
 import { uploadTopicImage } from "@/lib/image-upload";
+import { createTopicSchema } from "@/lib/validation";
 
 export default function CreateTopicScreen() {
   const router = useRouter();
@@ -36,23 +37,33 @@ export default function CreateTopicScreen() {
   }, []);
   
   const validateForm = () => {
-    let isValid = true;
-    
-    if (!title.trim()) {
-      setTitleError("タイトルは必須です");
-      isValid = false;
-    } else {
+    try {
+      createTopicSchema.parse({
+        title: title.trim(),
+        description: description.trim(),
+        location: currentLocation || { latitude: 0, longitude: 0 },
+        imageUrl: selectedImageUri || undefined,
+        aspectRatio: undefined,
+        originalWidth: undefined,
+        originalHeight: undefined
+      });
+      
       setTitleError("");
-    }
-    
-    if (!description.trim()) {
-      setDescriptionError("内容は必須です");
-      isValid = false;
-    } else {
       setDescriptionError("");
+      return true;
+    } catch (error: any) {
+      if (error.errors) {
+        // Zod validation errors
+        error.errors.forEach((err: any) => {
+          if (err.path.includes('title')) {
+            setTitleError(err.message);
+          } else if (err.path.includes('description')) {
+            setDescriptionError(err.message);
+          }
+        });
+      }
+      return false;
     }
-    
-    return isValid;
   };
   
   const handleImageSelected = (uri: string) => {
@@ -188,17 +199,22 @@ export default function CreateTopicScreen() {
           <Text style={styles.subtitle}>あなたの周りで起きていることを共有しましょう</Text>
           
           <View style={styles.formCard}>
-            <Input
-            label="タイトル"
-            placeholder="トピックのタイトルを入力"
-            value={title}
-            onChangeText={setTitle}
-            error={titleError}
-            maxLength={100}
-            onFocus={() => setTitleFocused(true)}
-            onBlur={() => setTitleFocused(false)}
-            inputStyle={titleFocused ? styles.inputFocused : {}}
-          />
+            <View style={styles.titleInputContainer}>
+              <Input
+                label="タイトル"
+                placeholder="トピックのタイトルを入力"
+                value={title}
+                onChangeText={setTitle}
+                error={titleError}
+                maxLength={50}
+                onFocus={() => setTitleFocused(true)}
+                onBlur={() => setTitleFocused(false)}
+                inputStyle={titleFocused ? styles.inputFocused : {}}
+              />
+              <Text style={styles.titleCharCount}>
+                {title.length} / 50
+              </Text>
+            </View>
           
           <View style={styles.descriptionContainer}>
             <Input
@@ -284,6 +300,13 @@ const styles = StyleSheet.create({
   },
   titleInputContainer: {
     marginBottom: 20,
+  },
+  titleCharCount: {
+    textAlign: 'right',
+    fontSize: 12,
+    color: Colors.text.secondary,
+    marginTop: 4,
+    marginRight: 4,
   },
   descriptionContainer: {
     position: 'relative',
