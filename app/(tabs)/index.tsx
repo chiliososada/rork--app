@@ -5,6 +5,8 @@ import { MapPin, Plus } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import TopicCard from "@/components/TopicCard";
 import SearchBar from "@/components/SearchBar";
+import SearchFilterBar from "@/components/SearchFilterBar";
+import SearchSettingsModal from "@/components/SearchSettingsModal";
 import Button from "@/components/Button";
 import CustomHeader from "@/components/CustomHeader";
 import Colors from "@/constants/colors";
@@ -27,6 +29,7 @@ export default function NearbyScreen() {
     clearSearch 
   } = useHomeTopicsStore();
   const [refreshing, setRefreshing] = useState(false);
+  const [settingsModalVisible, setSettingsModalVisible] = useState(false);
   
   useEffect(() => {
     if (currentLocation) {
@@ -58,6 +61,17 @@ export default function NearbyScreen() {
   
   const handleClearSearch = () => {
     clearSearch();
+  };
+
+  const handleSettingsPress = () => {
+    setSettingsModalVisible(true);
+  };
+
+  const handleSettingsChanged = () => {
+    // Refresh topics when search settings change
+    if (currentLocation) {
+      loadTopics();
+    }
   };
   
   const renderTopic = ({ item }: { item: Topic }) => {
@@ -128,6 +142,8 @@ export default function NearbyScreen() {
           placeholder="近くのトピックを検索..."
         />
         
+        <SearchFilterBar onSettingsPress={handleSettingsPress} />
+        
         <FlatList
           data={filteredTopics}
           renderItem={renderTopic}
@@ -179,6 +195,12 @@ export default function NearbyScreen() {
           <Plus size={24} color="white" />
         </TouchableOpacity>
       </SafeAreaView>
+
+      <SearchSettingsModal
+        visible={settingsModalVisible}
+        onClose={() => setSettingsModalVisible(false)}
+        onSettingsChanged={handleSettingsChanged}
+      />
     </View>
   );
 }

@@ -9,6 +9,7 @@ import { cacheManager } from '@/lib/cache/cache-manager';
 import { CACHE_PRESETS } from '@/lib/cache/base-store';
 import { getCachedBatchTopicInteractionStatus } from '@/lib/database-optimizers';
 import { requestDeduplicator } from '@/lib/cache/request-deduplicator';
+import { useSearchSettingsStore } from './search-settings-store';
 
 interface HomeTopicsState {
   topics: Topic[];
@@ -155,10 +156,13 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
       });
     }
     
+    // Get search radius from settings store
+    const searchSettings = useSearchSettingsStore.getState().settings;
+    
     const queryParams: GeoQueryParams = {
       latitude,
       longitude,
-      radiusKm: 5, // 5km radius for nearby topics
+      radiusKm: searchSettings.radiusKm,
       limit: 10,
       cursor: refresh ? undefined : get().nextCursor,
       sortBy: 'distance'
@@ -302,10 +306,13 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
     
     if (isLoadingMore || !hasMore || !nextCursor) return;
     
+    // Get search radius from settings store
+    const searchSettings = useSearchSettingsStore.getState().settings;
+    
     const queryParams: GeoQueryParams = {
       latitude,
       longitude,
-      radiusKm: 5,
+      radiusKm: searchSettings.radiusKm,
       limit: 10,
       cursor: nextCursor,
       sortBy: 'distance'
