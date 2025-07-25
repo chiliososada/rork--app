@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform, Alert } from "react-native";
-import { useRouter, Stack } from "expo-router";
+import { useRouter, Stack, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MapPin, ChevronLeft, X } from "lucide-react-native";
 import Colors from "@/constants/colors";
@@ -13,12 +13,20 @@ import { useAuthStore } from "@/store/auth-store";
 import { uploadTopicImage } from "@/lib/image-upload";
 import { createTopicSchema } from "@/lib/validation";
 import TagSelector from "@/components/TagSelector";
+import CategorySelector from "@/components/CategorySelector";
 
 export default function CreateTopicScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
   const { currentLocation, requestPermission } = useLocationStore();
   const { createTopic, isLoading } = useTopicDetailsStore();
+  
+  // 获取模板参数
+  const { templateTitle, templateTags, templateCategory } = useLocalSearchParams<{
+    templateTitle?: string;
+    templateTags?: string;
+    templateCategory?: string;
+  }>();
   
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -33,12 +41,33 @@ export default function CreateTopicScreen() {
   
   // Tags state
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>();
   
   useEffect(() => {
     if (!currentLocation) {
       requestPermission();
     }
   }, []);
+  
+  // 处理模板数据预填充
+  useEffect(() => {
+    if (templateTitle) {
+      setTitle(templateTitle);
+    }
+    if (templateTags) {
+      try {
+        const tags = JSON.parse(templateTags);
+        if (Array.isArray(tags)) {
+          setSelectedTags(tags);
+        }
+      } catch (error) {
+        console.error('Failed to parse template tags:', error);
+      }
+    }
+    if (templateCategory) {
+      setSelectedCategory(templateCategory);
+    }
+  }, [templateTitle, templateTags, templateCategory]);
   
   const validateForm = () => {
     try {
@@ -168,6 +197,7 @@ export default function CreateTopicScreen() {
       originalWidth,
       originalHeight,
       tags: selectedTags.length > 0 ? selectedTags : undefined,
+      category: selectedCategory,
     });
     
     router.push("/(tabs)");
@@ -244,6 +274,15 @@ export default function CreateTopicScreen() {
           </View>
           </View>
           
+          {/* Category Selector */}
+          <View style={styles.categorySelectorCard}>
+            <CategorySelector
+              selectedCategory={selectedCategory}
+              onCategoryChange={setSelectedCategory}
+              autoSelected={!!templateCategory}
+            />
+          </View>
+          
           {/* Tag Selector */}
           <View style={styles.tagSelectorCard}>
             <TagSelector
@@ -300,6 +339,20 @@ export default function CreateTopicScreen() {
 
 const styles = StyleSheet.create({
   formCard: {
+    backgroundColor: Colors.card,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  categorySelectorCard: {
     backgroundColor: Colors.card,
     borderRadius: 20,
     padding: 20,

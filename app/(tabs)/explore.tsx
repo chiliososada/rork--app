@@ -97,7 +97,7 @@ export default function ExploreScreen() {
   const handleSimilarPost = (topic: EnhancedTopic) => {
     // 似たような投稿を作成する画面へ遷移
     router.push({
-      pathname: '/(tabs)/publish',
+      pathname: '/create-topic',
       params: {
         templateTitle: topic.title,
         templateTags: JSON.stringify(topic.tags || []),
@@ -107,7 +107,7 @@ export default function ExploreScreen() {
   };
   
   const handleFABPress = () => {
-    router.push('/(tabs)/publish');
+    router.push('/create-topic');
   };
   
   const renderHeader = () => (
