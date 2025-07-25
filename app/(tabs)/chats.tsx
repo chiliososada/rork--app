@@ -8,9 +8,11 @@ import Colors from "@/constants/colors";
 import { useChatTopicsStore } from "@/store/chat-topics-store";
 import { useChatStore } from "@/store/chat-store";
 import { useAuthStore } from "@/store/auth-store";
+import { usePrivateChatStore } from "@/store/private-chat-store";
 import SearchBar from "@/components/SearchBar";
 import CustomHeader from "@/components/CustomHeader";
-import { Topic } from "@/types";
+import AvatarPicker from "@/components/AvatarPicker";
+import { Topic, ChatListItem } from "@/types";
 import { formatChatListTime } from "@/lib/utils/timeUtils";
 
 export default function ChatsScreen() {
@@ -30,14 +32,19 @@ export default function ChatsScreen() {
     subscribeToMultipleTopics,
     cleanupUnusedSubscriptions
   } = useChatStore();
+  const { 
+    privateChats, 
+    fetchPrivateChats 
+  } = usePrivateChatStore();
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'my' | 'others'>('others');
+  const [activeTab, setActiveTab] = useState<'参加中' | '作成済み' | 'プライベート'>('参加中');
   
   useEffect(() => {
     if (user) {
       fetchChatTopics(user.id, true);
+      fetchPrivateChats(user.id);
     }
-  }, [user, fetchChatTopics]);
+  }, [user, fetchChatTopics, fetchPrivateChats]);
   
   // トピックが変更されたら未読数を取得し、リアルタイム購読を設定
   useEffect(() => {
@@ -58,8 +65,12 @@ export default function ChatsScreen() {
     }
   }, [filteredTopics, user, fetchUnreadCountsForTopics, subscribeToMultipleTopics, cleanupUnusedSubscriptions]);
   
-  const handleChatPress = useCallback((topicId: string) => {
-    router.push(`/chat/${topicId}`);
+  const handleChatPress = useCallback((item: ChatListItem) => {
+    if (item.type === 'topic') {
+      router.push(`/chat/${item.id}`);
+    } else {
+      router.push(`/chat/private/${item.id}`);
+    }
   }, [router]);
   
   const handleSearch = (query: string) => {
@@ -75,8 +86,11 @@ export default function ChatsScreen() {
     
     setRefreshing(true);
     try {
-      // トピックデータを再取得
-      await fetchChatTopics(user.id, true);
+      // データを再取得
+      await Promise.all([
+        fetchChatTopics(user.id, true),
+        fetchPrivateChats(user.id)
+      ]);
       
       // 少し待ってからトピックIDを取得（データが更新されるのを待つ）
       setTimeout(async () => {
@@ -91,7 +105,7 @@ export default function ChatsScreen() {
     } finally {
       setRefreshing(false);
     }
-  }, [user, fetchChatTopics, fetchUnreadCountsForTopics, filteredTopics]);
+  }, [user, fetchChatTopics, fetchPrivateChats, fetchUnreadCountsForTopics, filteredTopics]);
   
   const handleLeaveTopic = useCallback((topicId: string, topicTitle: string) => {
     if (!user) return;
@@ -123,32 +137,95 @@ export default function ChatsScreen() {
     );
   }, [user, leaveTopic, fetchChatTopics]);
 
-  
+  // Convert topics and private chats to unified list with proper filtering
+  const getChatListItems = useMemo((): ChatListItem[] => {
+    const items: ChatListItem[] = [];
+    
+    if (activeTab === '参加中') {
+      // 显示用户参加的他人创建的话题聊天（可退出）
+      const participatingTopics = filteredTopics.filter(topic => 
+        topic.author.id !== user?.id && topic.isParticipated
+      );
+      const topicItems: ChatListItem[] = participatingTopics.map(topic => ({
+        id: topic.id,
+        type: 'topic',
+        title: topic.title,
+        lastMessage: topic.lastMessagePreview,
+        lastMessageTime: topic.lastMessageTime,
+        unreadCount: getUnreadCount(topic.id),
+        topic: topic,
+      }));
+      items.push(...topicItems);
+    } else if (activeTab === '作成済み') {
+      // 显示用户自己创建的话题聊天（不可退出）
+      const myTopics = filteredTopics.filter(topic => 
+        topic.author.id === user?.id
+      );
+      const topicItems: ChatListItem[] = myTopics.map(topic => ({
+        id: topic.id,
+        type: 'topic',
+        title: topic.title,
+        lastMessage: topic.lastMessagePreview,
+        lastMessageTime: topic.lastMessageTime,
+        unreadCount: getUnreadCount(topic.id),
+        topic: topic,
+      }));
+      items.push(...topicItems);
+    } else if (activeTab === 'プライベート') {
+      // 显示所有私人消息对话
+      const privateChatItems: ChatListItem[] = privateChats.map(chat => ({
+        id: chat.id,
+        type: 'private',
+        title: chat.otherUser?.name || 'Unknown User',
+        lastMessage: chat.lastMessage,
+        lastMessageTime: chat.lastMessageAt,
+        unreadCount: chat.unreadCount || 0,
+        otherUser: chat.otherUser,
+      }));
+      items.push(...privateChatItems);
+    }
+    
+    // Sort by last message time (newest first)
+    return items.sort((a, b) => {
+      const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
+      const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
+      return timeB - timeA;
+    });
+  }, [filteredTopics, privateChats, activeTab, getUnreadCount, user?.id]);
   
   // Memoize chat item renderer for performance
-  const renderChatItem = useCallback(({ item }: { item: Topic }) => {
-    const unreadCount = getUnreadCount(item.id);
-    
+  const renderChatItem = useCallback(({ item }: { item: ChatListItem }) => {
     return (
       <TouchableOpacity 
         style={styles.chatItem}
-        onPress={() => handleChatPress(item.id)}
+        onPress={() => handleChatPress(item)}
         activeOpacity={0.7}
       >
         <View style={styles.chatIconContainer}>
-          <MessageCircle size={24} color={Colors.text.light} />
-          {unreadCount > 0 && (
-            <View style={styles.unreadBadge}>
-              <Text style={styles.unreadBadgeText}>
-                {unreadCount > 99 ? '99+' : unreadCount.toString()}
-              </Text>
-            </View>
+          {item.type === 'private' && item.otherUser ? (
+            <AvatarPicker
+              currentAvatarUrl={item.otherUser.avatar}
+              userId={item.otherUser.id}
+              size={40}
+              editable={false}
+            />
+          ) : (
+            <>
+              <MessageCircle size={24} color={Colors.text.light} />
+              {(item.unreadCount || 0) > 0 && (
+                <View style={styles.unreadBadge}>
+                  <Text style={styles.unreadBadgeText}>
+                    {(item.unreadCount || 0) > 99 ? '99+' : (item.unreadCount || 0).toString()}
+                  </Text>
+                </View>
+              )}
+            </>
           )}
         </View>
         
         <View style={styles.chatInfo}>
           <View style={styles.chatTitleRow}>
-            <Text style={[styles.chatTitle, unreadCount > 0 && styles.unreadChatTitle]} numberOfLines={1}>
+            <Text style={[styles.chatTitle, (item.unreadCount || 0) > 0 && styles.unreadChatTitle]} numberOfLines={1}>
               {item.title}
             </Text>
             <View style={styles.chatTimeContainer}>
@@ -160,22 +237,37 @@ export default function ChatsScreen() {
               </Text>
             </View>
           </View>
-          <Text style={styles.chatParticipants}>
-            {item.participantCount} 人の参加者
-          </Text>
+          {item.type === 'topic' && item.topic ? (
+            <Text style={styles.chatParticipants}>
+              {item.topic.participantCount} 人の参加者
+            </Text>
+          ) : (
+            <Text style={styles.chatParticipants}>
+              {item.lastMessage || '新しいチャット'}
+            </Text>
+          )}
         </View>
         
         <View style={styles.authorContainer}>
-          <Image source={{ uri: item.author.avatar }} style={styles.authorAvatar} />
+          {item.type === 'topic' && item.topic && (
+            <Image source={{ uri: item.topic.author.avatar }} style={styles.authorAvatar} />
+          )}
+          {item.type === 'private' && (item.unreadCount || 0) > 0 && (
+            <View style={styles.privateUnreadBadge}>
+              <Text style={styles.unreadBadgeText}>
+                {(item.unreadCount || 0) > 99 ? '99+' : (item.unreadCount || 0).toString()}
+              </Text>
+            </View>
+          )}
         </View>
       </TouchableOpacity>
     );
-  }, [getUnreadCount, handleChatPress]);
+  }, [handleChatPress]);
   
   // Render hidden item (swipe actions)
-  const renderHiddenItem = useCallback(({ item }: { item: Topic }) => {
-    // Don't show swipe actions for "my" tab
-    if (activeTab === 'my') {
+  const renderHiddenItem = useCallback(({ item }: { item: ChatListItem }) => {
+    // 只有"参加中"标签的话题聊天可以退出
+    if (activeTab !== '参加中' || item.type !== 'topic' || !item.topic) {
       return null;
     }
     
@@ -193,46 +285,42 @@ export default function ChatsScreen() {
     );
   }, [handleLeaveTopic, activeTab]);
   
-  // Filter topics based on active tab
-  const tabFilteredTopics = useMemo(() => {
-    if (!user) return [];
-    
-    return filteredTopics.filter(topic => {
-      if (activeTab === 'my') {
-        return topic.author.id === user.id;
-      } else {
-        return topic.author.id !== user.id;
-      }
-    });
-  }, [filteredTopics, activeTab, user]);
-
   // Memoize expensive calculations
   const getActiveChatsCount = useMemo(() => {
-    return tabFilteredTopics.filter(topic => topic.lastMessageTime).length;
-  }, [tabFilteredTopics]);
+    return getChatListItems.filter(item => item.lastMessageTime).length;
+  }, [getChatListItems]);
   
   // Memoize key extractor
-  const keyExtractor = useCallback((item: Topic) => item.id, []);
+  const keyExtractor = useCallback((item: ChatListItem) => `${item.type}-${item.id}`, []);
 
-  // Tab component
+  // Tab component with three tabs
   const renderTabs = () => (
     <View style={styles.tabContainer}>
       <TouchableOpacity
-        style={[styles.tab, activeTab === 'others' && styles.activeTab]}
-        onPress={() => setActiveTab('others')}
+        style={[styles.tab, activeTab === '参加中' && styles.activeTab]}
+        onPress={() => setActiveTab('参加中')}
         activeOpacity={0.7}
       >
-        <Text style={[styles.tabText, activeTab === 'others' && styles.activeTabText]}>
-          その他
+        <Text style={[styles.tabText, activeTab === '参加中' && styles.activeTabText]}>
+          参加中
         </Text>
       </TouchableOpacity>
       <TouchableOpacity
-        style={[styles.tab, activeTab === 'my' && styles.activeTab]}
-        onPress={() => setActiveTab('my')}
+        style={[styles.tab, activeTab === '作成済み' && styles.activeTab]}
+        onPress={() => setActiveTab('作成済み')}
         activeOpacity={0.7}
       >
-        <Text style={[styles.tabText, activeTab === 'my' && styles.activeTabText]}>
-          私が発表した
+        <Text style={[styles.tabText, activeTab === '作成済み' && styles.activeTabText]}>
+          作成済み
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.tab, activeTab === 'プライベート' && styles.activeTab]}
+        onPress={() => setActiveTab('プライベート')}
+        activeOpacity={0.7}
+      >
+        <Text style={[styles.tabText, activeTab === 'プライベート' && styles.activeTabText]}>
+          プライベート
         </Text>
       </TouchableOpacity>
     </View>
@@ -242,7 +330,11 @@ export default function ChatsScreen() {
     <View style={styles.container}>
       <CustomHeader
         title="チャットルーム"
-        subtitle={`💬 ${getActiveChatsCount} 件のアクティブなチャット • ${tabFilteredTopics.length} 件の${activeTab === 'my' ? '発表した' : '参加中'}トピック`}
+        subtitle={`💬 ${getActiveChatsCount} 件のアクティブなチャット • ${getChatListItems.length} 件の${
+          activeTab === '参加中' ? '参加中のチャット' : 
+          activeTab === '作成済み' ? '作成したチャット' : 
+          'プライベートチャット'
+        }`}
       />
       
       <SafeAreaView style={styles.content} edges={['left', 'right']}>
@@ -250,13 +342,17 @@ export default function ChatsScreen() {
           value={searchQuery}
           onChangeText={handleSearch}
           onClear={handleClearSearch}
-          placeholder="チャットルームを検索..."
+          placeholder={
+            activeTab === 'プライベート' 
+              ? 'ユーザー名を検索...' 
+              : 'チャットルームを検索...'
+          }
         />
         
         {renderTabs()}
         
         <SwipeListView
-          data={tabFilteredTopics.map(topic => ({ key: topic.id, ...topic }))}
+          data={getChatListItems.map(item => ({ key: `${item.type}-${item.id}`, ...item }))}
           renderItem={renderChatItem}
           renderHiddenItem={renderHiddenItem}
           keyExtractor={keyExtractor}
@@ -291,23 +387,32 @@ export default function ChatsScreen() {
             <View style={styles.emptyContainer}>
               {searchQuery ? (
                 <>
-                  <Text style={styles.emptyTitle}>チャットルームが見つかりません</Text>
+                  <Text style={styles.emptyTitle}>
+                    {activeTab === 'プライベート' ? 'ユーザーが見つかりません' : 'チャットルームが見つかりません'}
+                  </Text>
                   <Text style={styles.emptyText}>
-                    検索条件を変更するか、クリアしてすべてのチャットルームを表示してください。
+                    検索条件を変更するか、クリアしてすべてを表示してください。
                   </Text>
                 </>
-              ) : activeTab === 'my' ? (
+              ) : activeTab === '参加中' ? (
                 <>
-                  <Text style={styles.emptyTitle}>発表したトピックがありません</Text>
+                  <Text style={styles.emptyTitle}>参加中のチャットルームがありません</Text>
+                  <Text style={styles.emptyText}>
+                    既存のトピックの詳細ページで「チャットに参加」ボタンをタップして参加してください。
+                  </Text>
+                </>
+              ) : activeTab === '作成済み' ? (
+                <>
+                  <Text style={styles.emptyTitle}>作成したチャットルームがありません</Text>
                   <Text style={styles.emptyText}>
                     新しいトピックを作成して、他の人とチャットを始めましょう。
                   </Text>
                 </>
               ) : (
                 <>
-                  <Text style={styles.emptyTitle}>参加中のチャットルームがありません</Text>
+                  <Text style={styles.emptyTitle}>プライベートチャットがありません</Text>
                   <Text style={styles.emptyText}>
-                    既存のトピックの詳細ページで「チャットに参加」ボタンをタップして参加してください。
+                    ユーザープロフィールからメッセージを送信してチャットを始めましょう。
                   </Text>
                 </>
               )}
@@ -339,8 +444,8 @@ const styles = StyleSheet.create({
   },
   tab: {
     flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
@@ -349,9 +454,10 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
   },
   tabText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: Colors.text.secondary,
+    textAlign: 'center',
   },
   activeTabText: {
     color: 'white',
@@ -485,5 +591,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     marginTop: 4,
+  },
+  privateUnreadBadge: {
+    backgroundColor: '#FF3B30',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: Colors.background,
   },
 });

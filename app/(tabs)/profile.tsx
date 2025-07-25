@@ -10,19 +10,25 @@ import { supabase } from "@/lib/supabase";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useTopicDetailsStore } from "@/store/topic-details-store";
 import { useCallback } from "react";
+import { useFollowStore } from "@/store/follow-store";
+import { Users } from "lucide-react-native";
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, logout, updateAvatar, isUpdatingAvatar } = useAuthStore();
   const { favoriteTopics, fetchFavoriteTopics, profileStatsVersion } = useTopicDetailsStore();
+  const { followStats, fetchFollowStats } = useFollowStore();
   const [topicCount, setTopicCount] = useState(0);
   const [likeCount, setLikeCount] = useState(0);
   const [favoriteCount, setFavoriteCount] = useState(0);
+  const [followersCount, setFollowersCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
   
   useEffect(() => {
     if (user?.id) {
       fetchUserStats();
       fetchFavoriteTopics(user.id);
+      fetchFollowStats([user.id]);
     }
   }, [user?.id]);
   
@@ -31,6 +37,7 @@ export default function ProfileScreen() {
     useCallback(() => {
       if (user?.id) {
         fetchUserStats();
+        fetchFollowStats([user.id]);
       }
     }, [user?.id])
   );
@@ -39,6 +46,17 @@ export default function ProfileScreen() {
   useEffect(() => {
     setFavoriteCount(favoriteTopics.length);
   }, [favoriteTopics.length]);
+  
+  // Update follow counts when followStats changes
+  useEffect(() => {
+    if (user?.id) {
+      const stats = followStats.get(user.id);
+      if (stats) {
+        setFollowersCount(stats.followersCount);
+        setFollowingCount(stats.followingCount);
+      }
+    }
+  }, [followStats, user?.id]);
   
   // 点赞状态改变时刷新统计数据
   useEffect(() => {
@@ -175,6 +193,28 @@ export default function ProfileScreen() {
               <Text style={styles.email}>{user?.email || "メールアドレスなし"}</Text>
               
               <View style={styles.statsContainer}>
+                <TouchableOpacity 
+                  style={styles.statItem}
+                  onPress={() => router.push('/followers')}
+                  activeOpacity={0.7}
+                >
+                  <Users size={20} color={Colors.text.secondary} />
+                  <Text style={styles.statNumber}>{followersCount}</Text>
+                  <Text style={styles.statLabel}>フォロワー</Text>
+                </TouchableOpacity>
+                <View style={styles.statDivider} />
+                <TouchableOpacity 
+                  style={styles.statItem}
+                  onPress={() => router.push('/following')}
+                  activeOpacity={0.7}
+                >
+                  <Users size={20} color={Colors.text.secondary} />
+                  <Text style={styles.statNumber}>{followingCount}</Text>
+                  <Text style={styles.statLabel}>フォロー中</Text>
+                </TouchableOpacity>
+              </View>
+              
+              <View style={[styles.statsContainer, { marginTop: 12 }]}>
                 <TouchableOpacity 
                   style={styles.statItem}
                   onPress={() => router.push('/my-topics')}

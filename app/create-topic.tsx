@@ -168,24 +168,25 @@ export default function CreateTopicScreen() {
   };
   
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
       <Stack.Screen 
         options={{
-          headerShown: false,
+          title: '新しいトピックを作成',
+          headerShown: true,
+          headerStyle: {
+            backgroundColor: Colors.card,
+          },
+          headerTitleStyle: {
+            fontSize: 18,
+            fontWeight: '600',
+            color: Colors.text.primary,
+          },
+          headerTintColor: Colors.text.primary,
+          headerBackTitle: '',
+          headerBackVisible: true,
+          headerShadowVisible: true,
         }} 
       />
-      
-      {/* Custom Header */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <ChevronLeft size={24} color={Colors.text.primary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>新しいトピックを作成</Text>
-        <View style={styles.placeholder} />
-      </View>
       
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -324,30 +325,6 @@ const styles = StyleSheet.create({
     right: 12,
     fontSize: 12,
     color: Colors.text.secondary,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    backgroundColor: Colors.card,
-  },
-  backButton: {
-    padding: 8,
-  },
-  placeholder: {
-    width: 40,
-    height: 40,
-  },
-  headerTitle: {
-    flex: 1,
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.text.primary,
-    textAlign: 'center',
-    marginHorizontal: 16,
   },
   container: {
     flex: 1,

@@ -11,6 +11,8 @@ import CommentItem from "@/components/CommentItem";
 import TopicImage from "@/components/TopicImage";
 import JoinChatButton from "@/components/JoinChatButton";
 import { formatMessageTime } from "@/lib/utils/timeUtils";
+import FollowButton from "@/components/FollowButton";
+import { useFollowStore } from "@/store/follow-store";
 
 export default function TopicDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -32,6 +34,7 @@ export default function TopicDetailScreen() {
     error
   } = useTopicDetailStore();
   const [commentText, setCommentText] = useState("");
+  const { fetchFollowStatus } = useFollowStore();
   
   useEffect(() => {
     if (id) {
@@ -44,6 +47,13 @@ export default function TopicDetailScreen() {
       clearCurrentTopic();
     };
   }, [id, fetchTopicById, fetchComments, clearCurrentTopic]);
+  
+  // Fetch follow status when topic is loaded
+  useEffect(() => {
+    if (currentTopic && user?.id && currentTopic.author.id !== user.id) {
+      fetchFollowStatus(user.id, [currentTopic.author.id]);
+    }
+  }, [currentTopic?.author.id, user?.id]);
   
   // Helper function to calculate distance between two coordinates in meters
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -160,35 +170,37 @@ export default function TopicDetailScreen() {
   }
   
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
       <Stack.Screen 
         options={{
-          headerShown: false,
+          title: 'トピック詳細',
+          headerShown: true,
+          headerStyle: {
+            backgroundColor: Colors.card,
+          },
+          headerTitleStyle: {
+            fontSize: 18,
+            fontWeight: '600',
+            color: Colors.text.primary,
+          },
+          headerTintColor: Colors.text.primary,
+          headerBackTitle: '',
+          headerBackVisible: true,
+          headerShadowVisible: true,
+          headerRight: () => (
+            <TouchableOpacity
+              style={{ marginRight: 8 }}
+              onPress={handleFavoritePress}
+            >
+              <Bookmark
+                size={24}
+                color={currentTopic.isFavorited ? '#007AFF' : Colors.text.secondary}
+                fill={currentTopic.isFavorited ? '#007AFF' : 'transparent'}
+              />
+            </TouchableOpacity>
+          ),
         }} 
       />
-      
-      {/* Custom Header */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <ChevronLeft size={24} color={Colors.text.primary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>トピック詳細</Text>
-        <TouchableOpacity
-          style={styles.favoriteButton}
-          onPress={handleFavoritePress}
-        >
-          <Bookmark
-            size={24}
-            color={currentTopic.isFavorited ? '#007AFF' : Colors.text.secondary}
-            fill={currentTopic.isFavorited ? '#007AFF' : 'transparent'}
-          />
-        </TouchableOpacity>
-        
-        {/* Loading indicator for topic refresh - removed since we now show full loading screen */}
-      </View>
       
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -205,8 +217,15 @@ export default function TopicDetailScreen() {
             <View style={styles.topicHeader}>
               <Text style={styles.topicTitle}>{currentTopic.title}</Text>
               <View style={styles.authorRow}>
-                <Text style={styles.authorName}>{currentTopic.author.name}さんの投稿</Text>
-                <Text style={styles.topicTime}>{formatMessageTime(currentTopic.createdAt)}</Text>
+                <View style={styles.authorInfo}>
+                  <Text style={styles.authorName}>{currentTopic.author.name}さんの投稿</Text>
+                  <Text style={styles.topicTime}>{formatMessageTime(currentTopic.createdAt)}</Text>
+                </View>
+                <FollowButton
+                  targetUserId={currentTopic.author.id}
+                  size="small"
+                  showIcon={false}
+                />
               </View>
             </View>
             
@@ -309,35 +328,6 @@ export default function TopicDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    backgroundColor: Colors.card,
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    flex: 1,
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.text.primary,
-    textAlign: 'center',
-    marginHorizontal: 16,
-  },
-  favoriteButton: {
-    padding: 8,
-  },
-  headerLoadingIndicator: {
-    position: 'absolute',
-    right: 60,
-    top: '50%',
-    marginTop: -10,
-  },
   container: {
     flex: 1,
     backgroundColor: Colors.background,
@@ -399,6 +389,10 @@ const styles = StyleSheet.create({
   authorRow: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
+  },
+  authorInfo: {
+    flex: 1,
   },
   authorName: {
     fontSize: 14,

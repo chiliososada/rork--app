@@ -268,52 +268,71 @@ export default function ChatRoomScreen() {
   };
   
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
       <Stack.Screen 
         options={{
-          headerShown: false,
+          title: topicLoading ? "読み込み中..." : (currentTopic?.title || "チャットルーム"),
+          headerShown: true,
+          headerStyle: {
+            backgroundColor: Colors.card,
+          },
+          headerTitleStyle: {
+            fontSize: 18,
+            fontWeight: '600',
+            color: Colors.text.primary,
+          },
+          headerTintColor: Colors.text.primary,
+          headerBackTitle: '',
+          headerBackVisible: true,
+          headerShadowVisible: true,
+          headerRight: () => (
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={[{
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                marginRight: 12,
+              }, 
+                connectionState === 'connected' ? { backgroundColor: '#4CAF50' } :
+                connectionState === 'connecting' ? { backgroundColor: '#FF9800' } :
+                connectionState === 'error' ? { backgroundColor: '#F44336' } :
+                { backgroundColor: '#9E9E9E' }
+              ]} />
+              <TouchableOpacity 
+                style={{ marginRight: 8 }}
+                onPress={() => setShowOnlineUsers(true)}
+              >
+                <Users size={20} color={Colors.text.primary} />
+                {onlineUsers.length > 0 && (
+                  <View style={{
+                    position: 'absolute',
+                    top: -5,
+                    right: -5,
+                    backgroundColor: '#FF3B30',
+                    borderRadius: 8,
+                    minWidth: 16,
+                    height: 16,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                    <Text style={{
+                      color: 'white',
+                      fontSize: 10,
+                      fontWeight: '600',
+                    }}>{onlineUsers.length}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={{ marginRight: 8 }}
+                onPress={() => setShowSearch(true)}
+              >
+                <Search size={20} color={Colors.text.primary} />
+              </TouchableOpacity>
+            </View>
+          ),
         }} 
       />
-      
-      {/* Custom Header */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <ChevronLeft size={24} color={Colors.text.primary} />
-        </TouchableOpacity>
-        <View style={styles.titleContainer}>
-          <Text style={styles.headerTitle}>
-            {topicLoading ? "読み込み中..." : (currentTopic?.title || "チャットルーム")}
-          </Text>
-          <View style={[styles.connectionIndicator, 
-            connectionState === 'connected' ? styles.connectedIndicator :
-            connectionState === 'connecting' ? styles.connectingIndicator :
-            connectionState === 'error' ? styles.errorIndicator :
-            styles.disconnectedIndicator
-          ]} />
-        </View>
-        <View style={styles.headerActions}>
-          <TouchableOpacity 
-            style={styles.headerButton}
-            onPress={() => setShowOnlineUsers(true)}
-          >
-            <Users size={20} color={Colors.text.primary} />
-            {onlineUsers.length > 0 && (
-              <View style={styles.onlineBadge}>
-                <Text style={styles.onlineBadgeText}>{onlineUsers.length}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.headerButton}
-            onPress={() => setShowSearch(true)}
-          >
-            <Search size={20} color={Colors.text.primary} />
-          </TouchableOpacity>
-        </View>
-      </View>
       
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -488,53 +507,6 @@ export default function ChatRoomScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    backgroundColor: Colors.card,
-  },
-  backButton: {
-    padding: 8,
-  },
-  titleContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginHorizontal: 16,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.text.primary,
-    textAlign: 'center',
-  },
-  connectionIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginLeft: 8,
-  },
-  connectedIndicator: {
-    backgroundColor: '#34C759',
-  },
-  connectingIndicator: {
-    backgroundColor: '#FF9500',
-  },
-  errorIndicator: {
-    backgroundColor: '#FF3B30',
-  },
-  disconnectedIndicator: {
-    backgroundColor: '#8E8E93',
-  },
-  placeholder: {
-    width: 40,
-    height: 40,
-  },
   container: {
     flex: 1,
     backgroundColor: Colors.background,
@@ -622,31 +594,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.text.secondary,
     fontStyle: 'italic',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerButton: {
-    padding: 8,
-    marginLeft: 8,
-    position: 'relative',
-  },
-  onlineBadge: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    backgroundColor: '#FF3B30',
-    borderRadius: 8,
-    minWidth: 16,
-    height: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  onlineBadgeText: {
-    fontSize: 10,
-    color: 'white',
-    fontWeight: 'bold',
   },
   quotedMessageContainer: {
     flexDirection: 'row',

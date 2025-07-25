@@ -370,10 +370,318 @@ $$;
     LEFT JOIN topic_participants tp ON t.id = tp.topic_id AND tp.user_id = user_id_param;
   END;
   $$;
+
+
+  1. 基本テーブルの作成
+
+  -- フォロー関係テーブル
+  CREATE TABLE public.user_follows (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    follower_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+    following_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(follower_id, following_id),
+    CHECK (follower_id != following_id)
+  );
+
+  -- インデックスの作成
+  CREATE INDEX user_follows_follower_id_idx ON public.user_follows(follower_id);
+  CREATE INDEX user_follows_following_id_idx ON public.user_follows(following_id);
+  CREATE INDEX user_follows_created_at_idx ON public.user_follows(created_at DESC);
+
+  -- ユーザーブロックテーブル（オプション）
+  CREATE TABLE public.user_blocks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    blocker_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+    blocked_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(blocker_id, blocked_id),
+    CHECK (blocker_id != blocked_id)
+  );
+
+  -- ブロックテーブルのインデックス
+  CREATE INDEX user_blocks_blocker_id_idx ON public.user_blocks(blocker_id);
+  CREATE INDEX user_blocks_blocked_id_idx ON public.user_blocks(blocked_id);
+
+  2. RPC関数の作成
+
+  -- ユーザーのフォロー統計情報を取得
+  CREATE OR REPLACE FUNCTION get_user_follow_stats(user_ids UUID[])
+  RETURNS TABLE (
+    user_id UUID,
+    followers_count INTEGER,
+    following_count INTEGER
+  )
+  LANGUAGE plpgsql
+  AS $$
+  BEGIN
+    RETURN QUERY
+    SELECT
+      u.id as user_id,
+      COALESCE(followers.count, 0)::INTEGER as followers_count,
+      COALESCE(following.count, 0)::INTEGER as following_count
+    FROM
+      unnest(user_ids) AS u(id)
+    LEFT JOIN (
+      SELECT following_id, COUNT(*)::INTEGER as count
+      FROM user_follows
+      WHERE following_id = ANY(user_ids)
+      GROUP BY following_id
+    ) followers ON u.id = followers.following_id
+    LEFT JOIN (
+      SELECT follower_id, COUNT(*)::INTEGER as count
+      FROM user_follows
+      WHERE follower_id = ANY(user_ids)
+      GROUP BY follower_id
+    ) following ON u.id = following.follower_id;
+  END;
+  $$;
+
+  -- 複数ユーザーのフォロー状態を一括確認
+  CREATE OR REPLACE FUNCTION check_follow_status(
+    current_user_id UUID,
+    target_user_ids UUID[]
+  )
+  RETURNS TABLE (
+    user_id UUID,
+    is_following BOOLEAN,
+    is_followed_by BOOLEAN
+  )
+  LANGUAGE plpgsql
+  AS $$
+  BEGIN
+    RETURN QUERY
+    SELECT
+      t.id as user_id,
+      (uf1.id IS NOT NULL) as is_following,
+      (uf2.id IS NOT NULL) as is_followed_by
+    FROM
+      unnest(target_user_ids) AS t(id)
+    LEFT JOIN user_follows uf1
+      ON uf1.follower_id = current_user_id AND uf1.following_id = t.id
+    LEFT JOIN user_follows uf2
+      ON uf2.follower_id = t.id AND uf2.following_id = current_user_id;
+  END;
+  $$;
+
+  -- 最近のフォロワーを取得（通知画面用）
+  CREATE OR REPLACE FUNCTION get_recent_followers(
+    user_id_param UUID,
+    limit_count INTEGER DEFAULT 20,
+    offset_count INTEGER DEFAULT 0
+  )
+  RETURNS TABLE (
+    follower_id UUID,
+    follower_name TEXT,
+    follower_avatar TEXT,
+    followed_at TIMESTAMP WITH TIME ZONE,
+    is_following_back BOOLEAN
+  )
+  LANGUAGE plpgsql
+  AS $$
+  BEGIN
+    RETURN QUERY
+    SELECT
+      uf.follower_id,
+      u.nickname as follower_name,
+      u.avatar_url as follower_avatar,
+      uf.created_at as followed_at,
+      (uf_back.id IS NOT NULL) as is_following_back
+    FROM user_follows uf
+    JOIN users u ON u.id = uf.follower_id
+    LEFT JOIN user_follows uf_back
+      ON uf_back.follower_id = user_id_param AND uf_back.following_id = uf.follower_id
+    WHERE uf.following_id = user_id_param
+    ORDER BY uf.created_at DESC
+    LIMIT limit_count
+    OFFSET offset_count;
+  END;
+  $$;
+
+  -- フォロー中のユーザーリストを取得
+  CREATE OR REPLACE FUNCTION get_following_users(
+    user_id_param UUID,
+    limit_count INTEGER DEFAULT 20,
+    offset_count INTEGER DEFAULT 0
+  )
+  RETURNS TABLE (
+    following_id UUID,
+    following_name TEXT,
+    following_avatar TEXT,
+    followed_at TIMESTAMP WITH TIME ZONE,
+    is_followed_back BOOLEAN
+  )
+  LANGUAGE plpgsql
+  AS $$
+  BEGIN
+    RETURN QUERY
+    SELECT
+      uf.following_id,
+      u.nickname as following_name,
+      u.avatar_url as following_avatar,
+      uf.created_at as followed_at,
+      (uf_back.id IS NOT NULL) as is_followed_back
+    FROM user_follows uf
+    JOIN users u ON u.id = uf.following_id
+    LEFT JOIN user_follows uf_back
+      ON uf_back.follower_id = uf.following_id AND uf_back.following_id = user_id_param
+    WHERE uf.follower_id = user_id_param
+    ORDER BY uf.created_at DESC
+    LIMIT limit_count
+    OFFSET offset_count;
+  END;
+  $$;
+
+  -- フォロー/アンフォロー処理（トグル機能）
+  CREATE OR REPLACE FUNCTION toggle_follow(
+    follower_id_param UUID,
+    following_id_param UUID
+  )
+  RETURNS TABLE (
+    action TEXT,
+    is_following BOOLEAN
+  )
+  LANGUAGE plpgsql
+  AS $$
+  DECLARE
+    existing_follow UUID;
+  BEGIN
+    -- 既存のフォロー関係をチェック
+    SELECT id INTO existing_follow
+    FROM user_follows
+    WHERE follower_id = follower_id_param
+      AND following_id = following_id_param;
+
+    IF existing_follow IS NOT NULL THEN
+      -- アンフォロー
+      DELETE FROM user_follows WHERE id = existing_follow;
+      RETURN QUERY SELECT 'unfollowed'::TEXT, false;
+    ELSE
+      -- フォロー
+      INSERT INTO user_follows (follower_id, following_id)
+      VALUES (follower_id_param, following_id_param);
+      RETURN QUERY SELECT 'followed'::TEXT, true;
+    END IF;
+  END;
+  $$;
+
+  -- フォロー中のユーザーの最新トピックを取得（フィード機能用）
+  CREATE OR REPLACE FUNCTION get_following_users_topics(
+    user_id_param UUID,
+    limit_count INTEGER DEFAULT 20,
+    offset_count INTEGER DEFAULT 0
+  )
+  RETURNS TABLE (
+    id UUID,
+    title TEXT,
+    description TEXT,
+    user_id UUID,
+    latitude DOUBLE PRECISION,
+    longitude DOUBLE PRECISION,
+    location_name TEXT,
+    created_at TIMESTAMP WITH TIME ZONE,
+    image_url TEXT,
+    image_aspect_ratio TEXT,
+    original_width INTEGER,
+    original_height INTEGER,
+    user_name TEXT,
+    user_avatar TEXT
+  )
+  LANGUAGE plpgsql
+  AS $$
+  BEGIN
+    RETURN QUERY
+    SELECT
+      t.id,
+      t.title,
+      t.description,
+      t.user_id,
+      t.latitude,
+      t.longitude,
+      t.location_name,
+      t.created_at,
+      t.image_url,
+      t.image_aspect_ratio,
+      t.original_width,
+      t.original_height,
+      u.nickname as user_name,
+      u.avatar_url as user_avatar
+    FROM topics t
+    JOIN users u ON u.id = t.user_id
+    WHERE t.user_id IN (
+      SELECT following_id
+      FROM user_follows
+      WHERE follower_id = user_id_param
+    )
+    AND (t.is_hidden IS NULL OR t.is_hidden = false)
+    ORDER BY t.created_at DESC
+    LIMIT limit_count
+    OFFSET offset_count;
+  END;
+  $$;
+
+  3. ブロック機能のRPC関数（オプション）
+
+  -- ブロック/アンブロック処理
+  CREATE OR REPLACE FUNCTION toggle_block(
+    blocker_id_param UUID,
+    blocked_id_param UUID
+  )
+  RETURNS TABLE (
+    action TEXT,
+    is_blocked BOOLEAN
+  )
+  LANGUAGE plpgsql
+  AS $$
+  DECLARE
+    existing_block UUID;
+  BEGIN
+    -- 既存のブロック関係をチェック
+    SELECT id INTO existing_block
+    FROM user_blocks
+    WHERE blocker_id = blocker_id_param
+      AND blocked_id = blocked_id_param;
+
+    IF existing_block IS NOT NULL THEN
+      -- アンブロック
+      DELETE FROM user_blocks WHERE id = existing_block;
+      RETURN QUERY SELECT 'unblocked'::TEXT, false;
+    ELSE
+      -- ブロック（同時にフォロー関係も削除）
+      INSERT INTO user_blocks (blocker_id, blocked_id)
+      VALUES (blocker_id_param, blocked_id_param);
+
+      -- 双方向のフォロー関係を削除
+      DELETE FROM user_follows
+      WHERE (follower_id = blocker_id_param AND following_id = blocked_id_param)
+         OR (follower_id = blocked_id_param AND following_id = blocker_id_param);
+
+      RETURN QUERY SELECT 'blocked'::TEXT, true;
+    END IF;
+  END;
+  $$;
+
+  -- ブロックしているユーザーのIDリストを取得
+  CREATE OR REPLACE FUNCTION get_blocked_user_ids(user_id_param UUID)
+  RETURNS UUID[]
+  LANGUAGE plpgsql
+  AS $$
+  BEGIN
+    RETURN ARRAY(
+      SELECT blocked_id
+      FROM user_blocks
+      WHERE blocker_id = user_id_param
+    );
+  END;
+  $$;
+                                                 
 如果设计到文本都使用日语
 
 我偏向于ios和安卓 web端可以降低比重
 
+所有新页面的导航都适用router 中框架的 导航尤其是后退按钮要统一 不要存在双重后退 Stack.Screenのナビゲーションのみを使用する       
+符合日本人的用户习惯的ui设计
+我现在的项目是制作阶段 还没有上线
 需要上线appstore 和 Google store
 
 
