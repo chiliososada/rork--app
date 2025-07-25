@@ -1,129 +1,220 @@
-import React, { useEffect, useCallback, useState } from "react";
-import { StyleSheet, Text, View, TouchableWithoutFeedback, Keyboard, ActivityIndicator } from "react-native";
+import React, { useEffect, useCallback, useState, useRef } from "react";
+import { 
+  StyleSheet, 
+  Text, 
+  View, 
+  TouchableWithoutFeedback, 
+  Keyboard, 
+  ActivityIndicator,
+  FlatList,
+  RefreshControl,
+  TouchableOpacity
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import { Plus } from "lucide-react-native";
 import Colors from "@/constants/colors";
 import { useLocationStore } from "@/store/location-store";
-import { useMapTopicsStore } from "@/store/map-topics-store";
+import { useExploreStore } from "@/store/explore-store";
 import SearchBar from "@/components/SearchBar";
 import SearchFilterBar from "@/components/SearchFilterBar";
 import SearchSettingsModal from "@/components/SearchSettingsModal";
-import MapViewComponent from "@/components/MapView";
 import CustomHeader from "@/components/CustomHeader";
+import GreetingHeader from "@/components/explore/GreetingHeader";
+import RecommendationCarousel from "@/components/explore/RecommendationCarousel";
+import CategoryTabs from "@/components/explore/CategoryTabs";
+import EnhancedTopicCard from "@/components/explore/EnhancedTopicCard";
+import { EnhancedTopic } from "@/types";
 
 export default function ExploreScreen() {
   const router = useRouter();
   const { currentLocation } = useLocationStore();
   const { 
-    filteredTopics, 
-    fetchMapTopics, 
-    fetchTopicsInViewport,
-    loadMoreTopics,
+    topics,
+    categories,
+    selectedCategory,
+    recommendations,
     isLoading,
     isLoadingMore,
-    searchQuery, 
-    searchTopics, 
-    clearSearch,
-    isSearching,
-    isSearchMode
-  } = useMapTopicsStore();
+    isLoadingRecommendations,
+    error,
+    fetchCategories,
+    fetchRecommendations,
+    fetchTopics,
+    loadMoreTopics,
+    selectCategory,
+    trackInteraction
+  } = useExploreStore();
   const [settingsModalVisible, setSettingsModalVisible] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const flatListRef = useRef<FlatList>(null);
   
-  // 初期データ読み込み：位置情報取得後にマップ用データを取得
+  // 初期データ読み込み
+  useEffect(() => {
+    fetchCategories();
+    fetchRecommendations();
+  }, []);
+  
+  // 位置情報取得後にトピックを取得
   useEffect(() => {
     if (currentLocation) {
-      // 地図専用のデータ取得（アクティビティベースソート）
-      fetchMapTopics(currentLocation.latitude, currentLocation.longitude, true);
+      fetchTopics(currentLocation.latitude, currentLocation.longitude, true);
     }
+  }, [currentLocation, selectedCategory]);
+  
+  const handleRefresh = useCallback(async () => {
+    if (!currentLocation) return;
+    
+    setRefreshing(true);
+    await Promise.all([
+      fetchRecommendations(),
+      fetchTopics(currentLocation.latitude, currentLocation.longitude, true)
+    ]);
+    setRefreshing(false);
   }, [currentLocation]);
   
-  // 地図視区変更時の処理
-  const handleMapRegionChange = useCallback((bounds: {
-    north: number;
-    south: number;
-    east: number;
-    west: number;
-  }) => {
-    // 視区が変更された時に新しいエリアのトピックを取得
-    fetchTopicsInViewport(bounds);
-  }, [fetchTopicsInViewport]);
+  const handleLoadMore = useCallback(() => {
+    if (currentLocation && !isLoadingMore) {
+      loadMoreTopics(currentLocation.latitude, currentLocation.longitude);
+    }
+  }, [currentLocation, isLoadingMore]);
   
-  const handleMarkerPress = (topicId: string) => {
-    router.push(`/topic/${topicId}`);
-  };
-  
-  const handleSearch = (query: string) => {
-    searchTopics(query);
-  };
-  
-  const handleClearSearch = () => {
-    clearSearch();
-  };
-
   const handleSettingsPress = () => {
     setSettingsModalVisible(true);
   };
 
   const handleSettingsChanged = () => {
-    // Refresh map topics when search settings change
     if (currentLocation) {
-      fetchMapTopics(currentLocation.latitude, currentLocation.longitude, true);
+      fetchTopics(currentLocation.latitude, currentLocation.longitude, true);
     }
+  };
+  
+  const handleCategorySelect = (categoryKey: string) => {
+    selectCategory(categoryKey);
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+  };
+  
+  const handleSimilarPost = (topic: EnhancedTopic) => {
+    // 似たような投稿を作成する画面へ遷移
+    router.push({
+      pathname: '/(tabs)/publish',
+      params: {
+        templateTitle: topic.title,
+        templateTags: JSON.stringify(topic.tags || []),
+        templateCategory: topic.category
+      }
+    });
+  };
+  
+  const handleFABPress = () => {
+    router.push('/(tabs)/publish');
+  };
+  
+  const renderHeader = () => (
+    <>
+      <GreetingHeader 
+        locationName={currentLocation ? '現在地' : undefined}
+        topicCount={topics.length}
+      />
+      
+      <RecommendationCarousel
+        recommendations={recommendations}
+        isLoading={isLoadingRecommendations}
+        onRecommendationPress={(rec) => trackInteraction(rec.topicId || '', 'click')}
+      />
+    </>
+  );
+  
+  const renderItem = ({ item }: { item: EnhancedTopic }) => (
+    <EnhancedTopicCard
+      topic={item}
+      onSimilarPost={handleSimilarPost}
+    />
+  );
+  
+  const renderEmpty = () => {
+    if (isLoading) return null;
+    
+    return (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyText}>
+          {selectedCategory === 'recommended' 
+            ? 'まだおすすめのトピックがありません'
+            : 'このカテゴリーのトピックはまだありません'}
+        </Text>
+      </View>
+    );
+  };
+  
+  const renderFooter = () => {
+    if (!isLoadingMore) return null;
+    
+    return (
+      <View style={styles.footerLoading}>
+        <ActivityIndicator size="small" color={Colors.primary} />
+      </View>
+    );
   };
   
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <View style={styles.container}>
         <CustomHeader
-          title="地図で探索"
-          subtitle={isSearchMode 
-            ? `🔍 "${searchQuery}" の検索結果 • ${filteredTopics.length} 件のトピック`
-            : `🗺️ 地図上のトピックを発見 • ${filteredTopics.length} 件のトピック`
-          }
+          title="🔍 発見"
+          subtitle={`${topics.length} 件のトピック`}
         />
         
         <SafeAreaView style={styles.content} edges={['left', 'right', 'bottom']}>
-          <SearchBar
-            value={searchQuery}
-            onChangeText={handleSearch}
-            onClear={handleClearSearch}
-            placeholder="地図上でトピックを検索..."
-            isLoading={isSearching}
-          />
-          
           <SearchFilterBar onSettingsPress={handleSettingsPress} />
           
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View style={styles.mapWrapper}>
-              {currentLocation ? (
-                <>
-                  <MapViewComponent
-                    currentLocation={currentLocation}
-                    topics={filteredTopics}
-                    onMarkerPress={handleMarkerPress}
-                    onRegionChange={handleMapRegionChange}
-                  />
-                  {/* データ読み込み中のインジケーター */}
-                  {((isLoading && filteredTopics.length === 0) || isLoadingMore) && (
-                    <View style={styles.loadingOverlay}>
-                      <View style={styles.loadingIndicator}>
-                        <ActivityIndicator size="small" color={Colors.primary} style={{ marginRight: 8 }} />
-                        <Text style={styles.loadingText}>
-                          {isSearchMode ? '検索結果を読み込んでいます...' : '地図上のトピックを読み込んでいます...'}
-                        </Text>
-                      </View>
-                    </View>
-                  )}
-                </>
-              ) : (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color={Colors.primary} />
-                  <Text style={styles.loadingText}>位置情報を取得しています...</Text>
-                </View>
-              )}
+          <CategoryTabs
+            categories={categories}
+            selectedCategory={selectedCategory}
+            onCategorySelect={handleCategorySelect}
+          />
+          
+          {currentLocation ? (
+            <FlatList
+              ref={flatListRef}
+              data={topics}
+              renderItem={renderItem}
+              keyExtractor={(item, index) => `${item.id}-${index}`}
+              ListHeaderComponent={renderHeader}
+              ListEmptyComponent={renderEmpty}
+              ListFooterComponent={renderFooter}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={handleRefresh}
+                  colors={[Colors.primary]}
+                  tintColor={Colors.primary}
+                />
+              }
+              onEndReached={handleLoadMore}
+              onEndReachedThreshold={0.5}
+              contentContainerStyle={styles.listContent}
+              showsVerticalScrollIndicator={false}
+              removeClippedSubviews={true}
+              maxToRenderPerBatch={10}
+              windowSize={10}
+              initialNumToRender={5}
+            />
+          ) : (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={Colors.primary} />
+              <Text style={styles.loadingText}>位置情報を取得しています...</Text>
             </View>
-          </TouchableWithoutFeedback>
+          )}
         </SafeAreaView>
+        
+        {/* フローティングアクションボタン */}
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={handleFABPress}
+          activeOpacity={0.8}
+        >
+          <Plus size={24} color="#fff" />
+        </TouchableOpacity>
 
         <SearchSettingsModal
           visible={settingsModalVisible}
@@ -143,9 +234,9 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
-  mapWrapper: {
-    flex: 1,
-    paddingBottom: 32,
+  listContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 80,
   },
   loadingContainer: {
     flex: 1,
@@ -155,29 +246,39 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
     color: Colors.text.secondary,
+    marginTop: 12,
   },
-  loadingOverlay: {
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: Colors.text.secondary,
+    textAlign: 'center',
+  },
+  footerLoading: {
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+  fab: {
     position: 'absolute',
-    top: 20,
-    left: 0,
-    right: 0,
+    bottom: 20,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Colors.primary,
     alignItems: 'center',
-    zIndex: 1000,
-  },
-  loadingIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.card,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 20,
+    justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 4,
     },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
 });

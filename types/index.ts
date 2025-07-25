@@ -182,3 +182,55 @@ export interface TagFilterParams {
   maxDistance?: number;
   limit?: number;
 }
+
+// 智能推荐接口
+export interface SmartRecommendation {
+  id: string;
+  title: string;
+  subtitle: string;
+  description: string;
+  recommendationType: 'trending' | 'location' | 'social' | 'business';
+  imageUrl?: string;
+  gradientColors: string[];
+  isSponsored: boolean;
+  sponsorName?: string;
+  targetUrl?: string;
+  topicId?: string;
+}
+
+// 分类配置接口
+export interface CategoryConfig {
+  categoryKey: string;
+  displayName: string;
+  iconEmoji: string;
+  colorCode: string;
+  commercialPriority: number;
+  isActive: boolean;
+  sortOrder?: number;
+}
+
+// 增强的话题类型
+export interface EnhancedTopic extends Topic {
+  engagementScore?: number;
+  isPromoted?: boolean;
+  category?: string;
+  recommendationReason?: string;
+  contentType?: 'normal' | 'sponsored' | 'challenge';
+}
+
+// 挑战活动接口
+export interface ChallengeActivity {
+  id: string;
+  title: string;
+  description: string;
+  participantCount: number;
+  targetParticipantCount: number;
+  deadline: string;
+  badgeImageUrl?: string;
+  challengeTags: string[];
+  rules?: string;
+  rewardDescription?: string;
+}
+
+// 探索页面交互类型
+export type ExploreInteractionType = 'view' | 'click' | 'like' | 'share' | 'similar_post' | 'category_click';
