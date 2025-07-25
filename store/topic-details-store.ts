@@ -455,14 +455,6 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
     set({ isLoading: true, error: null });
     
     try {
-      console.log('[TopicDetailsStore] Starting topic creation with data:', {
-        title: topicData.title,
-        description: topicData.description?.substring(0, 50) + '...',
-        userId: topicData.author.id,
-        location: topicData.location,
-        tags: topicData.tags,
-        hasImage: !!topicData.imageUrl
-      });
       // Insert topic into Supabase
       const { data: insertedTopic, error: insertError } = await supabase
         .from('topics')
@@ -478,7 +470,8 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
             image_aspect_ratio: topicData.aspectRatio,
             original_width: topicData.originalWidth,
             original_height: topicData.originalHeight,
-            tags: topicData.tags ? JSON.stringify(topicData.tags) : '[]'
+            tags: topicData.tags ? JSON.stringify(topicData.tags) : '[]',
+            category: topicData.category
           }
         ])
         .select(`
@@ -501,6 +494,7 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
         });
         throw insertError;
       }
+
 
       if (!insertedTopic) {
         console.error('[TopicDetailsStore] No data returned from insert');

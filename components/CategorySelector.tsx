@@ -16,12 +16,14 @@ interface CategorySelectorProps {
   selectedCategory?: string;
   onCategoryChange: (categoryKey: string) => void;
   autoSelected?: boolean; // 是否自动选择了分类
+  initialValue?: string; // 初始分类值
 }
 
 export default function CategorySelector({ 
   selectedCategory, 
   onCategoryChange,
-  autoSelected = false
+  autoSelected = false,
+  initialValue
 }: CategorySelectorProps) {
   const [categories, setCategories] = useState<CategoryConfig[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -30,6 +32,16 @@ export default function CategorySelector({
   useEffect(() => {
     fetchCategories();
   }, []);
+
+  // Handle initial value after categories are loaded
+  useEffect(() => {
+    if (categories.length > 0 && initialValue && !selectedCategory) {
+      const foundCategory = categories.find(cat => cat.categoryKey === initialValue);
+      if (foundCategory) {
+        onCategoryChange(initialValue);
+      }
+    }
+  }, [categories, initialValue, selectedCategory, onCategoryChange]);
 
   const fetchCategories = async () => {
     try {
@@ -50,6 +62,7 @@ export default function CategorySelector({
         commercialPriority: cat.commercial_priority
       })) || [];
 
+      
       setCategories(categoryConfigs);
     } catch (error) {
       console.error('Failed to fetch categories:', error);

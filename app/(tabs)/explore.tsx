@@ -1,4 +1,5 @@
 import React, { useEffect, useCallback, useState, useRef } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import { 
   StyleSheet, 
   Text, 
@@ -20,7 +21,6 @@ import SearchBar from "@/components/SearchBar";
 import SearchFilterBar from "@/components/SearchFilterBar";
 import SearchSettingsModal from "@/components/SearchSettingsModal";
 import CustomHeader from "@/components/CustomHeader";
-import GreetingHeader from "@/components/explore/GreetingHeader";
 import RecommendationCarousel from "@/components/explore/RecommendationCarousel";
 import CategoryTabs from "@/components/explore/CategoryTabs";
 import EnhancedTopicCard from "@/components/explore/EnhancedTopicCard";
@@ -62,6 +62,15 @@ export default function ExploreScreen() {
     }
   }, [currentLocation, selectedCategory]);
   
+  // 页面获得焦点时刷新数据
+  useFocusEffect(
+    useCallback(() => {
+      if (currentLocation) {
+        fetchTopics(currentLocation.latitude, currentLocation.longitude, true);
+      }
+    }, [currentLocation, fetchTopics])
+  );
+  
   const handleRefresh = useCallback(async () => {
     if (!currentLocation) return;
     
@@ -74,10 +83,11 @@ export default function ExploreScreen() {
   }, [currentLocation]);
   
   const handleLoadMore = useCallback(() => {
+    console.log(`[ExploreScreen] handleLoadMore - 触发加载更多, 当前位置: ${!!currentLocation}, isLoadingMore: ${isLoadingMore}`);
     if (currentLocation && !isLoadingMore) {
       loadMoreTopics(currentLocation.latitude, currentLocation.longitude);
     }
-  }, [currentLocation, isLoadingMore]);
+  }, [currentLocation, isLoadingMore, loadMoreTopics]);
   
   const handleSettingsPress = () => {
     setSettingsModalVisible(true);
@@ -112,11 +122,6 @@ export default function ExploreScreen() {
   
   const renderHeader = () => (
     <>
-      <GreetingHeader 
-        locationName={currentLocation ? '現在地' : undefined}
-        topicCount={topics.length}
-      />
-      
       <RecommendationCarousel
         recommendations={recommendations}
         isLoading={isLoadingRecommendations}
@@ -161,7 +166,10 @@ export default function ExploreScreen() {
       <View style={styles.container}>
         <CustomHeader
           title="🔍 発見"
-          subtitle={`${topics.length} 件のトピック`}
+          subtitle={selectedCategory === 'recommended' 
+            ? `${topics.length} 件のおすすめ` 
+            : `${topics.length} 件の${categories.find(cat => cat.categoryKey === selectedCategory)?.displayName || 'トピック'}`}
+          showGreeting={true}
         />
         
         <SafeAreaView style={styles.content} edges={['left', 'right', 'bottom']}>

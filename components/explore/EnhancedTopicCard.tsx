@@ -9,13 +9,10 @@ import { TopicCardAvatar } from '@/components/UserAvatar';
 import TopicTags from '@/components/TopicTags';
 import { useAuthStore } from '@/store/auth-store';
 import { formatChatListTime } from '@/lib/utils/timeUtils';
-import { TopicInteractionService } from '@/lib/services/topicInteractionService';
 import { useExploreStore } from '@/store/explore-store';
 
 interface EnhancedTopicCardProps {
   topic: EnhancedTopic;
-  onFavoriteToggle?: (topicId: string, isFavorited: boolean) => void;
-  onLikeToggle?: (topicId: string, likeData: { isLiked: boolean; count: number }) => void;
   onSimilarPost?: (topic: EnhancedTopic) => void;
   showMenuButton?: boolean;
   onDelete?: (topicId: string) => void;
@@ -23,18 +20,20 @@ interface EnhancedTopicCardProps {
 
 export default function EnhancedTopicCard({ 
   topic, 
-  onFavoriteToggle, 
-  onLikeToggle,
   onSimilarPost,
   showMenuButton = false, 
   onDelete 
 }: EnhancedTopicCardProps) {
   const router = useRouter();
   const { user } = useAuthStore();
-  const { trackInteraction } = useExploreStore();
-  const [isFavoriteLoading, setIsFavoriteLoading] = useState(false);
-  const [isLikeLoading, setIsLikeLoading] = useState(false);
-  // 移除showActionMenu状态
+  const { trackInteraction, categories } = useExploreStore();
+  
+  // 获取分类图标
+  const getCategoryIcon = (categoryKey?: string) => {
+    if (!categoryKey || !categories) return null;
+    const category = categories.find(cat => cat.categoryKey === categoryKey);
+    return category?.iconEmoji || null;
+  };
   
   const formatDistance = (meters: number) => {
     if (meters < 1000) {
@@ -50,40 +49,6 @@ export default function EnhancedTopicCard({
     router.push(`/topic/${topic.id}`);
   };
   
-  const handleFavoritePress = async (e: any) => {
-    e.stopPropagation();
-    if (!user?.id || isFavoriteLoading) return;
-    
-    setIsFavoriteLoading(true);
-    try {
-      const isFavorited = await TopicInteractionService.toggleFavorite(topic.id, user.id);
-      if (onFavoriteToggle) {
-        onFavoriteToggle(topic.id, isFavorited);
-      }
-    } catch (error) {
-      console.error('Error toggling favorite:', error);
-    } finally {
-      setIsFavoriteLoading(false);
-    }
-  };
-  
-  const handleLikePress = async (e: any) => {
-    e.stopPropagation();
-    if (!user?.id || isLikeLoading) return;
-    
-    setIsLikeLoading(true);
-    try {
-      const likeData = await TopicInteractionService.toggleLike(topic.id, user.id);
-      await trackInteraction(topic.id, 'like', topic.category);
-      if (onLikeToggle) {
-        onLikeToggle(topic.id, likeData);
-      }
-    } catch (error) {
-      console.error('Error toggling like:', error);
-    } finally {
-      setIsLikeLoading(false);
-    }
-  };
   
   const handleSimilarPost = async (e: any) => {
     e.stopPropagation();
@@ -148,19 +113,16 @@ export default function EnhancedTopicCard({
             <TopicCardAvatar user={topic.author} />
             <Text style={styles.authorName}>{topic.author.name}</Text>
           </View>
+          
+          <View style={styles.headerCenter}>
+            {getCategoryIcon(topic.category) && (
+              <View style={styles.categoryBadge}>
+                <Text style={styles.categoryIcon}>{getCategoryIcon(topic.category)}</Text>
+              </View>
+            )}
+          </View>
+          
           <View style={styles.headerRight}>
-            <TouchableOpacity
-              style={styles.favoriteButton}
-              onPress={handleFavoritePress}
-              disabled={isFavoriteLoading}
-              activeOpacity={0.7}
-            >
-              <Bookmark
-                size={18}
-                color={topic.isFavorited ? '#007AFF' : Colors.text.secondary}
-                fill={topic.isFavorited ? '#007AFF' : 'transparent'}
-              />
-            </TouchableOpacity>
             <Text style={styles.time}>{formatChatListTime(topic.createdAt)}</Text>
           </View>
         </View>
@@ -168,7 +130,7 @@ export default function EnhancedTopicCard({
         <View style={styles.content}>
           <Text style={styles.title}>{topic.title}</Text>
           
-          {/* タグ */}
+          {/* タグ - 标题正下方 */}
           <TopicTags 
             tags={topic.tags}
             style={styles.tagsContainer}
@@ -202,7 +164,7 @@ export default function EnhancedTopicCard({
           </View>
           
           <View style={styles.centerSection}>
-            <TouchableOpacity style={styles.stat} onPress={handleLikePress} activeOpacity={0.7}>
+            <View style={styles.stat}>
               <Heart 
                 size={14} 
                 color={topic.isLiked ? '#FF6B6B' : Colors.text.secondary}
@@ -211,7 +173,7 @@ export default function EnhancedTopicCard({
               <Text style={[styles.statText, topic.isLiked && { color: '#FF6B6B' }]}>
                 {topic.likesCount || 0}
               </Text>
-            </TouchableOpacity>
+            </View>
             
             <View style={styles.stat}>
               <MessageCircle size={14} color={Colors.text.secondary} />
@@ -312,20 +274,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flex: 1,
   },
   authorName: {
     fontSize: 14,
     fontWeight: '500',
     color: Colors.text.primary,
   },
+  headerCenter: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 12,
+  },
+  categoryBadge: {
+    backgroundColor: Colors.primary + '15',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.primary + '30',
+  },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-  },
-  favoriteButton: {
-    padding: 4,
-    borderRadius: 20,
+    flex: 1,
+    justifyContent: 'flex-end',
   },
   time: {
     fontSize: 12,
@@ -334,9 +307,13 @@ const styles = StyleSheet.create({
   content: {
     marginBottom: 12,
   },
+  categoryIcon: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
   tagsContainer: {
-    marginTop: 4,
-    marginBottom: 8,
+    marginTop: 6,
+    marginBottom: 12,
   },
   title: {
     fontSize: 16,

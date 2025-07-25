@@ -48,6 +48,9 @@ export interface Topic {
   
   // 标签相关
   tags?: string[]; // Array of selected tags for this topic
+  
+  // 分类相关
+  category?: string; // Topic category
 }
 
 export interface Comment {

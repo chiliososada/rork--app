@@ -9,21 +9,16 @@ import { TopicCardAvatar } from '@/components/UserAvatar';
 import TopicTags from '@/components/TopicTags';
 import { useAuthStore } from '@/store/auth-store';
 import { formatChatListTime } from '@/lib/utils/timeUtils';
-import { TopicInteractionService } from '@/lib/services/topicInteractionService';
 
 interface TopicCardProps {
   topic: Topic;
-  onFavoriteToggle?: (topicId: string, isFavorited: boolean) => void;
-  onLikeToggle?: (topicId: string, likeData: { isLiked: boolean; count: number }) => void;
   showMenuButton?: boolean;
   onDelete?: (topicId: string) => void;
 }
 
-export default function TopicCard({ topic, onFavoriteToggle, onLikeToggle, showMenuButton = false, onDelete }: TopicCardProps) {
+export default function TopicCard({ topic, showMenuButton = false, onDelete }: TopicCardProps) {
   const router = useRouter();
   const { user } = useAuthStore();
-  const [isFavoriteLoading, setIsFavoriteLoading] = useState(false);
-  const [isLikeLoading, setIsLikeLoading] = useState(false);
   const [showActionMenu, setShowActionMenu] = useState(false);
   
   const formatDistance = (meters: number) => {
@@ -39,45 +34,6 @@ export default function TopicCard({ topic, onFavoriteToggle, onLikeToggle, showM
     router.push(`/topic/${topic.id}`);
   };
   
-  const handleFavoritePress = async (e: any) => {
-    e.stopPropagation(); // Prevent triggering the topic navigation
-    if (!user?.id || isFavoriteLoading) return;
-    
-    setIsFavoriteLoading(true);
-    try {
-      const isFavorited = await TopicInteractionService.toggleFavorite(topic.id, user.id);
-      
-      // 如果有自定义handler，调用它（用于局部更新）
-      if (onFavoriteToggle) {
-        onFavoriteToggle(topic.id, isFavorited);
-      }
-      // 事件总线会自动处理跨页面同步
-    } catch (error) {
-      console.error('Error toggling favorite:', error);
-    } finally {
-      setIsFavoriteLoading(false);
-    }
-  };
-  
-  const handleLikePress = async (e: any) => {
-    e.stopPropagation(); // Prevent triggering the topic navigation
-    if (!user?.id || isLikeLoading) return;
-    
-    setIsLikeLoading(true);
-    try {
-      const likeData = await TopicInteractionService.toggleLike(topic.id, user.id);
-      
-      // 如果有自定义handler，调用它（用于局部更新）
-      if (onLikeToggle) {
-        onLikeToggle(topic.id, likeData);
-      }
-      // 事件总线会自动处理跨页面同步
-    } catch (error) {
-      console.error('Error toggling like:', error);
-    } finally {
-      setIsLikeLoading(false);
-    }
-  };
   
   const handleMenuPress = (e: any) => {
     e.stopPropagation();
@@ -125,18 +81,6 @@ export default function TopicCard({ topic, onFavoriteToggle, onLikeToggle, showM
           <Text style={styles.authorName}>{topic.author.name}</Text>
         </View>
         <View style={styles.headerRight}>
-          <TouchableOpacity
-            style={styles.favoriteButton}
-            onPress={handleFavoritePress}
-            disabled={isFavoriteLoading}
-            activeOpacity={0.7}
-          >
-            <Bookmark
-              size={18}
-              color={topic.isFavorited ? '#007AFF' : Colors.text.secondary}
-              fill={topic.isFavorited ? '#007AFF' : 'transparent'}
-            />
-          </TouchableOpacity>
           <Text style={styles.time}>{formatChatListTime(topic.createdAt)}</Text>
         </View>
       </View>
@@ -167,7 +111,7 @@ export default function TopicCard({ topic, onFavoriteToggle, onLikeToggle, showM
         </View>
         
         <View style={styles.statsContainer}>
-          <TouchableOpacity style={styles.stat} onPress={handleLikePress} activeOpacity={0.7}>
+          <View style={styles.stat}>
             <Heart 
               size={14} 
               color={topic.isLiked ? '#FF6B6B' : Colors.text.secondary}
@@ -176,7 +120,7 @@ export default function TopicCard({ topic, onFavoriteToggle, onLikeToggle, showM
             <Text style={[styles.statText, topic.isLiked && { color: '#FF6B6B' }]}>
               {topic.likesCount || 0}
             </Text>
-          </TouchableOpacity>
+          </View>
           
           <View style={styles.stat}>
             <MessageCircle size={14} color={Colors.text.secondary} />
@@ -271,10 +215,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-  },
-  favoriteButton: {
-    padding: 4,
-    borderRadius: 20,
   },
   time: {
     fontSize: 12,

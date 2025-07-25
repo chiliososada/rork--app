@@ -28,6 +28,7 @@ export default function CreateTopicScreen() {
     templateCategory?: string;
   }>();
   
+  
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [titleError, setTitleError] = useState("");
@@ -43,6 +44,11 @@ export default function CreateTopicScreen() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>();
   
+  // Category selection callback
+  const handleCategoryChange = (categoryKey: string) => {
+    setSelectedCategory(categoryKey);
+  };
+  
   useEffect(() => {
     if (!currentLocation) {
       requestPermission();
@@ -51,10 +57,10 @@ export default function CreateTopicScreen() {
   
   // 处理模板数据预填充
   useEffect(() => {
-    if (templateTitle) {
+    if (templateTitle && typeof templateTitle === 'string') {
       setTitle(templateTitle);
     }
-    if (templateTags) {
+    if (templateTags && typeof templateTags === 'string') {
       try {
         const tags = JSON.parse(templateTags);
         if (Array.isArray(tags)) {
@@ -64,9 +70,7 @@ export default function CreateTopicScreen() {
         console.error('Failed to parse template tags:', error);
       }
     }
-    if (templateCategory) {
-      setSelectedCategory(templateCategory);
-    }
+    // Note: templateCategory is handled by CategorySelector through initialValue prop
   }, [templateTitle, templateTags, templateCategory]);
   
   const validateForm = () => {
@@ -200,7 +204,8 @@ export default function CreateTopicScreen() {
       category: selectedCategory,
     });
     
-    router.push("/(tabs)");
+    // 跳转到探索页面查看新创建的话题
+    router.push("/(tabs)/explore");
   };
   
   return (
@@ -278,8 +283,9 @@ export default function CreateTopicScreen() {
           <View style={styles.categorySelectorCard}>
             <CategorySelector
               selectedCategory={selectedCategory}
-              onCategoryChange={setSelectedCategory}
+              onCategoryChange={handleCategoryChange}
               autoSelected={!!templateCategory}
+              initialValue={templateCategory}
             />
           </View>
           

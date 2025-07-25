@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, RefreshCw } from 'lucide-react-native';
 import Colors from '@/constants/colors';
+import { useAuthStore } from '@/store/auth-store';
 
 interface CustomHeaderProps {
   title: string;
@@ -13,6 +14,7 @@ interface CustomHeaderProps {
   showLocationRefresh?: boolean;
   onLocationRefresh?: () => void;
   isLocationRefreshing?: boolean;
+  showGreeting?: boolean; // 是否显示问候语
 }
 
 export default function CustomHeader({
@@ -24,8 +26,26 @@ export default function CustomHeader({
   showLocationRefresh = false,
   onLocationRefresh,
   isLocationRefreshing = false,
+  showGreeting = false,
 }: CustomHeaderProps) {
   const insets = useSafeAreaInsets();
+  const { user } = useAuthStore();
+  
+  // 获取当前时间的问候语，支持用户名
+  const getGreeting = (userName?: string) => {
+    const hour = new Date().getHours();
+    let greeting = '';
+    if (hour < 10) {
+      greeting = 'おはよう';
+    } else if (hour < 18) {
+      greeting = 'こんにちは';
+    } else {
+      greeting = 'こんばんは';
+    }
+    
+    // 如果有用户名，添加用户名和"さん"
+    return userName ? `${userName}さん、${greeting}` : greeting;
+  };
   
   // 创建动画值用于刷新按钮旋转
   const [rotateAnim] = React.useState(new Animated.Value(0));
@@ -63,8 +83,13 @@ export default function CustomHeader({
         )}
         
         <View style={styles.titleContainer}>
-          <Text style={styles.title}>{title}</Text>
-          {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+          <View style={styles.titleRow}>
+            <Text style={styles.title}>{title}</Text>
+            {showGreeting && (
+              <Text style={styles.greeting}>{getGreeting(user?.name)}</Text>
+            )}
+            {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+          </View>
         </View>
         
         <View style={styles.rightContainer}>
@@ -120,11 +145,22 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingLeft: 4,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   title: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
     color: Colors.text.primary,
     marginBottom: 2,
+  },
+  greeting: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.primary,
+    marginLeft: 8,
   },
   subtitle: {
     fontSize: 14,

@@ -267,6 +267,7 @@ export const useExploreStore = create<ExploreState>((set, get) => {
           }
         }
         
+        
         // 去重逻辑：确保没有重复的topics
         set(state => {
           const newTopics = refresh ? topics : [...state.topics, ...topics];
@@ -274,9 +275,20 @@ export const useExploreStore = create<ExploreState>((set, get) => {
             index === self.findIndex(t => t.id === topic.id)
           );
           
+          // 修正hasMore逻辑：基于API返回的数据量判断
+          // 如果API返回的数据量小于每页期望数量，说明没有更多数据了
+          const hasMoreData = topics.length === pageSize;
+          
+          // 计算实际新增的数据量（去重后）
+          const actualNewCount = uniqueTopics.length - (refresh ? 0 : state.topics.length);
+          
+          console.log(`[ExploreStore] fetchTopics - API返回: ${topics.length}条, 期望: ${pageSize}条`);
+          console.log(`[ExploreStore] fetchTopics - 去重前: ${newTopics.length}条, 去重后: ${uniqueTopics.length}条`);
+          console.log(`[ExploreStore] fetchTopics - 实际新增: ${actualNewCount}条, hasMore: ${hasMoreData}`);
+          
           return {
             topics: uniqueTopics,
-            hasMore: topics.length === pageSize,
+            hasMore: hasMoreData,
             isLoading: false,
             currentPage: refresh ? 1 : state.currentPage + 1
           };
@@ -292,29 +304,34 @@ export const useExploreStore = create<ExploreState>((set, get) => {
         const errorMessage = isNetworkError(error) 
           ? 'ネットワーク接続を確認してください' 
           : 'トピックの取得に失敗しました';
-        set({ error: errorMessage, isLoading: false });
+        
+        // 错误处理：保持现有数据，只重置加载状态
+        set(state => ({
+          error: errorMessage, 
+          isLoading: false,
+          // 如果是refresh操作失败，保持hasMore为true以允许重试
+          hasMore: refresh ? true : state.hasMore
+        }));
       }
     },
     
     loadMoreTopics: async (latitude: number, longitude: number) => {
       const { isLoadingMore, hasMore, topics: currentTopics } = get();
       
-      if (isLoadingMore || !hasMore) return;
+      if (isLoadingMore || !hasMore) {
+        console.log(`[ExploreStore] loadMoreTopics - 跳过加载: isLoadingMore=${isLoadingMore}, hasMore=${hasMore}`);
+        return;
+      }
       
+      console.log(`[ExploreStore] loadMoreTopics - 开始加载更多数据，当前数量: ${currentTopics.length}`);
       set({ isLoadingMore: true });
       
       try {
-        // 记录当前数量以验证是否有新数据
-        const currentCount = currentTopics.length;
         await get().fetchTopics(latitude, longitude, false);
-        
-        // 如果数据没有增加，说明没有更多数据了
-        const newCount = get().topics.length;
-        if (newCount === currentCount) {
-          set({ hasMore: false });
-        }
+        console.log(`[ExploreStore] loadMoreTopics - 加载完成，新数量: ${get().topics.length}`);
       } catch (error) {
         console.error('Error loading more topics:', error);
+        // 发生错误时，重置加载状态但保持hasMore不变，允许用户重试
       } finally {
         set({ isLoadingMore: false });
       }
