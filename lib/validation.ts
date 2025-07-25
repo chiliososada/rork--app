@@ -22,7 +22,8 @@ export const createTopicSchema = z.object({
   imageUrl: z.string().url().optional(),
   aspectRatio: z.enum(['1:1', '4:5', '1.91:1']).optional(),
   originalWidth: z.number().positive().optional(),
-  originalHeight: z.number().positive().optional()
+  originalHeight: z.number().positive().optional(),
+  tags: z.array(z.string()).max(3, '標籤は最大3個まで選択できます').optional()
 });
 
 /**

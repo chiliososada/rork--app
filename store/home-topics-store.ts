@@ -39,6 +39,7 @@ interface HomeTopicsState {
   searchTopics: (query: string) => Promise<void>;
   loadMoreSearchResults: () => Promise<void>;
   clearSearch: () => void;
+  searchByTag: (tag: string) => Promise<void>;
   updateTopicInteraction: (topicId: string, updates: Partial<Topic>) => void;
   checkInteractionStatus: (topicIds: string[], userId: string) => Promise<void>;
   invalidateCache: (method?: string) => void;
@@ -628,6 +629,70 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
       searchHasMore: false,
       searchNextCursor: undefined
     });
+  },
+
+  searchByTag: async (tag) => {
+    const { currentLocation } = get();
+    if (!currentLocation) return;
+
+    console.log('[HomeTopicsStore] Searching by tag:', tag);
+
+    set({ 
+      isSearching: true, 
+      isSearchMode: true,
+      searchQuery: `#${tag}`,
+      error: null 
+    });
+
+    try {
+      const searchSettings = useSearchSettingsStore.getState();
+      
+      const params = {
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude,
+        radiusKm: searchSettings.maxDistance,
+        limit: TOPICS_PER_PAGE,
+        searchQuery: tag, // 使用标签作为搜索词
+      };
+
+      const result = await withNetworkRetry(() => 
+        searchNearbyTopics(params)
+      );
+
+      set({ 
+        searchResults: result.topics,
+        filteredTopics: result.topics,
+        searchHasMore: result.hasMore,
+        searchNextCursor: result.nextCursor,
+        isSearching: false
+      });
+
+      // Check user interactions for search results
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.id && result.topics.length > 0) {
+        const topicIds = result.topics.map(t => t.id);
+        await get().checkInteractionStatus(topicIds, user.id);
+      }
+
+      console.log('[HomeTopicsStore] Tag search completed:', {
+        tag,
+        resultsCount: result.topics.length,
+        hasMore: result.hasMore
+      });
+
+    } catch (error: any) {
+      console.error('Failed to search by tag:', error);
+      const errorMessage = isNetworkError(error) 
+        ? 'ネットワーク接続を確認してください' 
+        : 'タグ検索に失敗しました';
+      
+      set({ 
+        error: errorMessage, 
+        isSearching: false,
+        searchResults: [],
+        filteredTopics: get().topics // Fallback to original topics
+      });
+    }
   },
 
   updateTopicInteraction: (topicId, updates) => {

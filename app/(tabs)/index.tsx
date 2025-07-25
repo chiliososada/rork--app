@@ -27,6 +27,7 @@ export default function NearbyScreen() {
     searchQuery, 
     searchTopics, 
     clearSearch,
+    searchByTag,
     isSearching,
     isSearchMode,
     searchHasMore,
@@ -75,6 +76,7 @@ export default function NearbyScreen() {
   const handleClearSearch = () => {
     clearSearch();
   };
+
 
   const handleSettingsPress = () => {
     setSettingsModalVisible(true);

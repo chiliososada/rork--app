@@ -45,6 +45,9 @@ export interface Topic {
   // 聊天参与相关
   isParticipated?: boolean; // Whether current user has joined this topic's chat
   lastMessagePreview?: string; // Preview of the last message (for chat list)
+  
+  // 标签相关
+  tags?: string[]; // Array of selected tags for this topic
 }
 
 export interface Comment {
@@ -133,4 +136,49 @@ export interface ChatListItem {
   unreadCount?: number;
   otherUser?: User; // プライベートチャット用
   topic?: Topic;    // トピックチャット用
+}
+
+// 标签选择相关接口
+export interface TagOption {
+  id: string;
+  label: string;
+  emoji?: string;
+}
+
+export interface TagSelection {
+  situation?: string;
+  mood?: string;
+  feature?: string;
+}
+
+export interface TagData {
+  situation: TagOption[];
+  mood: { [key: string]: TagOption[] };
+  feature: TagOption[];
+}
+
+// 标签显示相关接口
+export interface TopicTagsProps {
+  tags?: string[];
+  onTagPress?: (tag: string) => void;
+  maxVisible?: number;
+  style?: any;
+}
+
+// 标签样式接口
+export interface TagStyle {
+  backgroundColor: string;
+  textColor: string;
+  priority: number;
+}
+
+// 标签过滤参数接口
+export interface TagFilterParams {
+  tag: string;
+  location?: {
+    latitude: number;
+    longitude: number;
+  };
+  maxDistance?: number;
+  limit?: number;
 }

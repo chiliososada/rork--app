@@ -161,6 +161,34 @@ export async function fetchNearbyTopics(params: GeoQueryParams): Promise<QueryRe
         lastMessageTime,
         imageUrl: topic.image_url || undefined,
         aspectRatio: topic.image_aspect_ratio as '1:1' | '4:5' | '1.91:1' | undefined,
+        originalWidth: topic.original_width || undefined,
+        originalHeight: topic.original_height || undefined,
+        tags: (() => {
+          try {
+            if (!topic.tags) return undefined;
+            
+            // Handle already parsed arrays (JSONB from database)
+            if (Array.isArray(topic.tags)) {
+              return topic.tags.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+            }
+            
+            // Handle string format (shouldn't happen with JSONB but safeguard)
+            if (typeof topic.tags === 'string') {
+              const tagsStr = topic.tags.trim();
+              if (!tagsStr) return undefined;
+              
+              const parsed = JSON.parse(tagsStr);
+              if (Array.isArray(parsed)) {
+                return parsed.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+              }
+            }
+            
+            return undefined;
+          } catch (parseError: any) {
+            console.warn('[GeoQueries] Error parsing tags for topic', topic.id, ':', parseError.message, 'Raw tags:', topic.tags);
+            return undefined;
+          }
+        })(),
         isFavorited: false,
         isLiked: false,
         likesCount: 0
@@ -289,6 +317,34 @@ export async function fetchMapTopics(params: GeoQueryParams): Promise<QueryResul
         lastMessageTime,
         imageUrl: topic.image_url || undefined,
         aspectRatio: topic.image_aspect_ratio as '1:1' | '4:5' | '1.91:1' | undefined,
+        originalWidth: topic.original_width || undefined,
+        originalHeight: topic.original_height || undefined,
+        tags: (() => {
+          try {
+            if (!topic.tags) return undefined;
+            
+            // Handle already parsed arrays (JSONB from database)
+            if (Array.isArray(topic.tags)) {
+              return topic.tags.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+            }
+            
+            // Handle string format (shouldn't happen with JSONB but safeguard)
+            if (typeof topic.tags === 'string') {
+              const tagsStr = topic.tags.trim();
+              if (!tagsStr) return undefined;
+              
+              const parsed = JSON.parse(tagsStr);
+              if (Array.isArray(parsed)) {
+                return parsed.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+              }
+            }
+            
+            return undefined;
+          } catch (parseError: any) {
+            console.warn('[GeoQueries] Error parsing tags for topic', topic.id, ':', parseError.message, 'Raw tags:', topic.tags);
+            return undefined;
+          }
+        })(),
         isFavorited: false,
         isLiked: false,
         likesCount: 0
@@ -424,6 +480,34 @@ export async function fetchParticipatedTopics(userId: string, params: Omit<GeoQu
         lastMessageTime,
         imageUrl: topic.image_url || undefined,
         aspectRatio: topic.image_aspect_ratio as '1:1' | '4:5' | '1.91:1' | undefined,
+        originalWidth: topic.original_width || undefined,
+        originalHeight: topic.original_height || undefined,
+        tags: (() => {
+          try {
+            if (!topic.tags) return undefined;
+            
+            // Handle already parsed arrays (JSONB from database)
+            if (Array.isArray(topic.tags)) {
+              return topic.tags.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+            }
+            
+            // Handle string format (shouldn't happen with JSONB but safeguard)
+            if (typeof topic.tags === 'string') {
+              const tagsStr = topic.tags.trim();
+              if (!tagsStr) return undefined;
+              
+              const parsed = JSON.parse(tagsStr);
+              if (Array.isArray(parsed)) {
+                return parsed.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+              }
+            }
+            
+            return undefined;
+          } catch (parseError: any) {
+            console.warn('[GeoQueries] Error parsing tags for topic', topic.id, ':', parseError.message, 'Raw tags:', topic.tags);
+            return undefined;
+          }
+        })(),
         isFavorited: false,
         isLiked: false,
         likesCount: 0,
@@ -601,6 +685,34 @@ export async function searchNearbyTopics(params: GeoQueryParams & { searchQuery:
         lastMessageTime,
         imageUrl: topic.image_url || undefined,
         aspectRatio: topic.image_aspect_ratio as '1:1' | '4:5' | '1.91:1' | undefined,
+        originalWidth: topic.original_width || undefined,
+        originalHeight: topic.original_height || undefined,
+        tags: (() => {
+          try {
+            if (!topic.tags) return undefined;
+            
+            // Handle already parsed arrays (JSONB from database)
+            if (Array.isArray(topic.tags)) {
+              return topic.tags.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+            }
+            
+            // Handle string format (shouldn't happen with JSONB but safeguard)
+            if (typeof topic.tags === 'string') {
+              const tagsStr = topic.tags.trim();
+              if (!tagsStr) return undefined;
+              
+              const parsed = JSON.parse(tagsStr);
+              if (Array.isArray(parsed)) {
+                return parsed.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+              }
+            }
+            
+            return undefined;
+          } catch (parseError: any) {
+            console.warn('[GeoQueries] Error parsing tags for topic', topic.id, ':', parseError.message, 'Raw tags:', topic.tags);
+            return undefined;
+          }
+        })(),
         isFavorited: false,
         isLiked: false,
         likesCount: 0
@@ -748,6 +860,34 @@ export async function searchMapTopics(params: GeoQueryParams & { searchQuery: st
         lastMessageTime,
         imageUrl: topic.image_url || undefined,
         aspectRatio: topic.image_aspect_ratio as '1:1' | '4:5' | '1.91:1' | undefined,
+        originalWidth: topic.original_width || undefined,
+        originalHeight: topic.original_height || undefined,
+        tags: (() => {
+          try {
+            if (!topic.tags) return undefined;
+            
+            // Handle already parsed arrays (JSONB from database)
+            if (Array.isArray(topic.tags)) {
+              return topic.tags.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+            }
+            
+            // Handle string format (shouldn't happen with JSONB but safeguard)
+            if (typeof topic.tags === 'string') {
+              const tagsStr = topic.tags.trim();
+              if (!tagsStr) return undefined;
+              
+              const parsed = JSON.parse(tagsStr);
+              if (Array.isArray(parsed)) {
+                return parsed.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+              }
+            }
+            
+            return undefined;
+          } catch (parseError: any) {
+            console.warn('[GeoQueries] Error parsing tags for topic', topic.id, ':', parseError.message, 'Raw tags:', topic.tags);
+            return undefined;
+          }
+        })(),
         isFavorited: false,
         isLiked: false,
         likesCount: 0
@@ -849,6 +989,34 @@ export async function fetchTopicsInBounds(bounds: {
         lastMessageTime,
         imageUrl: topic.image_url || undefined,
         aspectRatio: topic.image_aspect_ratio as '1:1' | '4:5' | '1.91:1' | undefined,
+        originalWidth: topic.original_width || undefined,
+        originalHeight: topic.original_height || undefined,
+        tags: (() => {
+          try {
+            if (!topic.tags) return undefined;
+            
+            // Handle already parsed arrays (JSONB from database)
+            if (Array.isArray(topic.tags)) {
+              return topic.tags.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+            }
+            
+            // Handle string format (shouldn't happen with JSONB but safeguard)
+            if (typeof topic.tags === 'string') {
+              const tagsStr = topic.tags.trim();
+              if (!tagsStr) return undefined;
+              
+              const parsed = JSON.parse(tagsStr);
+              if (Array.isArray(parsed)) {
+                return parsed.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+              }
+            }
+            
+            return undefined;
+          } catch (parseError: any) {
+            console.warn('[GeoQueries] Error parsing tags for topic', topic.id, ':', parseError.message, 'Raw tags:', topic.tags);
+            return undefined;
+          }
+        })(),
         isFavorited: false,
         isLiked: false,
         likesCount: 0

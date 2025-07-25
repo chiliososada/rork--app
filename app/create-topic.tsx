@@ -12,6 +12,7 @@ import { useTopicDetailsStore } from "@/store/topic-details-store";
 import { useAuthStore } from "@/store/auth-store";
 import { uploadTopicImage } from "@/lib/image-upload";
 import { createTopicSchema } from "@/lib/validation";
+import TagSelector from "@/components/TagSelector";
 
 export default function CreateTopicScreen() {
   const router = useRouter();
@@ -30,6 +31,9 @@ export default function CreateTopicScreen() {
   const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   
+  // Tags state
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  
   useEffect(() => {
     if (!currentLocation) {
       requestPermission();
@@ -45,7 +49,8 @@ export default function CreateTopicScreen() {
         imageUrl: selectedImageUri || undefined,
         aspectRatio: undefined,
         originalWidth: undefined,
-        originalHeight: undefined
+        originalHeight: undefined,
+        tags: selectedTags.length > 0 ? selectedTags : undefined
       });
       
       setTitleError("");
@@ -162,6 +167,7 @@ export default function CreateTopicScreen() {
       aspectRatio: imageAspectRatio,
       originalWidth,
       originalHeight,
+      tags: selectedTags.length > 0 ? selectedTags : undefined,
     });
     
     router.push("/(tabs)");
@@ -238,6 +244,14 @@ export default function CreateTopicScreen() {
           </View>
           </View>
           
+          {/* Tag Selector */}
+          <View style={styles.tagSelectorCard}>
+            <TagSelector
+              onTagsChange={setSelectedTags}
+              selectedTags={selectedTags}
+            />
+          </View>
+          
           {/* Image Picker */}
           <ImagePicker
             onImageSelected={handleImageSelected}
@@ -299,6 +313,20 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 3,
   },
+  tagSelectorCard: {
+    backgroundColor: Colors.card,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
+  },
   titleInputContainer: {
     marginBottom: 20,
   },
@@ -316,7 +344,7 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   inputFocused: {
-    borderColor: '#007AFF',
+    borderColor: Colors.primary,
     borderWidth: 2,
   },
   charCount: {
@@ -350,6 +378,7 @@ const styles = StyleSheet.create({
     color: Colors.text.secondary,
     marginBottom: 24,
     lineHeight: 24,
+    textAlign: 'center',
   },
   descriptionInput: {
     height: 160,

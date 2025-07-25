@@ -674,7 +674,92 @@ $$;
     );
   END;
   $$;
-                                                 
+  -- 1. 为topics表添加tags字段（JSON数组）
+  ALTER TABLE public.topics ADD COLUMN tags JSONB DEFAULT '[]'::jsonb;
+
+  -- 2. 创建标签使用统计表（用于分析和推荐）
+  CREATE TABLE public.tag_usage_stats (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tag_name TEXT NOT NULL,
+    category TEXT NOT NULL, -- 'situation', 'mood', 'feature'
+    usage_count INTEGER DEFAULT 1,
+    last_used_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(tag_name, category)
+  );
+
+  -- 3. 创建索引以提高查询性能
+  CREATE INDEX topic_tags_gin_idx ON public.topics USING GIN (tags);
+  CREATE INDEX tag_usage_stats_category_idx ON public.tag_usage_stats(category);
+  CREATE INDEX tag_usage_stats_usage_count_idx ON public.tag_usage_stats(usage_count DESC);
+
+  -- 4. 创建RPC函数用于更新标签使用统计
+  CREATE OR REPLACE FUNCTION update_tag_usage_stats(tag_names TEXT[], categories TEXT[])
+  RETURNS VOID
+  LANGUAGE plpgsql
+  AS $$
+  BEGIN
+    FOR i IN 1..array_length(tag_names, 1) LOOP
+      INSERT INTO tag_usage_stats (tag_name, category, usage_count, last_used_at)
+      VALUES (tag_names[i], categories[i], 1, NOW())
+      ON CONFLICT (tag_name, category)
+      DO UPDATE SET
+        usage_count = tag_usage_stats.usage_count + 1,
+        last_used_at = NOW();
+    END LOOP;
+  END;
+  $$;
+
+  -- 5. 创建获取热门标签的RPC函数
+  CREATE OR REPLACE FUNCTION get_popular_tags(tag_category TEXT, limit_count INTEGER DEFAULT 10)
+  RETURNS TABLE (
+    tag_name TEXT,
+    usage_count INTEGER
+  )
+  LANGUAGE plpgsql
+  AS $$
+  BEGIN
+    RETURN QUERY
+    SELECT t.tag_name, t.usage_count
+    FROM tag_usage_stats t
+    WHERE t.category = tag_category
+    ORDER BY t.usage_count DESC, t.last_used_at DESC
+    LIMIT limit_count;
+  END;
+  $$;
+
+  -- 6. 插入一些初始的标签数据（可选）
+  INSERT INTO tag_usage_stats (tag_name, category, usage_count) VALUES
+  -- 情境标签
+  ('食事中', 'situation', 0),
+  ('移動中', 'situation', 0),
+  ('仕事中', 'situation', 0),
+  ('休憩中', 'situation', 0),
+  ('買い物', 'situation', 0),
+  ('勉強中', 'situation', 0),
+  ('運動中', 'situation', 0),
+  ('イベント', 'situation', 0),
+
+  -- 心情标签（食事中相关）
+  ('美味しい', 'mood', 0),
+  ('新発見', 'mood', 0),
+  ('みんなで', 'mood', 0),
+  ('コスパ良い', 'mood', 0),
+
+  -- 心情标签（仕事中相关）
+  ('頑張ってる', 'mood', 0),
+  ('忙しい', 'mood', 0),
+  ('一息', 'mood', 0),
+  ('打ち合わせ', 'mood', 0),
+
+  -- 特征标签
+  ('駅近', 'feature', 0),
+  ('静か', 'feature', 0),
+  ('おしゃれ', 'feature', 0),
+  ('穴場', 'feature', 0),
+  ('にぎやか', 'feature', 0),
+  ('新しい', 'feature', 0)
+  ON CONFLICT (tag_name, category) DO NOTHING;                                                 
 如果设计到文本都使用日语
 
 我偏向于ios和安卓 web端可以降低比重

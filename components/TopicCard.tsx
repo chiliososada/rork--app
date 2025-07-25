@@ -6,6 +6,7 @@ import { Topic } from '@/types';
 import Colors from '@/constants/colors';
 import { TopicCardImage } from '@/components/TopicImage';
 import { TopicCardAvatar } from '@/components/UserAvatar';
+import TopicTags from '@/components/TopicTags';
 import { useAuthStore } from '@/store/auth-store';
 import { formatChatListTime } from '@/lib/utils/timeUtils';
 import { TopicInteractionService } from '@/lib/services/topicInteractionService';
@@ -142,6 +143,13 @@ export default function TopicCard({ topic, onFavoriteToggle, onLikeToggle, showM
       
       <View style={styles.content}>
         <Text style={styles.title}>{topic.title}</Text>
+        
+        {/* Topic Tags */}
+        <TopicTags 
+          tags={topic.tags}
+          style={styles.tagsContainer}
+        />
+        
         <Text style={styles.description}>
           {topic.description}
         </Text>
@@ -274,6 +282,10 @@ const styles = StyleSheet.create({
   },
   content: {
     marginBottom: 12,
+  },
+  tagsContainer: {
+    marginTop: 4,
+    marginBottom: 8,
   },
   title: {
     fontSize: 16,

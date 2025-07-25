@@ -192,6 +192,32 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
         aspectRatio: topicData.image_aspect_ratio as '1:1' | '4:5' | '1.91:1' | undefined,
         originalWidth: topicData.original_width || undefined,
         originalHeight: topicData.original_height || undefined,
+        tags: (() => {
+          try {
+            if (!topicData.tags) return undefined;
+            
+            // Handle already parsed arrays (JSONB from database)
+            if (Array.isArray(topicData.tags)) {
+              return topicData.tags.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+            }
+            
+            // Handle string format (shouldn't happen with JSONB but safeguard)
+            if (typeof topicData.tags === 'string') {
+              const tagsStr = topicData.tags.trim();
+              if (!tagsStr) return undefined;
+              
+              const parsed = JSON.parse(tagsStr);
+              if (Array.isArray(parsed)) {
+                return parsed.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+              }
+            }
+            
+            return undefined;
+          } catch (parseError: any) {
+            console.warn('[TopicDetailsStore] Error parsing tags for topic', topicData.id, ':', parseError.message, 'Raw tags:', topicData.tags);
+            return undefined;
+          }
+        })(),
         isFavorited,
         isLiked,
         likesCount: likesCount || 0
@@ -429,6 +455,14 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
     set({ isLoading: true, error: null });
     
     try {
+      console.log('[TopicDetailsStore] Starting topic creation with data:', {
+        title: topicData.title,
+        description: topicData.description?.substring(0, 50) + '...',
+        userId: topicData.author.id,
+        location: topicData.location,
+        tags: topicData.tags,
+        hasImage: !!topicData.imageUrl
+      });
       // Insert topic into Supabase
       const { data: insertedTopic, error: insertError } = await supabase
         .from('topics')
@@ -443,7 +477,8 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
             image_url: topicData.imageUrl,
             image_aspect_ratio: topicData.aspectRatio,
             original_width: topicData.originalWidth,
-            original_height: topicData.originalHeight
+            original_height: topicData.originalHeight,
+            tags: topicData.tags ? JSON.stringify(topicData.tags) : '[]'
           }
         ])
         .select(`
@@ -458,8 +493,21 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
         .single();
 
       if (insertError) {
+        console.error('[TopicDetailsStore] Insert error details:', {
+          message: insertError.message,
+          details: insertError.details,
+          hint: insertError.hint,
+          code: insertError.code
+        });
         throw insertError;
       }
+
+      if (!insertedTopic) {
+        console.error('[TopicDetailsStore] No data returned from insert');
+        throw new Error('話題の作成に失敗しました：データが返されませんでした');
+      }
+
+      console.log('[TopicDetailsStore] Topic created successfully:', insertedTopic.id);
 
       // Transform to our Topic interface
       const newTopic: Topic = {
@@ -485,6 +533,32 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
         aspectRatio: insertedTopic.image_aspect_ratio as '1:1' | '4:5' | '1.91:1' | undefined,
         originalWidth: insertedTopic.original_width || undefined,
         originalHeight: insertedTopic.original_height || undefined,
+        tags: (() => {
+          try {
+            if (!insertedTopic.tags) return undefined;
+            
+            // Handle already parsed arrays (JSONB from database)
+            if (Array.isArray(insertedTopic.tags)) {
+              return insertedTopic.tags.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+            }
+            
+            // Handle string format (shouldn't happen with JSONB but safeguard)
+            if (typeof insertedTopic.tags === 'string') {
+              const tagsStr = insertedTopic.tags.trim();
+              if (!tagsStr) return undefined;
+              
+              const parsed = JSON.parse(tagsStr);
+              if (Array.isArray(parsed)) {
+                return parsed.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+              }
+            }
+            
+            return undefined;
+          } catch (parseError: any) {
+            console.warn('[TopicDetailsStore] Error parsing tags for topic', insertedTopic.id, ':', parseError.message, 'Raw tags:', insertedTopic.tags);
+            return undefined;
+          }
+        })(),
         isFavorited: false,
         isLiked: false,
         likesCount: 0
@@ -497,9 +571,26 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
 
       return newTopic;
     } catch (error: any) {
-      const errorMessage = isNetworkError(error) 
-        ? 'ネットワーク接続を確認してください' 
-        : 'トピックの作成に失敗しました';
+      console.error('[TopicDetailsStore] Create topic error:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+        stack: error.stack
+      });
+      
+      let errorMessage = 'トピックの作成に失敗しました';
+      
+      if (isNetworkError(error)) {
+        errorMessage = 'ネットワーク接続を確認してください';
+      } else if (error.code === '42703') {
+        // Column does not exist error - likely tags column not added
+        errorMessage = 'データベースの設定を確認してください。標籤機能のSQL文を実行する必要があります。';
+        console.error('[TopicDetailsStore] Database schema error - tags column might not exist');
+      } else if (error.message) {
+        errorMessage += ': ' + error.message;
+      }
+      
       set({ 
         error: errorMessage, 
         isLoading: false 

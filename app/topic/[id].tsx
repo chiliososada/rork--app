@@ -4,11 +4,12 @@ import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MapPin, MessageCircle, Users, Send, ChevronLeft, Heart, Bookmark } from "lucide-react-native";
 import Colors from "@/constants/colors";
-import { useTopicDetailStore } from "@/store/topic-detail-store";
+import { useTopicDetailsStore } from "@/store/topic-details-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useLocationStore } from "@/store/location-store";
 import CommentItem from "@/components/CommentItem";
 import TopicImage from "@/components/TopicImage";
+import TopicTags from "@/components/TopicTags";
 import JoinChatButton from "@/components/JoinChatButton";
 import { formatMessageTime } from "@/lib/utils/timeUtils";
 import FollowButton from "@/components/FollowButton";
@@ -29,10 +30,9 @@ export default function TopicDetailScreen() {
     toggleFavorite, 
     toggleLike, 
     isLoading, 
-    isLoadingComments,
     clearCurrentTopic,
     error
-  } = useTopicDetailStore();
+  } = useTopicDetailsStore();
   const [commentText, setCommentText] = useState("");
   const { fetchFollowStatus } = useFollowStore();
   
@@ -232,6 +232,12 @@ export default function TopicDetailScreen() {
             <View style={styles.topicContent}>
               <Text style={styles.topicDescription}>{currentTopic.description}</Text>
               
+              {/* Topic Tags */}
+              <TopicTags 
+                tags={currentTopic.tags} 
+                style={styles.topicTags}
+              />
+              
               {/* Topic Image */}
               <TopicImage 
                 topic={currentTopic} 
@@ -410,6 +416,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.text.primary,
     lineHeight: 26,
+    marginBottom: 12,
+  },
+  topicTags: {
     marginBottom: 16,
   },
   topicImage: {

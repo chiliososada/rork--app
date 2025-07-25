@@ -193,6 +193,7 @@ const styles = StyleSheet.create({
   container: {
     overflow: 'hidden',
     backgroundColor: 'transparent',
+    alignSelf: 'center',
   },
   image: {
     width: '100%',
