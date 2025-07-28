@@ -282,10 +282,6 @@ export const useExploreStore = create<ExploreState>((set, get) => {
           // 计算实际新增的数据量（去重后）
           const actualNewCount = uniqueTopics.length - (refresh ? 0 : state.topics.length);
           
-          console.log(`[ExploreStore] fetchTopics - API返回: ${topics.length}条, 期望: ${pageSize}条`);
-          console.log(`[ExploreStore] fetchTopics - 去重前: ${newTopics.length}条, 去重后: ${uniqueTopics.length}条`);
-          console.log(`[ExploreStore] fetchTopics - 实际新增: ${actualNewCount}条, hasMore: ${hasMoreData}`);
-          
           return {
             topics: uniqueTopics,
             hasMore: hasMoreData,
@@ -319,16 +315,13 @@ export const useExploreStore = create<ExploreState>((set, get) => {
       const { isLoadingMore, hasMore, topics: currentTopics } = get();
       
       if (isLoadingMore || !hasMore) {
-        console.log(`[ExploreStore] loadMoreTopics - 跳过加载: isLoadingMore=${isLoadingMore}, hasMore=${hasMore}`);
         return;
       }
       
-      console.log(`[ExploreStore] loadMoreTopics - 开始加载更多数据，当前数量: ${currentTopics.length}`);
       set({ isLoadingMore: true });
       
       try {
         await get().fetchTopics(latitude, longitude, false);
-        console.log(`[ExploreStore] loadMoreTopics - 加载完成，新数量: ${get().topics.length}`);
       } catch (error) {
         console.error('Error loading more topics:', error);
         // 发生错误时，重置加载状态但保持hasMore不变，允许用户重试
@@ -416,7 +409,6 @@ export const useExploreStore = create<ExploreState>((set, get) => {
       });
       
       unsubscribeFunctions.length = 0;
-      console.log('[ExploreStore] Cleanup completed');
     }
   };
 });

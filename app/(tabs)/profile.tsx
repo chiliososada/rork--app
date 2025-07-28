@@ -69,8 +69,6 @@ export default function ProfileScreen() {
   const fetchUserStats = async () => {
     if (!user?.id) return;
     
-    console.log('🔄 Refreshing user stats...');
-    
     try {
       // ユーザーの投稿数を取得
       const { count: topics } = await supabase

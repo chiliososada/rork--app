@@ -15,6 +15,7 @@ import { createTopicSchema } from "@/lib/validation";
 import SmartTagSelector from "@/components/SmartTagSelector";
 import CategorySelector from "@/components/CategorySelector";
 import { supabase } from "@/lib/supabase";
+import { eventBus, EVENT_TYPES } from "@/lib/event-bus";
 
 export default function CreateTopicScreen() {
   const router = useRouter();
@@ -217,7 +218,7 @@ export default function CreateTopicScreen() {
     } else {
     }
     
-    await createTopic({
+    const newTopic = await createTopic({
       title,
       description,
       author: user!,
@@ -230,8 +231,13 @@ export default function CreateTopicScreen() {
       category: selectedCategory,
     });
     
-    // 跳转到探索页面查看新创建的话题
-    router.push("/(tabs)/explore");
+    // 发送话题创建事件，让首页实时更新
+    eventBus.emit(EVENT_TYPES.TOPIC_CREATED, {
+      topic: newTopic
+    });
+    
+    // 跳转到首页查看新创建的话题
+    router.push("/(tabs)");
   };
   
   return (

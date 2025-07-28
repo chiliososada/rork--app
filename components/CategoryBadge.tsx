@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Colors from '@/constants/colors';
+import { useCategoryConfigs } from '@/hooks/useCategoryConfigs';
 
 interface CategoryBadgeProps {
   category?: string;
@@ -8,73 +9,15 @@ interface CategoryBadgeProps {
   style?: any;
 }
 
-// カテゴリー名の変換とスタイル定義
-const getCategoryInfo = (category: string) => {
-  const categoryMap: { [key: string]: { displayName: string; color: string; icon: string } } = {
-    recommended: {
-      displayName: 'おすすめ',
-      color: '#FF6B6B',
-      icon: '✨'
-    },
-    nearby: {
-      displayName: '近くの話題',
-      color: '#4ECDC4',
-      icon: '📍'
-    },
-    trending: {
-      displayName: 'トレンド',
-      color: '#FFE66D',
-      icon: '🔥'
-    },
-    new: {
-      displayName: '新着',
-      color: '#95E1D3',
-      icon: '🆕'
-    },
-    food: {
-      displayName: 'グルメ',
-      color: '#F38181',
-      icon: '🍽️'
-    },
-    event: {
-      displayName: 'イベント',
-      color: '#AA96DA',
-      icon: '🎉'
-    },
-    shopping: {
-      displayName: 'ショッピング',
-      color: '#FCBAD3',
-      icon: '🛍️'
-    },
-    work: {
-      displayName: '仕事',
-      color: '#3B82F6',
-      icon: '💼'
-    },
-    lifestyle: {
-      displayName: 'ライフスタイル',
-      color: '#059669',
-      icon: '🌿'
-    },
-    social: {
-      displayName: '交流',
-      color: '#7C3AED',
-      icon: '👥'
-    },
-    default: {
-      displayName: 'その他',
-      color: '#6B7280',
-      icon: '📌'
-    }
-  };
-
-  return categoryMap[category?.toLowerCase()] || categoryMap.default;
-};
-
 export default function CategoryBadge({ category, size = 'medium', style }: CategoryBadgeProps) {
-  if (!category) return null;
+  const { getCategoryByKey, isLoading } = useCategoryConfigs();
+  
+  if (!category || isLoading) return null;
 
-  const categoryInfo = getCategoryInfo(category);
+  const categoryInfo = getCategoryByKey(category);
+  
+  // カテゴリが無効な場合は非表示
+  if (!categoryInfo) return null;
   
   const sizeStyles = {
     small: {
@@ -104,7 +47,7 @@ export default function CategoryBadge({ category, size = 'medium', style }: Cate
       style={[
         styles.badge,
         {
-          backgroundColor: categoryInfo.color + '20', // 20% opacity
+          backgroundColor: categoryInfo.colorCode + '20', // 20% opacity
           paddingHorizontal: currentSizeStyle.paddingHorizontal,
           paddingVertical: currentSizeStyle.paddingVertical,
           borderRadius: currentSizeStyle.borderRadius,
@@ -116,12 +59,12 @@ export default function CategoryBadge({ category, size = 'medium', style }: Cate
         style={[
           styles.badgeText,
           {
-            color: categoryInfo.color,
+            color: categoryInfo.colorCode,
             fontSize: currentSizeStyle.fontSize,
           }
         ]}
       >
-        {categoryInfo.icon} {categoryInfo.displayName}
+        {categoryInfo.iconEmoji} {categoryInfo.displayName}
       </Text>
     </View>
   );

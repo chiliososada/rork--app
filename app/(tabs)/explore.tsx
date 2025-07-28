@@ -79,7 +79,6 @@ export default function ExploreScreen() {
   }, [currentLocation]);
   
   const handleLoadMore = useCallback(() => {
-    console.log(`[ExploreScreen] handleLoadMore - 触发加载更多, 当前位置: ${!!currentLocation}, isLoadingMore: ${isLoadingMore}`);
     if (currentLocation && !isLoadingMore) {
       loadMoreTopics(currentLocation.latitude, currentLocation.longitude);
     }
