@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { EnhancedTopic, SmartRecommendation, CategoryConfig, ChallengeActivity, ExploreInteractionType } from '@/types';
 import { supabase } from '@/lib/supabase';
 import { withNetworkRetry, isNetworkError } from '@/lib/retry';
-import { eventBus, EVENT_TYPES, TopicInteractionEvent, CommentEvent, MessageEvent } from '@/lib/event-bus';
+import { eventBus, EVENT_TYPES, TopicInteractionEvent, CommentEvent } from '@/lib/event-bus';
 import { getCachedBatchTopicInteractionStatus } from '@/lib/database-optimizers';
 import { useAuthStore } from './auth-store';
 
@@ -38,6 +38,10 @@ interface ExploreState {
   trackInteraction: (topicId: string, interactionType: ExploreInteractionType, category?: string) => Promise<void>;
   updateTopicInteraction: (topicId: string, updates: Partial<EnhancedTopic>) => void;
   checkInteractionStatus: (topicIds: string[], userId: string) => Promise<void>;
+  sortCategoriesByUserPreference: (categories: CategoryConfig[], userId: string) => Promise<CategoryConfig[]>;
+  getDefaultCategoryOrder: (categories: CategoryConfig[]) => CategoryConfig[];
+  getDefaultPriority: (categoryKey: string) => number;
+  trackCategoryUsage: (categoryKey: string) => Promise<void>;
   cleanup: () => void;
 }
 
@@ -92,6 +96,8 @@ export const useExploreStore = create<ExploreState>((set, get) => {
     
     fetchCategories: async () => {
       try {
+        const { user } = useAuthStore.getState();
+        
         const { data, error } = await supabase
           .from('category_configs')
           .select('*')
@@ -100,15 +106,23 @@ export const useExploreStore = create<ExploreState>((set, get) => {
           
         if (error) throw error;
         
-        const categories = data?.map(cat => ({
+        let categories: CategoryConfig[] = data?.map(cat => ({
           categoryKey: cat.category_key,
           displayName: cat.display_name,
           iconEmoji: cat.icon_emoji,
           colorCode: cat.color_code,
           commercialPriority: cat.commercial_priority,
           isActive: cat.is_active,
-          sortOrder: cat.sort_order
+          sortOrder: cat.sort_order || 0
         })) || [];
+        
+        // ユーザーの嗜好に基づいてカテゴリをソート
+        if (user?.id) {
+          categories = await get().sortCategoriesByUserPreference(categories, user.id);
+        } else {
+          // ゲストユーザー向けのデフォルトソート
+          categories = get().getDefaultCategoryOrder(categories);
+        }
         
         set({ categories });
       } catch (error) {
@@ -210,7 +224,7 @@ export const useExploreStore = create<ExploreState>((set, get) => {
         
         if (error) throw error;
         
-        const topics = data?.filter(topic => topic.id) // 过滤掉没有id的数据
+        const topics = data?.filter((topic: any) => topic.id) // 过滤掉没有id的数据
           .map((topic: any) => ({
           id: topic.id,
           title: topic.title,
@@ -271,16 +285,13 @@ export const useExploreStore = create<ExploreState>((set, get) => {
         // 去重逻辑：确保没有重复的topics
         set(state => {
           const newTopics = refresh ? topics : [...state.topics, ...topics];
-          const uniqueTopics = newTopics.filter((topic, index, self) => 
-            index === self.findIndex(t => t.id === topic.id)
+          const uniqueTopics = newTopics.filter((topic: EnhancedTopic, index: number, self: EnhancedTopic[]) => 
+            index === self.findIndex((t: EnhancedTopic) => t.id === topic.id)
           );
           
           // 修正hasMore逻辑：基于API返回的数据量判断
           // 如果API返回的数据量小于每页期望数量，说明没有更多数据了
           const hasMoreData = topics.length === pageSize;
-          
-          // 计算实际新增的数据量（去重后）
-          const actualNewCount = uniqueTopics.length - (refresh ? 0 : state.topics.length);
           
           return {
             topics: uniqueTopics,
@@ -312,7 +323,7 @@ export const useExploreStore = create<ExploreState>((set, get) => {
     },
     
     loadMoreTopics: async (latitude: number, longitude: number) => {
-      const { isLoadingMore, hasMore, topics: currentTopics } = get();
+      const { isLoadingMore, hasMore } = get();
       
       if (isLoadingMore || !hasMore) {
         return;
@@ -341,6 +352,9 @@ export const useExploreStore = create<ExploreState>((set, get) => {
           isLoading: false,
           error: null
         });
+        
+        // カテゴリ使用統計を追跡
+        get().trackCategoryUsage(categoryKey);
       }
     },
     
@@ -395,6 +409,95 @@ export const useExploreStore = create<ExploreState>((set, get) => {
         }));
       } catch (error) {
         console.error('Error checking interaction status:', error);
+      }
+    },
+    
+    sortCategoriesByUserPreference: async (categories: CategoryConfig[], userId: string): Promise<CategoryConfig[]> => {
+      try {
+        // ユーザーのカテゴリ使用統計を取得
+        const { data: userStats } = await supabase
+          .rpc('get_user_category_preferences', {
+            user_id_param: userId,
+            limit_count: 20
+          });
+        
+        // 使用頻度マップを作成
+        const usageMap = new Map<string, number>();
+        if (userStats) {
+          userStats.forEach((stat: any) => {
+            usageMap.set(stat.category_key, stat.usage_count);
+          });
+        }
+        
+        // カテゴリをソート
+        return categories.sort((a, b) => {
+          const aUsage = usageMap.get(a.categoryKey) || 0;
+          const bUsage = usageMap.get(b.categoryKey) || 0;
+          
+          // まず使用頻度でソート
+          if (aUsage !== bUsage) {
+            return bUsage - aUsage;
+          }
+          
+          // 使用頻度が同じ場合は、デフォルトの優先度でソート
+          const aDefaultPriority = get().getDefaultPriority(a.categoryKey);
+          const bDefaultPriority = get().getDefaultPriority(b.categoryKey);
+          
+          if (aDefaultPriority !== bDefaultPriority) {
+            return bDefaultPriority - aDefaultPriority;
+          }
+          
+          // 最後にsort_orderでソート
+          return (a.sortOrder || 0) - (b.sortOrder || 0);
+        });
+      } catch (error) {
+        console.error('Failed to sort categories by user preference:', error);
+        return get().getDefaultCategoryOrder(categories);
+      }
+    },
+    
+    getDefaultCategoryOrder: (categories: CategoryConfig[]): CategoryConfig[] => {
+      return categories.sort((a, b) => {
+        const aPriority = get().getDefaultPriority(a.categoryKey);
+        const bPriority = get().getDefaultPriority(b.categoryKey);
+        
+        if (aPriority !== bPriority) {
+          return bPriority - aPriority;
+        }
+        
+        return (a.sortOrder || 0) - (b.sortOrder || 0);
+      });
+    },
+    
+    getDefaultPriority: (categoryKey: string): number => {
+      // 日本人ユーザーの嗜好に基づくデフォルト優先度
+      const priorityMap: Record<string, number> = {
+        'recommended': 100,  // おすすめ（最高優先度）
+        'social': 90,        // 雑談・交流
+        'food': 80,          // グルメ
+        'nearby': 70,        // 近くの話題
+        'trending': 60,      // トレンド
+        'lifestyle': 50,     // ライフスタイル
+        'event': 40,         // イベント
+        'shopping': 30,      // ショッピング
+        'work': 20,          // 仕事
+        'new': 10            // 新着
+      };
+      
+      return priorityMap[categoryKey] || 0;
+    },
+    
+    trackCategoryUsage: async (categoryKey: string) => {
+      try {
+        const { user } = useAuthStore.getState();
+        if (!user?.id) return;
+        
+        await supabase.rpc('track_category_usage', {
+          user_id_param: user.id,
+          category_key_param: categoryKey
+        });
+      } catch (error) {
+        console.error('Failed to track category usage:', error);
       }
     },
     

@@ -6,7 +6,9 @@ import {
   ScrollView, 
   TouchableOpacity, 
   Dimensions,
-  ActivityIndicator
+  ActivityIndicator,
+  Linking,
+  Alert
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -44,16 +46,40 @@ export default function RecommendationCarousel({
     }
   };
   
-  const handlePress = (recommendation: SmartRecommendation) => {
+  const handlePress = async (recommendation: SmartRecommendation) => {
     if (onRecommendationPress) {
       onRecommendationPress(recommendation);
     }
     
     if (recommendation.topicId) {
       router.push(`/topic/${recommendation.topicId}`);
-    } else if (recommendation.targetUrl) {
-      // 处理外部链接
-      console.log('Navigate to:', recommendation.targetUrl);
+    } else if (recommendation.targetUrl && recommendation.targetUrl.trim()) {
+      let url = recommendation.targetUrl.trim();
+      
+      // URLにプロトコルがない場合はhttpsを追加
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = `https://${url}`;
+      }
+      
+      console.log('Opening URL:', url);
+      
+      try {
+        await Linking.openURL(url);
+      } catch (error) {
+        console.warn('URL開く際の警告:', {
+          originalUrl: recommendation.targetUrl,
+          processedUrl: url,
+          error: error.message
+        });
+        
+        // 開発環境でのエラーの場合はアラートを表示しない
+        // 実際のデバイスでテストが必要
+        if (__DEV__) {
+          console.log('開発環境でのLinking.openURLエラー - 実際にはURLが開かれている可能性があります');
+        } else {
+          Alert.alert('エラー', 'リンクを開くことができませんでした');
+        }
+      }
     }
   };
   
