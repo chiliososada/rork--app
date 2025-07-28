@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity } from "react-native";
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Share, Platform } from "react-native";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MapPin, MessageCircle, Users, Heart, Bookmark } from "lucide-react-native";
+import { MapPin, MessageCircle, Users, Heart, Bookmark, Share2 } from "lucide-react-native";
 import Colors from "@/constants/colors";
 import { useTopicDetailsStore } from "@/store/topic-details-store";
 import { useAuthStore } from "@/store/auth-store";
@@ -135,6 +135,45 @@ export default function TopicDetailScreen() {
     }
   };
   
+  const handleShare = async () => {
+    if (!currentTopic) return;
+    
+    try {
+      const shareUrl = `https://tokyopark.app/topic/${id}`;
+      const shareTitle = currentTopic.title;
+      const shareDescription = currentTopic.description?.length > 100 
+        ? currentTopic.description.substring(0, 100) + '...' 
+        : currentTopic.description;
+      
+      // Android需要将URL包含在message中，iOS可以分别处理
+      const shareMessage = Platform.OS === 'android' 
+        ? `${shareTitle}\n\n${shareDescription}\n\n話題を見る：${shareUrl}`
+        : `${shareTitle}\n\n${shareDescription}`;
+      
+      const result = await Share.share({
+        title: shareTitle,
+        message: shareMessage,
+        url: Platform.OS === 'ios' ? shareUrl : undefined,
+      });
+
+      // 处理分享结果
+      if (result.action === Share.sharedAction) {
+        console.log('分享成功');
+        // 可选：添加分享统计追踪
+        // trackInteraction?.(id, 'share');
+      } else if (result.action === Share.dismissedAction) {
+        console.log('用户取消分享');
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : typeof error === 'string' 
+          ? error 
+          : '未知错误';
+      console.error('分享失败:', errorMessage);
+    }
+  };
+  
   // Show loading state
   if (isLoading) {
     return (
@@ -190,16 +229,27 @@ export default function TopicDetailScreen() {
           headerBackVisible: true,
           headerShadowVisible: true,
           headerRight: () => (
-            <TouchableOpacity
-              style={{ marginRight: 8 }}
-              onPress={handleFavoritePress}
-            >
-              <Bookmark
-                size={24}
-                color={currentTopic.isFavorited ? '#007AFF' : Colors.text.secondary}
-                fill={currentTopic.isFavorited ? '#007AFF' : 'transparent'}
-              />
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <TouchableOpacity
+                style={{ marginRight: 12 }}
+                onPress={handleShare}
+              >
+                <Share2
+                  size={24}
+                  color={Colors.text.secondary}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ marginRight: 8 }}
+                onPress={handleFavoritePress}
+              >
+                <Bookmark
+                  size={24}
+                  color={currentTopic.isFavorited ? '#007AFF' : Colors.text.secondary}
+                  fill={currentTopic.isFavorited ? '#007AFF' : 'transparent'}
+                />
+              </TouchableOpacity>
+            </View>
           ),
         }} 
       />
