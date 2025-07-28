@@ -1,14 +1,15 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { StyleSheet, Text, View, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Modal } from "react-native";
+import { StyleSheet, Text, View, FlatList, Modal, TouchableOpacity, TextInput } from "react-native";
 import { useLocalSearchParams, Stack, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Send, ChevronLeft, Search, Users, X } from "lucide-react-native";
+import { Search, Users, X } from "lucide-react-native";
 import Colors from "@/constants/colors";
 import { useAuthStore } from "@/store/auth-store";
 import { useChatStore } from "@/store/chat-store";
 import { useLocationStore } from "@/store/location-store";
 import MessageItem from "@/components/MessageItem";
 import DateSeparator from "@/components/DateSeparator";
+import ChatInput from "@/components/input/ChatInput";
 import { Message, Topic } from "@/types";
 import { groupMessagesByDate, MessageGroup } from "@/lib/utils/timeUtils";
 import { TopicDetailService } from "@/lib/services/topicDetailService";
@@ -24,8 +25,8 @@ export default function ChatRoomScreen() {
     getMessagesForTopic, 
     fetchMessages, 
     addMessage, 
-    subscribeToTopic, 
-    unsubscribeFromTopic,
+    initializeGlobalConnection,
+    updateUserTopics,
     setCurrentTopic,
     sendTypingIndicator,
     stopTypingIndicator,
@@ -42,8 +43,8 @@ export default function ChatRoomScreen() {
     searchResults,
     isSending,
     isLoading,
-    checkConnectionHealth,
-    getConnectionState 
+    isConnected,
+    getConnectionStatus 
   } = useChatStore();
   
   const [messageText, setMessageText] = useState("");
@@ -96,7 +97,7 @@ export default function ChatRoomScreen() {
   }, []);
   
   // 接続状態を取得
-  const connectionState = id ? getConnectionState(id) : 'disconnected';
+  const connectionState = getConnectionStatus();
   
   // 独立したトピック詳細取得関数
   const loadTopicDetail = async () => {
@@ -119,6 +120,19 @@ export default function ChatRoomScreen() {
   };
   
   useEffect(() => {
+    const initializeConnection = async () => {
+      if (user?.id && !isConnected()) {
+        await initializeGlobalConnection(user.id);
+      }
+      
+      // 更新用户presence状态
+      setTimeout(() => {
+        if (user?.id && id) {
+          updateUserPresence(id, user.id, user.nickname || user.name);
+        }
+      }, 1000);
+    };
+    
     if (id && user) {
       // トピック情報を独立して取得
       loadTopicDetail();
@@ -129,35 +143,30 @@ export default function ChatRoomScreen() {
       // メッセージを取得
       fetchMessages(id);
       
-      // Realtimeサブスクリプションを開始
-      subscribeToTopic(id);
+      // 既読マーク
+      markAsRead(id);
       
-      // サブスクリプション完了を待ってプレゼンス状態を更新
-      setTimeout(() => {
-        updateUserPresence(id, user.id, user.name);
-      }, 1000);
+      // 全局连接初始化（非同期）
+      initializeConnection();
       
       // 定期的にプレゼンス状態を更新 (20秒毎)
       const presenceInterval = setInterval(() => {
-        updateUserPresence(id, user.id, user.name);
+        if (user?.id && id) {
+          updateUserPresence(id, user.id, user.nickname || user.name);
+        }
       }, 20000);
       
-      // 接続健全性チェック (30秒毎)
-      const healthCheckInterval = setInterval(() => {
-        checkConnectionHealth();
-      }, 30000);
-      
-      // クリーンアップ関数でサブスクリプションを解除
+      // クリーンアップ関数
       return () => {
         // ユーザーのオンライン状態を削除
-        removeUserPresence(id, user.id);
+        if (user?.id && id) {
+          removeUserPresence(id, user.id);
+        }
         clearInterval(presenceInterval);
-        clearInterval(healthCheckInterval);
-        unsubscribeFromTopic(id);
         setCurrentTopic(null);
       };
     }
-  }, [id, user, currentLocation]);
+  }, [id, user, currentLocation, initializeGlobalConnection, isConnected, updateUserPresence, removeUserPresence, setCurrentTopic, fetchMessages, markAsRead]);
   
   useEffect(() => {
     // Scroll to bottom when messages change, but only if user is already at bottom
@@ -268,7 +277,7 @@ export default function ChatRoomScreen() {
   };
   
   return (
-    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+    <SafeAreaView style={styles.container} edges={['left', 'right']}>
       <Stack.Screen 
         options={{
           title: topicLoading ? "読み込み中..." : (currentTopic?.title || "チャットルーム"),
@@ -334,88 +343,40 @@ export default function ChatRoomScreen() {
         }} 
       />
       
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.keyboardAvoid}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
-      >
-        <View style={styles.chatContainer}>
-          <FlatList
-            ref={flatListRef}
-            data={flattenedItems}
-            renderItem={renderItem}
-            keyExtractor={(item, index) => `${item.id}-${index}`}
-            contentContainerStyle={styles.messagesList}
-            onScroll={(event) => {
-              const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-              const isNearBottom = contentOffset.y + layoutMeasurement.height >= contentSize.height - 50;
-              setIsAtBottom(isNearBottom);
-            }}
-            scrollEventThrottle={100}
-            ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>まだメッセージがありません。会話を始めましょう！</Text>
-              </View>
-            }
-          />
-          
-          {/* 入力中インジケーター */}
-          {typingUsers.length > 0 && (
-            <View style={styles.typingContainer}>
-              <Text style={styles.typingText}>
-                {typingUsers.map(u => u.name).join(', ')}さんが入力中...
-              </Text>
+      <View style={styles.chatContainer}>
+        <FlatList
+          ref={flatListRef}
+          data={flattenedItems}
+          renderItem={renderItem}
+          keyExtractor={(item, index) => `${item.id}-${index}`}
+          contentContainerStyle={styles.messagesList}
+          onScroll={(event) => {
+            const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+            const isNearBottom = contentOffset.y + layoutMeasurement.height >= contentSize.height - 50;
+            setIsAtBottom(isNearBottom);
+          }}
+          scrollEventThrottle={100}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>まだメッセージがありません。会話を始めましょう！</Text>
             </View>
-          )}
-          
-          {/* 引用返信プレビュー */}
-          {quotedMessage && (
-            <View style={styles.quotedMessageContainer}>
-              <View style={styles.quotedMessage}>
-                <Text style={styles.quotedAuthor}>{quotedMessage.author.name}</Text>
-                <Text style={styles.quotedText} numberOfLines={2}>{quotedMessage.text}</Text>
-              </View>
-              <TouchableOpacity
-                style={styles.cancelQuoteButton}
-                onPress={() => setQuotedMessage(null)}
-              >
-                <X size={16} color={Colors.text.secondary} />
-              </TouchableOpacity>
-            </View>
-          )}
-          
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.input}
-              placeholder="メッセージを入力..."
-              placeholderTextColor="#999999"
-              value={messageText}
-              onChangeText={handleTextChange}
-              onFocus={() => {
-                // フォーカス時にも最下部にスクロール
-                if (flatListRef.current && messages.length > 0) {
-                  setTimeout(() => {
-                    flatListRef.current?.scrollToEnd({ animated: true });
-                  }, 300); // キーボード表示の遅延を考慮
-                  setIsAtBottom(true);
-                }
-              }}
-              multiline
-              selectionColor="#007AFF"
-            />
-            <TouchableOpacity 
-              style={[
-                styles.sendButton,
-                (!messageText.trim() || isSending) ? styles.sendButtonDisabled : {}
-              ]}
-              onPress={handleSendMessage}
-              disabled={!messageText.trim() || isSending}
-            >
-              <Send size={20} color={Colors.text.light} />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </KeyboardAvoidingView>
+          }
+        />
+        
+        <ChatInput
+          value={messageText}
+          onChangeText={handleTextChange}
+          onSend={handleSendMessage}
+          placeholder="メッセージを入力..."
+          disabled={false}
+          isSending={isSending}
+          quotedMessage={quotedMessage}
+          onCancelQuote={() => setQuotedMessage(null)}
+          typingUsers={typingUsers}
+          maxLength={1000}
+          showCharacterCount={false}
+        />
+      </View>
       
       {/* 検索モーダル */}
       <Modal
@@ -511,9 +472,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  keyboardAvoid: {
-    flex: 1,
-  },
   chatContainer: {
     flex: 1,
   },
@@ -530,98 +488,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.text.secondary,
     textAlign: "center",
-  },
-  inputContainer: {
-    flexDirection: "row",
-    padding: 16,
-    paddingBottom: Platform.OS === "ios" ? 16 : 16,
-    backgroundColor: '#FAFAFA',
-    borderTopWidth: 1,
-    borderTopColor: '#E8E8E8',
-    alignItems: "flex-end",
-  },
-  input: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 22,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    maxHeight: 80,
-    fontSize: 16,
-    minHeight: 44,
-    borderWidth: 1.5,
-    borderColor: '#E0E0E0',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
-    color: Colors.text.primary,
-  },
-  sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#007AFF',
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: 12,
-    marginBottom: 0,
-    shadowColor: '#007AFF',
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 6,
-  },
-  sendButtonDisabled: {
-    backgroundColor: '#C7C7CC',
-    shadowColor: '#C7C7CC',
-    shadowOpacity: 0.1,
-    elevation: 2,
-  },
-  typingContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
-  },
-  typingText: {
-    fontSize: 12,
-    color: Colors.text.secondary,
-    fontStyle: 'italic',
-  },
-  quotedMessageContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#F5F5F5',
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  quotedMessage: {
-    flex: 1,
-    paddingLeft: 12,
-    borderLeftWidth: 3,
-    borderLeftColor: '#007AFF',
-  },
-  quotedAuthor: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#007AFF',
-    marginBottom: 2,
-  },
-  quotedText: {
-    fontSize: 14,
-    color: Colors.text.secondary,
-  },
-  cancelQuoteButton: {
-    padding: 8,
-    alignSelf: 'flex-start',
   },
   modalContainer: {
     flex: 1,

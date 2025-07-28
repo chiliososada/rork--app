@@ -29,8 +29,9 @@ export default function ChatsScreen() {
   const { 
     getUnreadCount, 
     fetchUnreadCountsForTopics,
-    subscribeToMultipleTopics,
-    cleanupUnusedSubscriptions
+    initializeGlobalConnection,
+    updateUserTopics,
+    isConnected
   } = useChatStore();
   const { 
     privateChats, 
@@ -55,15 +56,15 @@ export default function ChatsScreen() {
       // 未読数を取得
       fetchUnreadCountsForTopics(topicIds, user.id);
       
-      // リアルタイム購読を設定（最大5つまで）
-      subscribeToMultipleTopics(topicIds.slice(0, 5));
-      
-      // クリーンアップ: 表示されていないトピックの購読を解除
-      return () => {
-        cleanupUnusedSubscriptions(topicIds);
-      };
+      // 初始化全局连接（如果还未连接）
+      if (user?.id && !isConnected()) {
+        initializeGlobalConnection(user.id);
+      } else if (user?.id) {
+        // 更新用户参与的topics
+        updateUserTopics(user.id);
+      }
     }
-  }, [filteredTopics, user, fetchUnreadCountsForTopics, subscribeToMultipleTopics, cleanupUnusedSubscriptions]);
+  }, [filteredTopics, user, fetchUnreadCountsForTopics, initializeGlobalConnection, updateUserTopics, isConnected]);
   
   const handleChatPress = useCallback((item: ChatListItem) => {
     if (item.type === 'topic') {

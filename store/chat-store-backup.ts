@@ -43,7 +43,6 @@ interface ChatState {
   globalChannel: any | null;
   isGlobalChannelConnected: boolean;
   userParticipatingTopics: Set<string>; // 用户参与的所有topic ID
-  currentUserId: string | null;
   
   // メッセージ管理機能
   fetchMessages: (topicId: string) => Promise<void>;
@@ -155,7 +154,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
   globalChannel: null,
   isGlobalChannelConnected: false,
   userParticipatingTopics: new Set(),
-  currentUserId: null,
 
   // メッセージを取得
   fetchMessages: async (topicId: string) => {
@@ -340,276 +338,405 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
   },
 
-  // 初始化全局连接
-  initializeGlobalConnection: async (userId: string) => {
-    const { globalChannel, isGlobalChannelConnected } = get();
+  // Realtimeサブスクリプション開始
+  subscribeToTopic: (topicId: string, priority: number = 1) => {
+    const { 
+      realtimeChannels, 
+      activeConnections, 
+      maxActiveConnections,
+      connectionStates,
+      connectionPriorities,
+      reconnectTimeouts
+    } = get();
     
-    // 如果已经连接，先断开
-    if (globalChannel && isGlobalChannelConnected) {
-      get().disconnectGlobalConnection();
+    // 既存のサブスクリプションがある場合は無視
+    if (realtimeChannels[topicId] && connectionStates[topicId] === 'connected') {
+      return;
     }
     
-    try {
-      // 更新当前用户ID
-      set({ currentUserId: userId });
-      
-      // 获取用户参与的所有topic
-      await get().updateUserTopics(userId);
-      
-      const { userParticipatingTopics } = get();
-      const topicArray = Array.from(userParticipatingTopics);
-      
-      if (topicArray.length === 0) {
-        console.log('用户暂无参与的topic，跳过连接初始化');
-        return;
+    // 接続中または再接続タイマーがある場合はスキップ
+    if (connectionStates[topicId] === 'connecting' || reconnectTimeouts[topicId]) {
+      console.log(`Topic ${topicId} is already connecting or has pending reconnection`);
+      return;
+    }
+    
+    // 優先度を設定
+    set(state => ({
+      connectionPriorities: {
+        ...state.connectionPriorities,
+        [topicId]: priority
       }
-      
-      console.log(`初始化全局连接，监听 ${topicArray.length} 个topics`);
-      
-      // 创建全局channel
-      const channel = supabase
-        .channel('global_user_chat')
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'chat_messages',
-            filter: `topic_id=in.(${topicArray.join(',')})`
-          },
-          async (payload) => {
-            try {
-              get().routeMessage(payload.new);
-            } catch (error) {
-              // 静默处理消息路由错误
-            }
-          }
-        )
-        .on('broadcast', { event: 'message' }, (payload) => {
-          
-          if (payload.payload && payload.payload.type === 'chat_message') {
-            const broadcastMessage = payload.payload;
-            const topicId = broadcastMessage.topic_id;
-            
-            if (topicId && userParticipatingTopics.has(topicId)) {
-              const newMessage: Message = {
-                id: broadcastMessage.id || `broadcast-${Date.now()}`,
-                text: broadcastMessage.text || broadcastMessage.message,
-                createdAt: broadcastMessage.created_at || new Date().toISOString(),
-                author: {
-                  id: broadcastMessage.user_id || 'broadcast-user',
-                  name: broadcastMessage.user_name || '管理者',
-                  avatar: broadcastMessage.avatar || 'https://ui-avatars.com/api/?name=Admin&background=blue',
-                  email: broadcastMessage.email || 'admin@example.com'
-                },
-                topicId: topicId
-              };
+    }));
+    
+    // 接続数制限チェック
+    if (activeConnections.size >= maxActiveConnections) {
+      console.log(`Connection limit reached (${maxActiveConnections}). Managing connections by priority.`);
+      get().manageConnectionsByPriority(topicId, priority);
+      return;
+    }
+    
+    // 接続状態を設定
+    set(state => ({
+      connectionStates: {
+        ...state.connectionStates,
+        [topicId]: 'connecting'
+      }
+    }));
 
-              set(state => {
-                return addMessageToState(state, topicId, newMessage);
-              });
+    // 新しいRealtimeチャンネルを作成
+    const channel = supabase
+      .channel(`chat_messages:topic_${topicId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'chat_messages',
+          filter: `topic_id=eq.${topicId}`,
+        },
+        async (payload) => {
+          try {
+            // 自分が送信したメッセージは既にローカルステートにあるのでスキップ
+            const { messages } = get();
+            const existingMessages = messages[topicId] || [];
+            const messageExists = existingMessages.some(msg => msg.id === payload.new.id);
+            
+            if (messageExists) {
+              return;
+            }
+
+              // ユーザー情報を取得
+            const userData = await withNetworkRetry(async () => {
+              const { data, error } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', payload.new.user_id)
+                .single();
+
+              if (error || !data) {
+                throw error || new Error('ユーザー情報が見つかりません');
+              }
+              
+              return data;
+            }).catch((error) => {
+              console.error('ユーザー情報の取得に失敗:', error);
+              return null;
+            });
+
+            if (!userData) {
+              return;
+            }
+
+            // メッセージを復号化
+            let decryptedText: string;
+            try {
+              decryptedText = isEncrypted(payload.new.message) 
+                ? decryptMessage(payload.new.message) 
+                : payload.new.message;
+            } catch (error) {
+              console.warn('メッセージの復号化に失敗:', error);
+              decryptedText = payload.new.message;
+            }
+
+            // 新しいメッセージをローカルステートに追加
+            const newMessage: Message = {
+              id: payload.new.id,
+              text: decryptedText,
+              createdAt: payload.new.created_at,
+              author: {
+                id: userData.id,
+                name: userData.nickname,
+                avatar: userData.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.nickname)}&background=random`,
+                email: userData.email
+              },
+              topicId: payload.new.topic_id
+            };
+
+            set(state => {
+              // 使用辅助函数安全添加消息
+              const updatedState = addMessageToState(state, topicId, newMessage);
+              
+              // 如果消息已存在（没有变化），直接返回原状态
+              if (updatedState === state) {
+                return state;
+              }
+              
+              // 通知音を再生（バックグラウンドで）
+              if (state.currentTopicId !== topicId) {
+                get().playNotificationSound();
+              }
+              
+              // 未読カウントを更新（現在のトピックでない場合）
+              const newUnreadCounts = { ...state.unreadCounts };
+              if (state.currentTopicId !== topicId) {
+                newUnreadCounts[topicId] = (newUnreadCounts[topicId] || 0) + 1;
+              }
+              
+              return {
+                ...updatedState,
+                unreadCounts: newUnreadCounts
+              };
+            });
+
+          } catch (error) {
+            console.error('Realtimeメッセージ処理エラー:', error);
+          }
+        }
+      )
+      .on('broadcast', { event: 'message' }, (payload) => {
+        console.log('受信した広播メッセージ:', payload);
+        
+        // 広播メッセージを処理
+        if (payload.payload && payload.payload.type === 'chat_message') {
+          const broadcastMessage = payload.payload;
+          
+          // 新しいメッセージをローカルステートに追加
+          const newMessage: Message = {
+            id: broadcastMessage.id || `broadcast-${Date.now()}`,
+            text: broadcastMessage.text || broadcastMessage.message,
+            createdAt: broadcastMessage.created_at || new Date().toISOString(),
+            author: {
+              id: broadcastMessage.user_id || 'broadcast-user',
+              name: broadcastMessage.user_name || '管理者',
+              avatar: broadcastMessage.avatar || 'https://ui-avatars.com/api/?name=Admin&background=blue',
+              email: broadcastMessage.email || 'admin@example.com'
+            },
+            topicId: topicId
+          };
+
+          set(state => {
+            return addMessageToState(state, topicId, newMessage);
+          });
+        }
+      })
+      .on('broadcast', { event: 'typing' }, (payload) => {
+        const { userId, userName, timestamp } = payload.payload;
+        
+        set(state => {
+          const newTypingUsers = { ...state.typingUsers };
+          if (!newTypingUsers[topicId]) {
+            newTypingUsers[topicId] = {};
+          }
+          newTypingUsers[topicId][userId] = { name: userName, timestamp };
+          return { typingUsers: newTypingUsers };
+        });
+      })
+      .on('broadcast', { event: 'stop_typing' }, (payload) => {
+        const { userId } = payload.payload;
+        
+        set(state => {
+          const newTypingUsers = { ...state.typingUsers };
+          if (newTypingUsers[topicId] && newTypingUsers[topicId][userId]) {
+            delete newTypingUsers[topicId][userId];
+            if (Object.keys(newTypingUsers[topicId]).length === 0) {
+              delete newTypingUsers[topicId];
             }
           }
-        })
-        .on('broadcast', { event: 'typing' }, (payload) => {
-          const { topicId, userId, userName, timestamp } = payload.payload;
-          
-          if (topicId && userParticipatingTopics.has(topicId)) {
-            set(state => {
-              const newTypingUsers = { ...state.typingUsers };
-              if (!newTypingUsers[topicId]) {
-                newTypingUsers[topicId] = {};
-              }
-              newTypingUsers[topicId][userId] = { name: userName, timestamp };
-              return { typingUsers: newTypingUsers };
-            });
+          return { typingUsers: newTypingUsers };
+        });
+      })
+      .on('presence', { event: 'sync' }, () => {
+        // プレゼンス状態の同期
+        const presenceState = channel.presenceState();
+        const newOnlineUsers: Record<string, { name: string; timestamp: number }> = {};
+        
+        console.log(`Presence sync for topic ${topicId}:`, presenceState);
+        
+        Object.values(presenceState).forEach((presences: any) => {
+          presences.forEach((presence: any) => {
+            if (presence.userId && presence.userName) {
+              newOnlineUsers[presence.userId] = {
+                name: presence.userName,
+                timestamp: Date.now()
+              };
+            }
+          });
+        });
+        
+        console.log(`Updated online users for topic ${topicId}:`, newOnlineUsers);
+        
+        set(state => ({
+          onlineUsers: {
+            ...state.onlineUsers,
+            [topicId]: newOnlineUsers
           }
-        })
-        .on('broadcast', { event: 'stop_typing' }, (payload) => {
-          const { topicId, userId } = payload.payload;
-          
-          if (topicId && userParticipatingTopics.has(topicId)) {
+        }));
+      })
+      .on('presence', { event: 'join' }, ({ newPresences }) => {
+        // 新しいユーザーが参加 - ローカル状態のみ更新
+        newPresences.forEach((presence: any) => {
+          if (presence.userId && presence.userName) {
             set(state => {
-              const newTypingUsers = { ...state.typingUsers };
-              if (newTypingUsers[topicId] && newTypingUsers[topicId][userId]) {
-                delete newTypingUsers[topicId][userId];
-                if (Object.keys(newTypingUsers[topicId]).length === 0) {
-                  delete newTypingUsers[topicId];
-                }
+              const newOnlineUsers = { ...state.onlineUsers };
+              if (!newOnlineUsers[topicId]) {
+                newOnlineUsers[topicId] = {};
               }
-              return { typingUsers: newTypingUsers };
-            });
-          }
-        })
-        .subscribe((status) => {
-          if (status === 'SUBSCRIBED') {
-            set({ 
-              globalChannel: channel,
-              isGlobalChannelConnected: true 
-            });
-            console.log('全局聊天连接已建立');
-          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-            // 静默处理连接错误，不显示给用户
-            set({ isGlobalChannelConnected: false });
-            
-            // 3秒后静默重试连接
-            setTimeout(() => {
-              get().initializeGlobalConnection(userId);
-            }, 3000);
-          } else if (status === 'CLOSED') {
-            set({ 
-              globalChannel: null,
-              isGlobalChannelConnected: false 
+              newOnlineUsers[topicId][presence.userId] = { 
+                name: presence.userName, 
+                timestamp: Date.now() 
+              };
+              return { onlineUsers: newOnlineUsers };
             });
           }
         });
+      })
+      .on('presence', { event: 'leave' }, ({ leftPresences }) => {
+        // ユーザーが退出 - ローカル状態のみ更新
+        leftPresences.forEach((presence: any) => {
+          if (presence.userId) {
+            set(state => {
+              const newOnlineUsers = { ...state.onlineUsers };
+              if (newOnlineUsers[topicId] && newOnlineUsers[topicId][presence.userId]) {
+                delete newOnlineUsers[topicId][presence.userId];
+                if (Object.keys(newOnlineUsers[topicId]).length === 0) {
+                  delete newOnlineUsers[topicId];
+                }
+              }
+              return { onlineUsers: newOnlineUsers };
+            });
+          }
+        });
+      })
+      .subscribe(async (status) => {
+        console.log(`Topic ${topicId} subscription status:`, status);
         
-      // 保存channel引用
-      set({ globalChannel: channel });
-      
-    } catch (error) {
-      // 静默处理初始化失败，不影响用户体验
-      set({ 
-        globalChannel: null,
-        isGlobalChannelConnected: false 
+        if (status === 'SUBSCRIBED') {
+          // 接続成功
+          set(state => ({
+            connectionStates: {
+              ...state.connectionStates,
+              [topicId]: 'connected'
+            },
+            reconnectAttempts: {
+              ...state.reconnectAttempts,
+              [topicId]: 0
+            }
+          }));
+          console.log(`チャンネル ${topicId} に正常に接続されました`);
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          // 接続エラー
+          set(state => ({
+            connectionStates: {
+              ...state.connectionStates,
+              [topicId]: 'error'
+            }
+          }));
+          console.error(`チャンネル ${topicId} 接続エラー:`, status);
+          
+          // 自動再接続を試行
+          get().scheduleReconnect(topicId);
+        } else if (status === 'CLOSED') {
+          // 接続切断
+          set(state => ({
+            connectionStates: {
+              ...state.connectionStates,
+              [topicId]: 'disconnected'
+            }
+          }));
+          console.log(`チャンネル ${topicId} が切断されました`);
+          
+          // 必要に応じて再接続
+          const { activeConnections } = get();
+          if (activeConnections.has(topicId)) {
+            get().scheduleReconnect(topicId);
+          }
+        }
       });
-    }
+
+    // チャンネルを保存し、アクティブ接続リストに追加
+    set(state => ({
+      realtimeChannels: {
+        ...state.realtimeChannels,
+        [topicId]: channel
+      },
+      activeConnections: new Set([...state.activeConnections, topicId])
+    }));
   },
 
-  // 断开全局连接
-  disconnectGlobalConnection: () => {
-    const { globalChannel } = get();
+  // 特定トピックのサブスクリプション解除
+  unsubscribeFromTopic: (topicId: string) => {
+    const { realtimeChannels, reconnectTimeouts } = get();
+    const channel = realtimeChannels[topicId];
     
-    if (globalChannel) {
-      supabase.removeChannel(globalChannel);
-      set({ 
-        globalChannel: null,
-        isGlobalChannelConnected: false,
-        userParticipatingTopics: new Set()
-      });
+    // 再接続タイマーをクリア
+    if (reconnectTimeouts[topicId]) {
+      clearTimeout(reconnectTimeouts[topicId]);
     }
-  },
-
-  // 更新用户参与的topics
-  updateUserTopics: async (userId: string) => {
-    try {
-      const topics = await getUserTopicIds(userId);
-      const topicsSet = new Set(topics);
+    
+    if (channel) {
+      supabase.removeChannel(channel);
       
-      // 用户topics已更新
-      
-      set({ userParticipatingTopics: topicsSet });
-      
-      // 如果全局连接已存在且topics发生变化，需要重新连接
-      const { globalChannel, isGlobalChannelConnected } = get();
-      if (globalChannel && isGlobalChannelConnected) {
-        await get().initializeGlobalConnection(userId);
-      }
-      
-    } catch (error) {
-      // 静默处理更新topics失败
-    }
-  },
-
-  // 消息路由分发
-  routeMessage: async (message: any) => {
-    try {
-      const topicId = message.topic_id;
-      const { userParticipatingTopics, messages } = get();
-      
-      // 检查是否是用户参与的topic
-      if (!userParticipatingTopics.has(topicId)) {
-        return;
-      }
-      
-      // 检查消息是否已存在
-      const existingMessages = messages[topicId] || [];
-      const messageExists = existingMessages.some(msg => msg.id === message.id);
-      
-      if (messageExists) {
-        return;
-      }
-
-      // 获取用户信息
-      const userData = await withNetworkRetry(async () => {
-        const { data, error } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', message.user_id)
-          .single();
-
-        if (error || !data) {
-          throw error || new Error('ユーザー情報が見つかりません');
-        }
-        
-        return data;
-      }).catch((error) => {
-        console.error('ユーザー情報の取得に失敗:', error);
-        return null;
-      });
-
-      if (!userData) {
-        return;
-      }
-
-      // 消息解密
-      let decryptedText: string;
-      try {
-        decryptedText = isEncrypted(message.message) 
-          ? decryptMessage(message.message) 
-          : message.message;
-      } catch (error) {
-        console.warn('メッセージの復号化に失敗:', error);
-        decryptedText = message.message;
-      }
-
-      // 创建新消息对象
-      const newMessage: Message = {
-        id: message.id,
-        text: decryptedText,
-        createdAt: message.created_at,
-        author: {
-          id: userData.id,
-          name: userData.nickname,
-          avatar: userData.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.nickname)}&background=random`,
-          email: userData.email
-        },
-        topicId: message.topic_id
-      };
-
-      // 添加到状态
       set(state => {
-        const updatedState = addMessageToState(state, topicId, newMessage);
+        const newChannels = { ...state.realtimeChannels };
+        const newActiveConnections = new Set(state.activeConnections);
+        const newConnectionStates = { ...state.connectionStates };
+        const newReconnectAttempts = { ...state.reconnectAttempts };
+        const newReconnectTimeouts = { ...state.reconnectTimeouts };
+        const newConnectionPriorities = { ...state.connectionPriorities };
         
-        if (updatedState === state) {
-          return state;
-        }
+        delete newChannels[topicId];
+        newActiveConnections.delete(topicId);
+        delete newConnectionStates[topicId];
+        delete newReconnectAttempts[topicId];
+        delete newReconnectTimeouts[topicId];
+        delete newConnectionPriorities[topicId];
         
-        // 播放通知声音（如果不是当前topic）
-        if (state.currentTopicId !== topicId) {
-          get().playNotificationSound();
-        }
-        
-        // 更新未读计数
-        const newUnreadCounts = { ...state.unreadCounts };
-        if (state.currentTopicId !== topicId) {
-          newUnreadCounts[topicId] = (newUnreadCounts[topicId] || 0) + 1;
-        }
-        
-        return {
-          ...updatedState,
-          unreadCounts: newUnreadCounts
+        return { 
+          realtimeChannels: newChannels,
+          activeConnections: newActiveConnections,
+          connectionStates: newConnectionStates,
+          reconnectAttempts: newReconnectAttempts,
+          reconnectTimeouts: newReconnectTimeouts,
+          connectionPriorities: newConnectionPriorities
         };
       });
-
-    } catch (error) {
-      // 静默处理消息路由错误，不影响用户体验
     }
   },
 
-  // 现在のトピックを设定
+  // 全てのサブスクリプション解除
+  unsubscribeFromAllTopics: () => {
+    const { realtimeChannels, reconnectTimeouts } = get();
+    
+    // 全ての再接続タイマーをクリア
+    Object.values(reconnectTimeouts).forEach(timeout => {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+    });
+    
+    Object.values(realtimeChannels).forEach(channel => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    });
+    
+    set({ 
+      realtimeChannels: {},
+      activeConnections: new Set(),
+      connectionStates: {},
+      reconnectAttempts: {},
+      reconnectTimeouts: {},
+      connectionPriorities: {}
+    });
+  },
+
+  // 現在のトピックを設定
   setCurrentTopic: (topicId: string | null) => {
     set({ currentTopicId: topicId });
+    
+    // 現在のトピックを高優先度で接続
+    if (topicId) {
+      // 接続試行回数をリセットして新しいチャンスを与える
+      set(state => ({
+        reconnectAttempts: {
+          ...state.reconnectAttempts,
+          [topicId]: 0
+        },
+        activeConnections: new Set([...state.activeConnections, topicId])
+      }));
+      
+      get().subscribeToTopic(topicId, 10); // 最高優先度
+    }
   },
 
   // 特定トピックのメッセージを取得
@@ -626,14 +753,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   // 入力中インジケーターを送信
   sendTypingIndicator: (topicId: string, userId: string, userName: string) => {
-    const { globalChannel, userParticipatingTopics } = get();
+    const { realtimeChannels } = get();
+    const channel = realtimeChannels[topicId];
     
-    if (globalChannel && userParticipatingTopics.has(topicId)) {
-      globalChannel.send({
+    if (channel) {
+      channel.send({
         type: 'broadcast',
         event: 'typing',
         payload: {
-          topicId,
           userId,
           userName,
           timestamp: Date.now()
@@ -644,20 +771,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   // 入力中インジケーターを停止
   stopTypingIndicator: (topicId: string, userId: string) => {
-    const { globalChannel, userParticipatingTopics } = get();
+    const { realtimeChannels } = get();
+    const channel = realtimeChannels[topicId];
     
-    if (globalChannel && userParticipatingTopics.has(topicId)) {
-      globalChannel.send({
+    if (channel) {
+      channel.send({
         type: 'broadcast',
         event: 'stop_typing',
         payload: {
-          topicId,
           userId
         }
       });
     }
     
-    // 本地状态也删除
+    // ローカル状態からも削除
     set(state => {
       const newTypingUsers = { ...state.typingUsers };
       if (newTypingUsers[topicId]) {
@@ -800,14 +927,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   // ユーザーのプレゼンス状態を更新
   updateUserPresence: (topicId: string, userId: string, userName: string) => {
-    const { globalChannel, userParticipatingTopics } = get();
+    const { realtimeChannels } = get();
+    const channel = realtimeChannels[topicId];
     
-    if (globalChannel && userParticipatingTopics.has(topicId)) {
-      // Note: Supabase presence is topic-specific, so we might need a different approach
-      // For now, just update local state
+    if (channel) {
+      // Supabaseのpresence機能を使用してリアルタイムで状態を共有
+      console.log(`Tracking presence for user ${userName} in topic ${topicId}`);
+      channel.track({
+        userId,
+        userName,
+        timestamp: Date.now()
+      });
+    } else {
+      console.log(`No channel found for topic ${topicId} when updating presence`);
     }
     
-    // ローカル状态更新
+    // ローカル状態も更新
     set(state => {
       const newOnlineUsers = { ...state.onlineUsers };
       if (!newOnlineUsers[topicId]) {
@@ -820,6 +955,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   // ユーザーのプレゼンス状態を削除
   removeUserPresence: (topicId: string, userId: string) => {
+    const { realtimeChannels } = get();
+    const channel = realtimeChannels[topicId];
+    
+    if (channel) {
+      // Supabaseのpresence機能を使用してリアルタイムで状態を削除
+      channel.untrack();
+    }
+    
+    // ローカル状態も更新
     set(state => {
       const newOnlineUsers = { ...state.onlineUsers };
       if (newOnlineUsers[topicId] && newOnlineUsers[topicId][userId]) {
@@ -960,22 +1104,175 @@ export const useChatStore = create<ChatState>((set, get) => ({
       console.error('Failed to fetch unread counts:', error);
     }
   },
-
-  // 连接状态管理
-  isConnected: () => {
-    const { isGlobalChannelConnected } = get();
-    return isGlobalChannelConnected;
-  },
-
-  getConnectionStatus: () => {
-    const { globalChannel, isGlobalChannelConnected } = get();
+  
+  // バックグラウンドでトピックを監視（チャットリスト用）
+  subscribeToMultipleTopics: (topicIds: string[]) => {
+    const { realtimeChannels, activeConnections, maxActiveConnections } = get();
     
-    if (!globalChannel) {
-      return 'disconnected';
-    } else if (isGlobalChannelConnected) {
-      return 'connected';
-    } else {
-      return 'connecting';
+    // 接続数の制限を考慮して購読するトピックを選択
+    const availableSlots = maxActiveConnections - activeConnections.size;
+    const topicsToSubscribe = topicIds
+      .filter(id => !realtimeChannels[id] || get().connectionStates[id] === 'disconnected') // まだ購読していないか切断されたトピック
+      .slice(0, Math.max(0, availableSlots)); // 利用可能なスロット数まで
+    
+    // 各トピックを購読（低優先度）
+    topicsToSubscribe.forEach((topicId, index) => {
+      get().subscribeToTopic(topicId, 1); // 低優先度
+    });
+  },
+  
+  // 不要なトピックの購読を解除（接続数管理用）
+  cleanupUnusedSubscriptions: (activeTopicIds: string[]) => {
+    const { realtimeChannels, currentTopicId } = get();
+    const activeSet = new Set(activeTopicIds);
+    
+    // 現在のトピックは常に保持
+    if (currentTopicId) {
+      activeSet.add(currentTopicId);
     }
+    
+    // アクティブでないトピックの購読を解除
+    Object.keys(realtimeChannels).forEach(topicId => {
+      if (!activeSet.has(topicId)) {
+        get().unsubscribeFromTopic(topicId);
+      }
+    });
+  },
+  
+  // 優先度による接続管理
+  manageConnectionsByPriority: (newTopicId: string, newPriority: number) => {
+    const { connectionPriorities, activeConnections } = get();
+    
+    // 最も低い優先度の接続を見つける
+    let lowestPriority = newPriority;
+    let topicToDisconnect: string | null = null;
+    
+    Array.from(activeConnections).forEach(topicId => {
+      const priority = connectionPriorities[topicId] || 1;
+      if (priority < lowestPriority) {
+        lowestPriority = priority;
+        topicToDisconnect = topicId;
+      }
+    });
+    
+    // 新しい接続の優先度が高い場合、既存の低優先度接続を切断
+    if (topicToDisconnect && newPriority > lowestPriority) {
+      console.log(`Disconnecting lower priority topic ${topicToDisconnect} for ${newTopicId}`);
+      get().unsubscribeFromTopic(topicToDisconnect);
+      
+      // 少し待ってから新しい接続を開始
+      setTimeout(() => {
+        get().subscribeToTopic(newTopicId, newPriority);
+      }, 100);
+    }
+  },
+  
+  // 自動再接続スケジュール
+  scheduleReconnect: (topicId: string) => {
+    const { reconnectAttempts, reconnectTimeouts, connectionStates } = get();
+    const currentAttempts = reconnectAttempts[topicId] || 0;
+    const maxAttempts = 3; // 減らして無限ループを防止
+    
+    // 既に再接続タイマーが設定されている場合はスキップ
+    if (reconnectTimeouts[topicId]) {
+      console.log(`Reconnection already scheduled for topic ${topicId}`);
+      return;
+    }
+    
+    if (currentAttempts >= maxAttempts) {
+      console.log(`Max reconnection attempts reached for topic ${topicId}. Giving up.`);
+      // 接続状態をエラーに設定
+      set(state => ({
+        connectionStates: {
+          ...state.connectionStates,
+          [topicId]: 'error'
+        }
+      }));
+      return;
+    }
+    
+    // 指数バックオフによる遅延
+    const delay = Math.min(3000 * Math.pow(2, currentAttempts), 15000); // 最大15秒
+    
+    console.log(`Scheduling reconnection for topic ${topicId} in ${delay}ms (attempt ${currentAttempts + 1}/${maxAttempts})`);
+    
+    const timeoutId = setTimeout(() => {
+      // タイムアウトをクリア
+      set(state => {
+        const newTimeouts = { ...state.reconnectTimeouts };
+        delete newTimeouts[topicId];
+        return { reconnectTimeouts: newTimeouts };
+      });
+      
+      const { activeConnections, connectionPriorities } = get();
+      
+      // まだアクティブな接続として管理されている場合のみ再接続
+      if (activeConnections.has(topicId)) {
+        const priority = connectionPriorities[topicId] || 1;
+        
+        // 再接続試行回数を増やす
+        set(state => ({
+          reconnectAttempts: {
+            ...state.reconnectAttempts,
+            [topicId]: currentAttempts + 1
+          }
+        }));
+        
+        console.log(`Attempting to reconnect to topic ${topicId}`);
+        get().subscribeToTopic(topicId, priority);
+      }
+    }, delay);
+    
+    // タイムアウトIDを保存
+    set(state => ({
+      reconnectTimeouts: {
+        ...state.reconnectTimeouts,
+        [topicId]: timeoutId
+      }
+    }));
+  },
+  
+  // 接続状態の取得
+  getConnectionState: (topicId: string) => {
+    const { connectionStates } = get();
+    return connectionStates[topicId] || 'disconnected';
+  },
+  
+  // 接続健全性チェック
+  checkConnectionHealth: () => {
+    const { realtimeChannels, connectionStates, activeConnections, reconnectAttempts } = get();
+    
+    Array.from(activeConnections).forEach(topicId => {
+      const channel = realtimeChannels[topicId];
+      const state = connectionStates[topicId];
+      const attempts = reconnectAttempts[topicId] || 0;
+      
+      // 再接続試行が多いトピックはアクティブ接続から除外
+      if (attempts >= 3 && state === 'error') {
+        console.log(`Removing problematic topic ${topicId} from active connections`);
+        set(state => {
+          const newActiveConnections = new Set(state.activeConnections);
+          newActiveConnections.delete(topicId);
+          return { activeConnections: newActiveConnections };
+        });
+        return;
+      }
+      
+      if (channel && state === 'connected') {
+        // チャンネルが正常に動作しているかテスト
+        try {
+          // 軽量なping的操作を送信してテスト
+          channel.send({
+            type: 'broadcast',
+            event: 'ping',
+            payload: { timestamp: Date.now() }
+          });
+        } catch (error) {
+          console.warn(`Health check failed for topic ${topicId}:`, error);
+          // 再接続をスケジュール
+          get().scheduleReconnect(topicId);
+        }
+      }
+    });
   }
 }));

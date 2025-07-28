@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from "react";
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator } from "react-native";
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity } from "react-native";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MapPin, MessageCircle, Users, Send, ChevronLeft, Heart, Bookmark } from "lucide-react-native";
+import { MapPin, MessageCircle, Users, Heart, Bookmark } from "lucide-react-native";
 import Colors from "@/constants/colors";
 import { useTopicDetailsStore } from "@/store/topic-details-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useLocationStore } from "@/store/location-store";
 import CommentItem from "@/components/CommentItem";
+import CommentInput from "@/components/input/CommentInput";
 import TopicImage from "@/components/TopicImage";
 import TopicTags from "@/components/TopicTags";
 import JoinChatButton from "@/components/JoinChatButton";
@@ -171,7 +172,7 @@ export default function TopicDetailScreen() {
   }
   
   return (
-    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+    <SafeAreaView style={styles.container} edges={['left', 'right']}>
       <Stack.Screen 
         options={{
           title: 'トピック詳細',
@@ -203,11 +204,7 @@ export default function TopicDetailScreen() {
         }} 
       />
       
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.keyboardAvoid}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
-      >
+      <View style={styles.contentContainer}>
         <ScrollView 
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
@@ -317,28 +314,18 @@ export default function TopicDetailScreen() {
           </View>
         </ScrollView>
         
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.input}
-            placeholder="コメントを追加..."
-            placeholderTextColor="#999999"
-            value={commentText}
-            onChangeText={setCommentText}
-            multiline
-            selectionColor="#007AFF"
-          />
-          <TouchableOpacity 
-            style={[
-              styles.sendButton,
-              !commentText.trim() ? styles.sendButtonDisabled : {}
-            ]}
-            onPress={handleSendComment}
-            disabled={!commentText.trim()}
-          >
-            <Send size={20} color={Colors.text.light} />
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
+        <CommentInput
+          value={commentText}
+          onChangeText={setCommentText}
+          onSend={handleSendComment}
+          placeholder="コメントを追加..."
+          disabled={false}
+          isSending={false}
+          maxLength={500}
+          showCharacterCount={true}
+          autoFocus={false}
+        />
+      </View>
     </SafeAreaView>
   );
 }
@@ -348,7 +335,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  keyboardAvoid: {
+  contentContainer: {
     flex: 1,
   },
   scrollView: {
@@ -519,63 +506,5 @@ const styles = StyleSheet.create({
     color: Colors.text.secondary,
     textAlign: "center",
     lineHeight: 24,
-  },
-  inputContainer: {
-    flexDirection: "row",
-    padding: 16,
-    paddingBottom: Platform.OS === "ios" ? 16 : 16,
-    backgroundColor: '#FAFAFA',
-    borderTopWidth: 1,
-    borderTopColor: '#E8E8E8',
-    alignItems: 'flex-end',
-  },
-  input: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 22,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    maxHeight: 100,
-    minHeight: 44,
-    fontSize: 16,
-    textAlignVertical: 'top',
-    borderWidth: 1.5,
-    borderColor: '#E0E0E0',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
-    color: Colors.text.primary,
-  },
-  sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#007AFF',
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: 12,
-    marginBottom: 0,
-    shadowColor: '#007AFF',
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 6,
-  },
-  sendButtonDisabled: {
-    backgroundColor: '#C7C7CC',
-    shadowColor: '#C7C7CC',
-    shadowOpacity: 0.1,
-    elevation: 2,
-  },
-  chatButton: {
-    padding: 8,
   },
 });
