@@ -108,28 +108,43 @@ export default function CategoryTabs({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: Colors.background,
-    paddingVertical: 8,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
   scrollContent: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
   },
   tab: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginHorizontal: 4,
-    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    marginHorizontal: 6,
+    borderRadius: 24,
     backgroundColor: Colors.card,
     position: 'relative',
-    minWidth: 80,
+    minWidth: 85,
     alignItems: 'center',
+    // 添加统一的阴影效果
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
   },
   selectedTab: {
-    backgroundColor: Colors.primary + '10',
+    backgroundColor: Colors.primary,
+    // 选中状态增强阴影
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 6,
   },
   commercialTab: {
-    backgroundColor: '#FFE4B5',
+    // 移除黄色背景，与普通标签保持一致的外观
+    // 仅通过文字颜色区分商业标签
   },
   tabContent: {
     flexDirection: 'row',
@@ -142,18 +157,19 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '500',
-    color: Colors.text.secondary,
+    color: Colors.text.primary,
   },
   selectedLabel: {
-    color: Colors.primary,
+    color: '#FFFFFF',
     fontWeight: '600',
   },
   commercialLabel: {
-    color: '#FF8C00',
+    color: Colors.text.primary,
+    fontWeight: '500',
   },
   indicator: {
     position: 'absolute',
-    bottom: -8,
+    bottom: -10,
     left: '20%',
     right: '20%',
     height: 3,

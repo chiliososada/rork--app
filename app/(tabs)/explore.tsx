@@ -152,9 +152,7 @@ export default function ExploreScreen() {
       <View style={styles.container}>
         <CustomHeader
           title="🔍 発見"
-          subtitle={selectedCategory === 'recommended' 
-            ? `${topics.length} 件のおすすめ` 
-            : `${topics.length} 件の${categories.find(cat => cat.categoryKey === selectedCategory)?.displayName || 'トピック'}`}
+          subtitle=""
           showGreeting={true}
         />
         

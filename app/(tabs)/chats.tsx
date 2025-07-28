@@ -330,11 +330,7 @@ export default function ChatsScreen() {
     <View style={styles.container}>
       <CustomHeader
         title="チャットルーム"
-        subtitle={`💬 ${getActiveChatsCount} 件のアクティブなチャット • ${getChatListItems.length} 件の${
-          activeTab === '参加中' ? '参加中のチャット' : 
-          activeTab === '作成済み' ? '作成したチャット' : 
-          'プライベートチャット'
-        }`}
+        subtitle=""
       />
       
       <SafeAreaView style={styles.content} edges={['left', 'right']}>
