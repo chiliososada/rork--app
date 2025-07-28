@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Alert } from 'react-native';
+import React, { useState, memo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Alert, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MapPin, MessageCircle, Users, Heart, Bookmark, MoreHorizontal, Trash2 } from 'lucide-react-native';
 import { Topic } from '@/types';
@@ -16,10 +16,11 @@ interface TopicCardProps {
   onDelete?: (topicId: string) => void;
 }
 
-export default function TopicCard({ topic, showMenuButton = false, onDelete }: TopicCardProps) {
+function TopicCard({ topic, showMenuButton = false, onDelete }: TopicCardProps) {
   const router = useRouter();
   const { user } = useAuthStore();
   const [showActionMenu, setShowActionMenu] = useState(false);
+  const scaleValue = useState(new Animated.Value(1))[0];
   
   const formatDistance = (meters: number) => {
     if (meters < 1000) {
@@ -30,6 +31,24 @@ export default function TopicCard({ topic, showMenuButton = false, onDelete }: T
   };
   
   
+  const handlePressIn = () => {
+    Animated.spring(scaleValue, {
+      toValue: 0.98,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 50,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleValue, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 50,
+    }).start();
+  };
+
   const handlePress = () => {
     router.push(`/topic/${topic.id}`);
   };
@@ -71,10 +90,19 @@ export default function TopicCard({ topic, showMenuButton = false, onDelete }: T
   return (
     <>
       <TouchableOpacity 
-        style={styles.container}
         onPress={handlePress}
-        activeOpacity={0.7}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={1}
       >
+        <Animated.View 
+          style={[
+            styles.container,
+            {
+              transform: [{ scale: scaleValue }]
+            }
+          ]}
+        >
       <View style={styles.header}>
         <View style={styles.authorContainer}>
           <TopicCardAvatar user={topic.author} />
@@ -104,7 +132,7 @@ export default function TopicCard({ topic, showMenuButton = false, onDelete }: T
       
       <View style={styles.footer}>
         <View style={styles.locationContainer}>
-          <MapPin size={14} color={Colors.text.secondary} />
+          <MapPin size={14} color={Colors.location} />
           <Text style={styles.locationText}>
             {topic.location.name || '不明な場所'} • {formatDistance(topic.distance || 0)}
           </Text>
@@ -113,22 +141,22 @@ export default function TopicCard({ topic, showMenuButton = false, onDelete }: T
         <View style={styles.statsContainer}>
           <View style={styles.stat}>
             <Heart 
-              size={14} 
-              color={topic.isLiked ? '#FF6B6B' : Colors.text.secondary}
-              fill={topic.isLiked ? '#FF6B6B' : 'transparent'}
+              size={16} 
+              color={topic.isLiked ? Colors.like : Colors.text.tertiary}
+              fill={topic.isLiked ? Colors.like : 'transparent'}
             />
-            <Text style={[styles.statText, topic.isLiked && { color: '#FF6B6B' }]}>
+            <Text style={[styles.statText, topic.isLiked && { color: Colors.like }]}>
               {topic.likesCount || 0}
             </Text>
           </View>
           
           <View style={styles.stat}>
-            <MessageCircle size={14} color={Colors.text.secondary} />
+            <MessageCircle size={16} color={Colors.message} />
             <Text style={styles.statText}>{topic.commentCount}</Text>
           </View>
           
           <View style={styles.stat}>
-            <Users size={14} color={Colors.text.secondary} />
+            <Users size={16} color={Colors.accent} />
             <Text style={styles.statText}>{topic.participantCount}</Text>
           </View>
         </View>
@@ -144,6 +172,7 @@ export default function TopicCard({ topic, showMenuButton = false, onDelete }: T
           </TouchableOpacity>
         )}
       </View>
+        </Animated.View>
       </TouchableOpacity>
       
       {/* Action Menu Modal */}
@@ -185,30 +214,26 @@ export default function TopicCard({ topic, showMenuButton = false, onDelete }: T
 const styles = StyleSheet.create({
   container: {
     backgroundColor: Colors.card,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 0.5,
+    borderBottomColor: Colors.borderLight,
     position: 'relative',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   authorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   authorName: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 15,
+    fontWeight: '600',
     color: Colors.text.primary,
   },
   headerRight: {
@@ -217,26 +242,29 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   time: {
-    fontSize: 12,
-    color: Colors.text.secondary,
+    fontSize: 13,
+    color: Colors.text.tertiary,
+    fontWeight: '400',
   },
   content: {
-    marginBottom: 12,
+    marginBottom: 16,
   },
   tagsContainer: {
-    marginTop: 4,
-    marginBottom: 8,
+    marginTop: 6,
+    marginBottom: 12,
   },
   title: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
     color: Colors.text.primary,
-    marginBottom: 4,
+    marginBottom: 6,
+    lineHeight: 24,
   },
   description: {
-    fontSize: 14,
+    fontSize: 15,
     color: Colors.text.secondary,
-    lineHeight: 20,
+    lineHeight: 22,
+    marginTop: 8,
   },
   footer: {
     flexDirection: 'row',
@@ -246,25 +274,32 @@ const styles = StyleSheet.create({
   locationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: Colors.backgroundSoft,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   locationText: {
-    fontSize: 12,
-    color: Colors.text.secondary,
-    marginLeft: 4,
+    fontSize: 13,
+    color: Colors.location,
+    marginLeft: 6,
+    fontWeight: '500',
   },
   statsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 16,
   },
   stat: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: 12,
+    gap: 4,
   },
   statText: {
-    fontSize: 12,
+    fontSize: 13,
     color: Colors.text.secondary,
-    marginLeft: 4,
+    fontWeight: '500',
+    minWidth: 16,
   },
   menuButton: {
     position: 'absolute',
@@ -316,3 +351,6 @@ const styles = StyleSheet.create({
     color: Colors.text.primary,
   },
 });
+
+// 记忆化组件以优化性能
+export default memo(TopicCard);

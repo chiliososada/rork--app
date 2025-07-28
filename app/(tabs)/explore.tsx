@@ -13,7 +13,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { Plus } from "lucide-react-native";
 import Colors from "@/constants/colors";
 import { useLocationStore } from "@/store/location-store";
 import { useExploreStore } from "@/store/explore-store";
@@ -89,21 +88,7 @@ export default function ExploreScreen() {
     flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
   };
   
-  const handleSimilarPost = (topic: EnhancedTopic) => {
-    // 似たような投稿を作成する画面へ遷移
-    router.push({
-      pathname: '/create-topic',
-      params: {
-        templateTitle: topic.title,
-        templateTags: JSON.stringify(topic.tags || []),
-        templateCategory: topic.category
-      }
-    });
-  };
   
-  const handleFABPress = () => {
-    router.push('/create-topic');
-  };
   
   const renderHeader = () => (
     <>
@@ -115,14 +100,13 @@ export default function ExploreScreen() {
     </>
   );
   
-  const renderItem = ({ item }: { item: EnhancedTopic }) => (
+  const renderItem = useCallback(({ item }: { item: EnhancedTopic }) => (
     <EnhancedTopicCard
       topic={item}
-      onSimilarPost={handleSimilarPost}
     />
-  );
+  ), []);
   
-  const renderEmpty = () => {
+  const renderEmpty = useCallback(() => {
     if (isLoading) return null;
     
     return (
@@ -134,9 +118,9 @@ export default function ExploreScreen() {
         </Text>
       </View>
     );
-  };
+  }, [isLoading, selectedCategory]);
   
-  const renderFooter = () => {
+  const renderFooter = useCallback(() => {
     if (!isLoadingMore) return null;
     
     return (
@@ -144,7 +128,7 @@ export default function ExploreScreen() {
         <ActivityIndicator size="small" color={Colors.primary} />
       </View>
     );
-  };
+  }, [isLoadingMore]);
   
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -196,14 +180,6 @@ export default function ExploreScreen() {
           )}
         </SafeAreaView>
         
-        {/* フローティングアクションボタン */}
-        <TouchableOpacity
-          style={styles.fab}
-          onPress={handleFABPress}
-          activeOpacity={0.8}
-        >
-          <Plus size={24} color="#fff" />
-        </TouchableOpacity>
       </View>
     </TouchableWithoutFeedback>
   );
@@ -212,14 +188,13 @@ export default function ExploreScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.backgroundSoft,
   },
   content: {
     flex: 1,
   },
   listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 80,
+    paddingBottom: 20,
   },
   loadingContainer: {
     flex: 1,
@@ -227,41 +202,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   loadingText: {
-    fontSize: 16,
+    fontSize: 17,
     color: Colors.text.secondary,
-    marginTop: 12,
+    marginTop: 20,
+    fontWeight: '500',
   },
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 60,
+    paddingHorizontal: 32,
+    backgroundColor: Colors.card,
   },
   emptyText: {
-    fontSize: 16,
+    fontSize: 17,
     color: Colors.text.secondary,
     textAlign: 'center',
+    lineHeight: 24,
   },
   footerLoading: {
     paddingVertical: 20,
     alignItems: 'center',
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 20,
-    right: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
   },
 });

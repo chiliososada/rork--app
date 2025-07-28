@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { StyleSheet, Text, View, FlatList, RefreshControl, ActivityIndicator, TouchableOpacity, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MapPin, Plus } from "lucide-react-native";
+import { MapPin } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import TopicCard from "@/components/TopicCard";
 import SearchBar from "@/components/SearchBar";
@@ -120,9 +120,9 @@ export default function NearbyScreen() {
     }
   }, [getCurrentLocation, fetchNearbyTopics, lastLocationRefresh]);
   
-  const renderTopic = ({ item }: { item: Topic }) => {
+  const renderTopic = useCallback(({ item }: { item: Topic }) => {
     return <TopicCard topic={item} />;
-  };
+  }, []);
 
   const renderFooter = () => {
     const isLoadingFooter = isSearchMode ? isSearching : isLoadingMore;
@@ -219,7 +219,15 @@ export default function NearbyScreen() {
           data={filteredTopics}
           renderItem={renderTopic}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={[styles.listContent, { paddingBottom: 100 }]}
+          contentContainerStyle={[styles.listContent, { paddingBottom: 20 }]}
+          showsVerticalScrollIndicator={false}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={10}
+          windowSize={10}
+          initialNumToRender={8}
+          getItemLayout={(data, index) => (
+            { length: 200, offset: 200 * index, index }
+          )}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -258,13 +266,6 @@ export default function NearbyScreen() {
           }
         />
         
-        {/* Floating Action Button */}
-        <TouchableOpacity 
-          style={styles.fab}
-          onPress={() => router.push('/create-topic')}
-        >
-          <Plus size={24} color="white" />
-        </TouchableOpacity>
       </SafeAreaView>
 
       <SearchSettingsModal
@@ -279,13 +280,13 @@ export default function NearbyScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.backgroundSoft,
   },
   content: {
     flex: 1,
   },
   listContent: {
-    padding: 16,
+    paddingTop: 0,
   },
   permissionContainer: {
     flex: 1,
@@ -294,27 +295,29 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(91, 114, 242, 0.1)',
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: 'rgba(74, 144, 226, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 24,
+    marginBottom: 32,
   },
   permissionTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "700",
     color: Colors.text.primary,
-    marginBottom: 12,
+    marginBottom: 16,
     textAlign: "center",
+    lineHeight: 28,
   },
   permissionText: {
-    fontSize: 16,
+    fontSize: 17,
     color: Colors.text.secondary,
     textAlign: "center",
-    marginBottom: 24,
-    lineHeight: 24,
+    marginBottom: 32,
+    lineHeight: 26,
+    paddingHorizontal: 8,
   },
   permissionButton: {
     width: "100%",
@@ -325,57 +328,49 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   loadingText: {
-    fontSize: 16,
+    fontSize: 17,
     color: Colors.text.secondary,
-    marginTop: 16,
+    marginTop: 20,
+    fontWeight: '500',
   },
   emptyContainer: {
     alignItems: "center",
     justifyContent: "center",
-    padding: 24,
+    paddingHorizontal: 32,
+    paddingVertical: 60,
+    backgroundColor: Colors.card,
   },
   emptyTitle: {
-    fontSize: 18,
-    fontWeight: "600",
+    fontSize: 20,
+    fontWeight: "700",
     color: Colors.text.primary,
-    marginBottom: 8,
+    marginBottom: 12,
+    textAlign: "center",
   },
   emptyText: {
-    fontSize: 14,
+    fontSize: 16,
     color: Colors.text.secondary,
     textAlign: "center",
-    marginBottom: 16,
+    marginBottom: 24,
+    lineHeight: 24,
+    paddingHorizontal: 16,
   },
   createTopicButton: {
     backgroundColor: Colors.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 24,
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 28,
     alignSelf: 'center',
+    shadowColor: Colors.shadow.medium,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   createTopicText: {
     color: 'white',
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 100, // タブバーとの重複を避けるため
-    right: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 4.65,
+    fontWeight: '700',
+    fontSize: 17,
   },
   loadingFooter: {
     flexDirection: 'row',

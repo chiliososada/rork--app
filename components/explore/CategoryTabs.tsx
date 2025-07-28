@@ -107,13 +107,13 @@ export default function CategoryTabs({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.card,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomWidth: 0.5,
+    borderBottomColor: Colors.borderLight,
   },
   scrollContent: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingVertical: 4,
   },
   tab: {
@@ -121,26 +121,21 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     marginHorizontal: 6,
     borderRadius: 24,
-    backgroundColor: Colors.card,
+    backgroundColor: Colors.backgroundSoft,
     position: 'relative',
     minWidth: 85,
     alignItems: 'center',
-    // 添加统一的阴影效果
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
   },
   selectedTab: {
     backgroundColor: Colors.primary,
-    // 选中状态增强阴影
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 6,
+    borderColor: Colors.primary,
+    shadowColor: Colors.shadow.light,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   commercialTab: {
     // 移除黄色背景，与普通标签保持一致的外观
