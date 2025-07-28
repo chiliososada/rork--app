@@ -12,8 +12,9 @@ import { useTopicDetailsStore } from "@/store/topic-details-store";
 import { useAuthStore } from "@/store/auth-store";
 import { uploadTopicImage } from "@/lib/image-upload";
 import { createTopicSchema } from "@/lib/validation";
-import TagSelector from "@/components/TagSelector";
+import SmartTagSelector from "@/components/SmartTagSelector";
 import CategorySelector from "@/components/CategorySelector";
+import { supabase } from "@/lib/supabase";
 
 export default function CreateTopicScreen() {
   const router = useRouter();
@@ -191,6 +192,31 @@ export default function CreateTopicScreen() {
     originalWidth?: number,
     originalHeight?: number
   ) => {
+    // 記録標籤使用情況
+    if (selectedTags.length > 0 && user && currentLocation) {
+      
+      try {
+        const result = await supabase.rpc('record_tag_usage', {
+          user_id_param: user.id,
+          tag_names: selectedTags,
+          user_lat: currentLocation.latitude,
+          user_lng: currentLocation.longitude,
+        });
+        
+      } catch (error: any) {
+        console.error('[CreateTopic] Error recording tag usage:', {
+          error: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code,
+          tags: selectedTags,
+          userId: user.id
+        });
+        // 不影響話題創建
+      }
+    } else {
+    }
+    
     await createTopic({
       title,
       description,
@@ -289,11 +315,12 @@ export default function CreateTopicScreen() {
             />
           </View>
           
-          {/* Tag Selector */}
+          {/* Smart Tag Selector */}
           <View style={styles.tagSelectorCard}>
-            <TagSelector
-              onTagsChange={setSelectedTags}
+            <SmartTagSelector
               selectedTags={selectedTags}
+              onTagsChange={setSelectedTags}
+              maxTags={5}
             />
           </View>
           

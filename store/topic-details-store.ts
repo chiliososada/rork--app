@@ -218,6 +218,7 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
             return undefined;
           }
         })(),
+        category: topicData.category || undefined,
         isFavorited,
         isLiked,
         likesCount: likesCount || 0
@@ -470,7 +471,7 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
             image_aspect_ratio: topicData.aspectRatio,
             original_width: topicData.originalWidth,
             original_height: topicData.originalHeight,
-            tags: topicData.tags ? JSON.stringify(topicData.tags) : '[]',
+            tags: topicData.tags || [],
             category: topicData.category
           }
         ])

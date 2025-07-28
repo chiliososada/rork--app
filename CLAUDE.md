@@ -759,7 +759,216 @@ $$;
   ('穴場', 'feature', 0),
   ('にぎやか', 'feature', 0),
   ('新しい', 'feature', 0)
-  ON CONFLICT (tag_name, category) DO NOTHING;                                                 
+  ON CONFLICT (tag_name, category) DO NOTHING;                
+
+
+   -- TokyoPark アプリケーション データベーススキーマ
+-- 位置ベースの話題ディスカッションアプリ
+
+-- 1. ユーザーテーブル
+CREATE TABLE public.users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT,
+  phone TEXT,
+  nickname TEXT NOT NULL,
+  avatar_url TEXT,
+  gender TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 2. 話題テーブル（メインコンテンツ）
+CREATE TABLE public.topics (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  description TEXT,
+  user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+  latitude DOUBLE PRECISION NOT NULL,
+  longitude DOUBLE PRECISION NOT NULL,
+  location_name TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  image_url TEXT,
+  image_aspect_ratio TEXT CHECK (image_aspect_ratio IN ('1:1', '4:5', '1.91:1')),
+  original_width INTEGER,
+  original_height INTEGER,
+  tags JSONB DEFAULT '[]'::jsonb,
+  category TEXT,
+  engagement_score DECIMAL DEFAULT 0,
+  is_promoted BOOLEAN DEFAULT FALSE,
+  promotion_end_date TIMESTAMP WITH TIME ZONE,
+  is_hidden BOOLEAN DEFAULT FALSE
+);
+
+-- 3. コメントテーブル
+CREATE TABLE public.comments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  topic_id UUID REFERENCES public.topics(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  likes_count INTEGER DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 4. チャットメッセージテーブル
+CREATE TABLE public.chat_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  topic_id UUID REFERENCES public.topics(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+  message TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 5. 話題いいねテーブル
+CREATE TABLE public.topic_likes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  topic_id UUID REFERENCES public.topics(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(topic_id, user_id)
+);
+
+-- 6. 話題お気に入りテーブル
+CREATE TABLE public.topic_favorites (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  topic_id UUID REFERENCES public.topics(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(topic_id, user_id)
+);
+
+-- 7. コメントいいねテーブル
+CREATE TABLE public.comment_likes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  comment_id UUID REFERENCES public.comments(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(comment_id, user_id)
+);
+
+-- 8. ユーザーフォロー関係テーブル
+CREATE TABLE public.user_follows (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  follower_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+  following_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(follower_id, following_id),
+  CHECK (follower_id != following_id)
+);
+
+-- 9. ユーザーブロックテーブル
+CREATE TABLE public.user_blocks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  blocker_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+  blocked_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(blocker_id, blocked_id),
+  CHECK (blocker_id != blocked_id)
+);
+
+-- 10. 話題参加者テーブル
+CREATE TABLE public.topic_participants (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  topic_id UUID REFERENCES public.topics(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+  joined_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  is_active BOOLEAN DEFAULT TRUE,
+  UNIQUE(topic_id, user_id)
+);
+
+-- 11. 標籤使用統計テーブル
+CREATE TABLE public.tag_usage_stats (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tag_name TEXT NOT NULL,
+  category TEXT NOT NULL, -- 'situation', 'mood', 'feature'
+  usage_count INTEGER DEFAULT 1,
+  last_used_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(tag_name, category)
+);
+
+-- 12. カテゴリ設定テーブル
+CREATE TABLE public.category_configs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  category_key TEXT UNIQUE NOT NULL,
+  display_name TEXT NOT NULL,
+  icon_emoji TEXT,
+  color_code TEXT,
+  commercial_priority INTEGER DEFAULT 0,
+  is_active BOOLEAN DEFAULT TRUE,
+  sort_order INTEGER DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 13. プライベートチャットテーブル
+CREATE TABLE public.private_chats (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  participant1_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+  participant2_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  last_message_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(participant1_id, participant2_id),
+  CHECK (participant1_id != participant2_id)
+);
+
+-- 14. プライベートメッセージテーブル
+CREATE TABLE public.private_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  chat_id UUID REFERENCES public.private_chats(id) ON DELETE CASCADE,
+  sender_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+  message TEXT NOT NULL,
+  is_read BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- ========== インデックス作成 ==========
+
+-- 話題テーブルのインデックス
+CREATE INDEX topics_location_idx ON public.topics(latitude, longitude);
+CREATE INDEX topics_user_id_idx ON public.topics(user_id);
+CREATE INDEX topics_created_at_idx ON public.topics(created_at DESC);
+CREATE INDEX topics_category_idx ON public.topics(category);
+CREATE INDEX topic_tags_gin_idx ON public.topics USING GIN (tags);
+CREATE INDEX topics_engagement_score_idx ON public.topics(engagement_score DESC);
+
+-- いいね・お気に入りのインデックス
+CREATE INDEX topic_likes_topic_id_idx ON public.topic_likes(topic_id);
+CREATE INDEX topic_likes_user_id_idx ON public.topic_likes(user_id);
+CREATE INDEX topic_favorites_topic_id_idx ON public.topic_favorites(topic_id);
+CREATE INDEX topic_favorites_user_id_idx ON public.topic_favorites(user_id);
+
+-- コメント関連のインデックス
+CREATE INDEX comments_topic_id_idx ON public.comments(topic_id);
+CREATE INDEX comments_user_id_idx ON public.comments(user_id);
+CREATE INDEX comments_created_at_idx ON public.comments(created_at DESC);
+CREATE INDEX comment_likes_comment_id_idx ON public.comment_likes(comment_id);
+CREATE INDEX comment_likes_user_id_idx ON public.comment_likes(user_id);
+
+-- チャット関連のインデックス
+CREATE INDEX chat_messages_topic_id_idx ON public.chat_messages(topic_id);
+CREATE INDEX chat_messages_user_id_idx ON public.chat_messages(user_id);
+CREATE INDEX chat_messages_created_at_idx ON public.chat_messages(created_at DESC);
+
+-- フォロー・ブロック関連のインデックス
+CREATE INDEX user_follows_follower_id_idx ON public.user_follows(follower_id);
+CREATE INDEX user_follows_following_id_idx ON public.user_follows(following_id);
+CREATE INDEX user_follows_created_at_idx ON public.user_follows(created_at DESC);
+CREATE INDEX user_blocks_blocker_id_idx ON public.user_blocks(blocker_id);
+CREATE INDEX user_blocks_blocked_id_idx ON public.user_blocks(blocked_id);
+
+-- 参加者関連のインデックス
+CREATE INDEX topic_participants_topic_id_idx ON public.topic_participants(topic_id);
+CREATE INDEX topic_participants_user_id_idx ON public.topic_participants(user_id);
+CREATE INDEX topic_participants_active_idx ON public.topic_participants(topic_id, user_id) WHERE is_active = TRUE;
+
+-- 標籤統計のインデックス
+CREATE INDEX tag_usage_stats_category_idx ON public.tag_usage_stats(category);
+CREATE INDEX tag_usage_stats_usage_count_idx ON public.tag_usage_stats(usage_count DESC);
+
+-- プライベートチャット関連のインデックス
+CREATE INDEX private_chats_participant1_idx ON public.private_chats(participant1_id);
+CREATE INDEX private_chats_participant2_idx ON public.private_chats(participant2_id);
+CREATE INDEX private_messages_chat_id_idx ON public.private_messages(chat_id);
+CREATE INDEX private_messages_sender_id_idx ON public.private_messages(sender_id);
+CREATE INDEX private_messages_created_at_idx ON public.private_messages(created_at DESC);                                
 如果设计到文本都使用日语
 
 我偏向于ios和安卓 web端可以降低比重

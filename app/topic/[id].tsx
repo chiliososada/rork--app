@@ -11,6 +11,7 @@ import CommentItem from "@/components/CommentItem";
 import TopicImage from "@/components/TopicImage";
 import TopicTags from "@/components/TopicTags";
 import JoinChatButton from "@/components/JoinChatButton";
+import CategoryBadge from "@/components/CategoryBadge";
 import { formatMessageTime } from "@/lib/utils/timeUtils";
 import FollowButton from "@/components/FollowButton";
 import { useFollowStore } from "@/store/follow-store";
@@ -215,7 +216,16 @@ export default function TopicDetailScreen() {
         >
           <View style={styles.topicCard}>
             <View style={styles.topicHeader}>
-              <Text style={styles.topicTitle}>{currentTopic.title}</Text>
+              <View style={styles.headerTop}>
+                <Text style={styles.topicTitle}>{currentTopic.title}</Text>
+                {currentTopic.category && (
+                  <CategoryBadge 
+                    category={currentTopic.category} 
+                    size="medium"
+                    style={styles.categoryBadge}
+                  />
+                )}
+              </View>
               <View style={styles.authorRow}>
                 <View style={styles.authorInfo}>
                   <Text style={styles.authorName}>{currentTopic.author.name}さんの投稿</Text>
@@ -385,12 +395,18 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     backgroundColor: '#FAFAFA',
   },
+  headerTop: {
+    marginBottom: 12,
+  },
   topicTitle: {
     fontSize: 24,
     fontWeight: "700",
     color: Colors.text.primary,
-    marginBottom: 12,
+    marginBottom: 8,
     lineHeight: 32,
+  },
+  categoryBadge: {
+    marginBottom: 8,
   },
   authorRow: {
     flexDirection: "row",

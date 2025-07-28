@@ -169,7 +169,8 @@ export async function fetchNearbyTopics(params: GeoQueryParams): Promise<QueryRe
             
             // Handle already parsed arrays (JSONB from database)
             if (Array.isArray(topic.tags)) {
-              return topic.tags.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+              const validTags = topic.tags.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+              return validTags.length > 0 ? validTags : undefined;
             }
             
             // Handle string format (shouldn't happen with JSONB but safeguard)
@@ -179,7 +180,8 @@ export async function fetchNearbyTopics(params: GeoQueryParams): Promise<QueryRe
               
               const parsed = JSON.parse(tagsStr);
               if (Array.isArray(parsed)) {
-                return parsed.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+                const validTags = parsed.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+                return validTags.length > 0 ? validTags : undefined;
               }
             }
             
@@ -325,7 +327,8 @@ export async function fetchMapTopics(params: GeoQueryParams): Promise<QueryResul
             
             // Handle already parsed arrays (JSONB from database)
             if (Array.isArray(topic.tags)) {
-              return topic.tags.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+              const validTags = topic.tags.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+              return validTags.length > 0 ? validTags : undefined;
             }
             
             // Handle string format (shouldn't happen with JSONB but safeguard)
@@ -335,7 +338,8 @@ export async function fetchMapTopics(params: GeoQueryParams): Promise<QueryResul
               
               const parsed = JSON.parse(tagsStr);
               if (Array.isArray(parsed)) {
-                return parsed.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+                const validTags = parsed.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+                return validTags.length > 0 ? validTags : undefined;
               }
             }
             
@@ -488,7 +492,8 @@ export async function fetchParticipatedTopics(userId: string, params: Omit<GeoQu
             
             // Handle already parsed arrays (JSONB from database)
             if (Array.isArray(topic.tags)) {
-              return topic.tags.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+              const validTags = topic.tags.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+              return validTags.length > 0 ? validTags : undefined;
             }
             
             // Handle string format (shouldn't happen with JSONB but safeguard)
@@ -498,7 +503,8 @@ export async function fetchParticipatedTopics(userId: string, params: Omit<GeoQu
               
               const parsed = JSON.parse(tagsStr);
               if (Array.isArray(parsed)) {
-                return parsed.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+                const validTags = parsed.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+                return validTags.length > 0 ? validTags : undefined;
               }
             }
             
@@ -693,7 +699,8 @@ export async function searchNearbyTopics(params: GeoQueryParams & { searchQuery:
             
             // Handle already parsed arrays (JSONB from database)
             if (Array.isArray(topic.tags)) {
-              return topic.tags.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+              const validTags = topic.tags.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+              return validTags.length > 0 ? validTags : undefined;
             }
             
             // Handle string format (shouldn't happen with JSONB but safeguard)
@@ -703,7 +710,8 @@ export async function searchNearbyTopics(params: GeoQueryParams & { searchQuery:
               
               const parsed = JSON.parse(tagsStr);
               if (Array.isArray(parsed)) {
-                return parsed.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+                const validTags = parsed.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+                return validTags.length > 0 ? validTags : undefined;
               }
             }
             
@@ -868,7 +876,8 @@ export async function searchMapTopics(params: GeoQueryParams & { searchQuery: st
             
             // Handle already parsed arrays (JSONB from database)
             if (Array.isArray(topic.tags)) {
-              return topic.tags.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+              const validTags = topic.tags.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+              return validTags.length > 0 ? validTags : undefined;
             }
             
             // Handle string format (shouldn't happen with JSONB but safeguard)
@@ -878,7 +887,8 @@ export async function searchMapTopics(params: GeoQueryParams & { searchQuery: st
               
               const parsed = JSON.parse(tagsStr);
               if (Array.isArray(parsed)) {
-                return parsed.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+                const validTags = parsed.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+                return validTags.length > 0 ? validTags : undefined;
               }
             }
             
@@ -997,7 +1007,8 @@ export async function fetchTopicsInBounds(bounds: {
             
             // Handle already parsed arrays (JSONB from database)
             if (Array.isArray(topic.tags)) {
-              return topic.tags.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+              const validTags = topic.tags.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+              return validTags.length > 0 ? validTags : undefined;
             }
             
             // Handle string format (shouldn't happen with JSONB but safeguard)
@@ -1007,7 +1018,8 @@ export async function fetchTopicsInBounds(bounds: {
               
               const parsed = JSON.parse(tagsStr);
               if (Array.isArray(parsed)) {
-                return parsed.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+                const validTags = parsed.filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0);
+                return validTags.length > 0 ? validTags : undefined;
               }
             }
             

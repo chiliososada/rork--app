@@ -17,9 +17,6 @@ import { Plus } from "lucide-react-native";
 import Colors from "@/constants/colors";
 import { useLocationStore } from "@/store/location-store";
 import { useExploreStore } from "@/store/explore-store";
-import SearchBar from "@/components/SearchBar";
-import SearchFilterBar from "@/components/SearchFilterBar";
-import SearchSettingsModal from "@/components/SearchSettingsModal";
 import CustomHeader from "@/components/CustomHeader";
 import RecommendationCarousel from "@/components/explore/RecommendationCarousel";
 import CategoryTabs from "@/components/explore/CategoryTabs";
@@ -45,7 +42,6 @@ export default function ExploreScreen() {
     selectCategory,
     trackInteraction
   } = useExploreStore();
-  const [settingsModalVisible, setSettingsModalVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   
@@ -88,16 +84,6 @@ export default function ExploreScreen() {
       loadMoreTopics(currentLocation.latitude, currentLocation.longitude);
     }
   }, [currentLocation, isLoadingMore, loadMoreTopics]);
-  
-  const handleSettingsPress = () => {
-    setSettingsModalVisible(true);
-  };
-
-  const handleSettingsChanged = () => {
-    if (currentLocation) {
-      fetchTopics(currentLocation.latitude, currentLocation.longitude, true);
-    }
-  };
   
   const handleCategorySelect = (categoryKey: string) => {
     selectCategory(categoryKey);
@@ -173,8 +159,6 @@ export default function ExploreScreen() {
         />
         
         <SafeAreaView style={styles.content} edges={['left', 'right', 'bottom']}>
-          <SearchFilterBar onSettingsPress={handleSettingsPress} />
-          
           <CategoryTabs
             categories={categories}
             selectedCategory={selectedCategory}
@@ -223,12 +207,6 @@ export default function ExploreScreen() {
         >
           <Plus size={24} color="#fff" />
         </TouchableOpacity>
-
-        <SearchSettingsModal
-          visible={settingsModalVisible}
-          onClose={() => setSettingsModalVisible(false)}
-          onSettingsChanged={handleSettingsChanged}
-        />
       </View>
     </TouchableWithoutFeedback>
   );
