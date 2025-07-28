@@ -125,7 +125,7 @@ export function CommentAvatar({ user, style }: { user: User; style?: ViewStyle }
   return (
     <UserAvatar 
       user={user} 
-      size="small" 
+      size={28} 
       style={style}
       showBorder={false}
     />

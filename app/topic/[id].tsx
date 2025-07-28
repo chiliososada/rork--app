@@ -462,16 +462,19 @@ const styles = StyleSheet.create({
   },
   commentsSection: {
     padding: 16,
-    paddingTop: 0,
+    paddingTop: 8,
   },
   commentHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#E8E8E8',
   },
   commentTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "700",
     color: Colors.text.primary,
   },
