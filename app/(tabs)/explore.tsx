@@ -103,6 +103,7 @@ export default function ExploreScreen() {
   const renderItem = useCallback(({ item }: { item: EnhancedTopic }) => (
     <EnhancedTopicCard
       topic={item}
+      showMenuButton={true}
     />
   ), []);
   

@@ -8,17 +8,21 @@ import {
   FlatList,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
-import { MessageSquare, Heart, Bookmark, Users, MessageCircle } from 'lucide-react-native';
+import { MessageSquare, Heart, Bookmark, Users, MessageCircle, MoreHorizontal, Flag, Shield } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useAuthStore } from '@/store/auth-store';
 import { useFollowStore } from '@/store/follow-store';
 import { useTopicDetailsStore } from '@/store/topic-details-store';
 import { usePrivateChatStore } from '@/store/private-chat-store';
+import { useUserBlocking } from '@/store/blocking-store';
 import AvatarPicker from '@/components/AvatarPicker';
 import FollowButton from '@/components/FollowButton';
+import BlockUserButton from '@/components/BlockUserButton';
+import ReportModal from '@/components/ReportModal';
 import TopicCard from '@/components/TopicCard';
 import { supabase } from '@/lib/supabase';
 import { User, Topic } from '@/types';
@@ -30,6 +34,7 @@ export default function UserProfileScreen() {
   const { followStats, followStatus, fetchFollowStats, fetchFollowStatus } = useFollowStore();
   const { fetchUserTopics } = useTopicDetailsStore();
   const { getOrCreatePrivateChat } = usePrivateChatStore();
+  const { isUserBlockedSync, loadBlockedUsers } = useUserBlocking();
   
   const [user, setUser] = useState<User | null>(null);
   const [userTopics, setUserTopics] = useState<Topic[]>([]);
@@ -38,6 +43,8 @@ export default function UserProfileScreen() {
   const [topicCount, setTopicCount] = useState(0);
   const [likeCount, setLikeCount] = useState(0);
   const [favoriteCount, setFavoriteCount] = useState(0);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
   
   const stats = followStats.get(id);
   const followersCount = stats?.followersCount || 0;
@@ -55,8 +62,16 @@ export default function UserProfileScreen() {
   useEffect(() => {
     if (id && currentUser?.id && id !== currentUser.id) {
       fetchFollowStatus(currentUser.id, [id]);
+      loadBlockedUsers(currentUser.id);
     }
   }, [id, currentUser?.id]);
+
+  useEffect(() => {
+    if (id && currentUser?.id) {
+      const blocked = isUserBlockedSync(id);
+      setIsBlocked(blocked);
+    }
+  }, [id, currentUser?.id, isUserBlockedSync]);
   
   const loadUserData = async (refresh = false) => {
     if (refresh) {
@@ -179,6 +194,43 @@ export default function UserProfileScreen() {
       console.error('Error creating private chat:', error);
     }
   };
+
+  const handleMoreOptions = () => {
+    if (!user) return;
+
+    Alert.alert(
+      'ユーザーオプション',
+      `${user.name}さんに対する操作を選択してください`,
+      [
+        {
+          text: 'ユーザーを通報',
+          onPress: () => setShowReportModal(true),
+          style: 'destructive',
+        },
+        {
+          text: 'キャンセル',
+          style: 'cancel',
+        },
+      ]
+    );
+  };
+
+  const handleBlockChange = (blocked: boolean) => {
+    setIsBlocked(blocked);
+    if (blocked) {
+      // ブロック後は自動的に前の画面に戻る
+      Alert.alert(
+        'ブロック完了',
+        `${user?.name || 'ユーザー'}をブロックしました。\nこのユーザーの投稿やコメントは表示されなくなります。`,
+        [
+          {
+            text: 'OK',
+            onPress: () => router.back(),
+          },
+        ]
+      );
+    }
+  };
   
   const renderTopic = ({ item }: { item: Topic }) => (
     <TopicCard topic={item} />
@@ -242,6 +294,15 @@ export default function UserProfileScreen() {
           headerBackTitle: '',
           headerBackVisible: true,
           headerShadowVisible: true,
+          headerRight: () => (
+            <TouchableOpacity
+              onPress={handleMoreOptions}
+              style={styles.headerButton}
+              activeOpacity={0.7}
+            >
+              <MoreHorizontal size={24} color={Colors.text.primary} />
+            </TouchableOpacity>
+          ),
         }}
       />
       
@@ -278,11 +339,29 @@ export default function UserProfileScreen() {
                 style={styles.messageButton}
                 onPress={handleSendMessage}
                 activeOpacity={0.7}
+                disabled={isBlocked}
               >
-                <MessageCircle size={16} color={Colors.primary} />
-                <Text style={styles.messageButtonText}>メッセージ</Text>
+                <MessageCircle size={16} color={isBlocked ? Colors.text.secondary : Colors.primary} />
+                <Text style={[
+                  styles.messageButtonText, 
+                  isBlocked && { color: Colors.text.secondary }
+                ]}>
+                  {isBlocked ? 'ブロック中' : 'メッセージ'}
+                </Text>
               </TouchableOpacity>
             </View>
+
+            {!isBlocked && (
+              <View style={styles.blockButtonContainer}>
+                <BlockUserButton
+                  userId={user.id}
+                  userName={user.name}
+                  size="small"
+                  variant="secondary"
+                  onBlockChange={handleBlockChange}
+                />
+              </View>
+            )}
             
             <View style={styles.statsContainer}>
               <TouchableOpacity 
@@ -345,6 +424,15 @@ export default function UserProfileScreen() {
           )}
         </View>
       </ScrollView>
+
+      {/* Report Modal */}
+      <ReportModal
+        visible={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        reportedUserId={user.id}
+        reportedUserName={user.name}
+        contentType="user"
+      />
     </SafeAreaView>
   );
 }
@@ -465,5 +553,13 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     color: Colors.text.secondary,
+  },
+  headerButton: {
+    padding: 8,
+    marginRight: 8,
+  },
+  blockButtonContainer: {
+    marginTop: 8,
+    marginBottom: 12,
   },
 });

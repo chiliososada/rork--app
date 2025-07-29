@@ -1,15 +1,19 @@
 import React from 'react';
-import { View, StyleSheet, ViewStyle } from 'react-native';
+import { View, StyleSheet, ViewStyle, Text } from 'react-native';
 import { Image } from 'expo-image';
+import { Shield } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { User } from '@/types';
+import { User, SafeUser } from '@/types';
+import { useUserBlockStatus } from '@/hooks/useContentFilter';
 
 interface UserAvatarProps {
-  user: User;
+  user: User | SafeUser;
   size?: 'small' | 'medium' | 'large' | number;
   style?: ViewStyle;
   showBorder?: boolean;
   borderColor?: string;
+  showBlockedIndicator?: boolean; // Whether to show blocked user indicator
+  userName?: string; // Optional username for blocked avatar placeholder
 }
 
 export default function UserAvatar({ 
@@ -17,8 +21,11 @@ export default function UserAvatar({
   size = 'medium', 
   style,
   showBorder = false,
-  borderColor = Colors.card
+  borderColor = Colors.card,
+  showBlockedIndicator = true,
+  userName
 }: UserAvatarProps) {
+  const { isBlocked } = useUserBlockStatus(user.id);
   
   const getSize = () => {
     if (typeof size === 'number') return size;
@@ -37,6 +44,36 @@ export default function UserAvatar({
 
   const avatarSize = getSize();
   const borderRadius = avatarSize / 2;
+
+  // Show blocked indicator if user is blocked
+  if (isBlocked && showBlockedIndicator) {
+    return (
+      <View
+        style={[
+          styles.container,
+          styles.blockedContainer,
+          {
+            width: avatarSize,
+            height: avatarSize,
+            borderRadius,
+          },
+          showBorder && {
+            borderWidth: 2,
+            borderColor: '#8E8E93',
+            borderRadius: borderRadius + 2,
+          },
+          style,
+        ]}
+      >
+        <Shield size={avatarSize * 0.4} color="#8E8E93" />
+        {avatarSize >= 40 && (
+          <Text style={[styles.blockedText, { fontSize: avatarSize * 0.15 }]}>
+            ブロック済み
+          </Text>
+        )}
+      </View>
+    );
+  }
 
   return (
     <View
@@ -175,5 +212,19 @@ const styles = StyleSheet.create({
   },
   avatar: {
     backgroundColor: Colors.border,
+  },
+  blockedContainer: {
+    backgroundColor: '#F2F2F7',
+    borderWidth: 1,
+    borderColor: '#E8E8E8',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexDirection: 'column',
+  },
+  blockedText: {
+    color: '#8E8E93',
+    fontWeight: '500',
+    marginTop: 2,
+    textAlign: 'center',
   },
 });

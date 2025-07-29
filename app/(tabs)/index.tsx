@@ -121,7 +121,7 @@ export default function NearbyScreen() {
   }, [getCurrentLocation, fetchNearbyTopics, lastLocationRefresh]);
   
   const renderTopic = useCallback(({ item }: { item: Topic }) => {
-    return <TopicCard topic={item} />;
+    return <TopicCard topic={item} showMenuButton={true} />;
   }, []);
 
   const renderFooter = () => {

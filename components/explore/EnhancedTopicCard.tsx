@@ -1,7 +1,7 @@
 import React, { useState, memo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MapPin, MessageCircle, Users, Heart, Award } from 'lucide-react-native';
+import { MapPin, MessageCircle, Users, Heart, Award, MoreHorizontal, Flag, Trash2, Shield } from 'lucide-react-native';
 import { EnhancedTopic } from '@/types';
 import Colors from '@/constants/colors';
 import { TopicCardImage } from '@/components/TopicImage';
@@ -10,6 +10,8 @@ import TopicTags from '@/components/TopicTags';
 import { useAuthStore } from '@/store/auth-store';
 import { formatChatListTime } from '@/lib/utils/timeUtils';
 import { useExploreStore } from '@/store/explore-store';
+import { useUserBlocking } from '@/store/blocking-store';
+import ReportModal from '@/components/ReportModal';
 
 interface EnhancedTopicCardProps {
   topic: EnhancedTopic;
@@ -25,6 +27,19 @@ function EnhancedTopicCard({
   const router = useRouter();
   const { user } = useAuthStore();
   const { trackInteraction } = useExploreStore();
+  const { isUserBlockedSync, blockUserWithConfirmation, unblockUserWithConfirmation } = useUserBlocking();
+  const [showActionMenu, setShowActionMenu] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
+
+  // Check if the topic author is blocked
+  const isAuthorBlocked = user && topic.author.id !== user.id ? isUserBlockedSync(topic.author.id) : false;
+  const isOwnTopic = user?.id === topic.author.id;
+
+  // Initialize block status
+  React.useEffect(() => {
+    setIsBlocked(isAuthorBlocked);
+  }, [isAuthorBlocked]);
   
   const formatDistance = (meters: number) => {
     if (meters < 1000) {
@@ -39,10 +54,38 @@ function EnhancedTopicCard({
     await trackInteraction(topic.id, 'click', topic.category);
     router.push(`/topic/${topic.id}`);
   };
-  
-  
-  
-  // 移除handleMenuPress函数
+
+  const handleMenuPress = (e: any) => {
+    e.stopPropagation();
+    setShowActionMenu(true);
+  };
+
+  const handleReportPress = () => {
+    setShowActionMenu(false);
+    setShowReportModal(true);
+  };
+
+  const handleBlockPress = async () => {
+    setShowActionMenu(false);
+    
+    if (isBlocked) {
+      // Unblock user
+      const success = await unblockUserWithConfirmation(topic.author.id, topic.author.name);
+      if (success) {
+        setIsBlocked(false);
+      }
+    } else {
+      // Block user
+      const success = await blockUserWithConfirmation(topic.author.id, topic.author.name);
+      if (success) {
+        setIsBlocked(true);
+      }
+    }
+  };
+
+  const closeMenu = () => {
+    setShowActionMenu(false);
+  };
   
   const handleDeletePress = (e: any) => {
     e.stopPropagation();
@@ -102,7 +145,17 @@ function EnhancedTopicCard({
               <Text style={styles.time}>{formatChatListTime(topic.createdAt)}</Text>
             </View>
           </View>
-          
+
+          {/* Menu Button - Show only for other users' topics */}
+          {!isOwnTopic && !isAuthorBlocked && (
+            <TouchableOpacity 
+              style={styles.menuButton}
+              onPress={handleMenuPress}
+              activeOpacity={0.7}
+            >
+              <MoreHorizontal size={20} color={Colors.text.secondary} />
+            </TouchableOpacity>
+          )}
         </View>
         
         <View style={styles.content}>
@@ -162,7 +215,75 @@ function EnhancedTopicCard({
         </View>
       </TouchableOpacity>
       
-      {/* 移除了Modal */}
+      {/* Action Menu Modal */}
+      <Modal
+        visible={showActionMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={closeMenu}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={closeMenu}
+        >
+          <View style={styles.actionMenu}>
+            {isOwnTopic && onDelete && (
+              <TouchableOpacity 
+                style={styles.actionMenuItem}
+                onPress={handleDeletePress}
+                activeOpacity={0.7}
+              >
+                <Trash2 size={20} color={Colors.error} />
+                <Text style={styles.deleteText}>削除</Text>
+              </TouchableOpacity>
+            )}
+            
+            {!isOwnTopic && (
+              <>
+                <TouchableOpacity 
+                  style={styles.actionMenuItem}
+                  onPress={handleReportPress}
+                  activeOpacity={0.7}
+                >
+                  <Flag size={20} color="#FF9500" />
+                  <Text style={styles.reportText}>通報</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.actionMenuItem}
+                  onPress={handleBlockPress}
+                  activeOpacity={0.7}
+                >
+                  <Shield size={20} color={isBlocked ? '#34C759' : '#FF3B30'} />
+                  <Text style={styles.blockText}>
+                    {isBlocked ? 'ブロック解除' : 'ブロック'}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
+            
+            <TouchableOpacity 
+              style={[styles.actionMenuItem, styles.cancelItem]}
+              onPress={closeMenu}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.cancelText}>キャンセル</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Report Modal */}
+      <ReportModal
+        visible={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        reportedUserId={topic.author.id}
+        reportedUserName={topic.author.name}
+        contentType="topic"
+        contentId={topic.id}
+        contentPreview={`${topic.title}: ${topic.description?.substring(0, 100)}...`}
+      />
     </>
   );
 }
@@ -290,7 +411,58 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     minWidth: 16,
   },
-  // 移除了所有Modal相关的样式
+  menuButton: {
+    padding: 8,
+    marginLeft: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  actionMenu: {
+    backgroundColor: Colors.card,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 20,
+    paddingBottom: 40,
+    paddingHorizontal: 20,
+  },
+  actionMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  cancelItem: {
+    backgroundColor: Colors.background,
+    justifyContent: 'center',
+  },
+  deleteText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: Colors.error,
+    marginLeft: 12,
+  },
+  cancelText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: Colors.text.primary,
+  },
+  reportText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#FF9500',
+    marginLeft: 12,
+  },
+  blockText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: Colors.text.secondary,
+    marginLeft: 12,
+  },
 });
 
 // 记忆化组件以优化性能

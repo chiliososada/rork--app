@@ -3,6 +3,8 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User } from '@/types';
 import { supabase } from '@/lib/supabase';
+import { useBlockingStore } from '@/store/blocking-store';
+import { useReportingStore } from '@/store/reporting-store';
 
 interface AuthState {
   user: User | null;
@@ -142,6 +144,14 @@ export const useAuthStore = create<AuthState>()(
 
       logout: async () => {
         await supabase.auth.signOut();
+        
+        // Clear related stores when logging out
+        const blockingStore = useBlockingStore.getState();
+        const reportingStore = useReportingStore.getState();
+        
+        blockingStore.clearBlockStatusCache();
+        reportingStore.clearReportCache();
+        
         set({ 
           user: null, 
           isAuthenticated: false 
@@ -175,6 +185,32 @@ export const useAuthStore = create<AuthState>()(
                 user: userObj,
                 isAuthenticated: true 
               });
+
+              // Load user-specific data when authenticated (only if not already loaded recently)
+              const blockingStore = useBlockingStore.getState();
+              const reportingStore = useReportingStore.getState();
+              
+              // Only load blocked users if we don't have recent data or if user changed
+              const now = Date.now();
+              const fiveMinutes = 5 * 60 * 1000; // 5 minutes in milliseconds
+              const shouldLoadBlocked = !blockingStore.lastUpdated || 
+                                      (now - blockingStore.lastUpdated > fiveMinutes) ||
+                                      blockingStore.currentLoadingUserId !== userObj.id;
+              
+              if (shouldLoadBlocked && !blockingStore.loadingPromise) {
+                blockingStore.loadBlockedUsers(userObj.id).catch(() => {
+                  // Silently handle error - component will handle retry if needed
+                });
+              }
+              
+              // Load report data only if needed
+              if (!reportingStore.categories.length) {
+                reportingStore.loadReportCategories();
+              }
+              
+              if (!reportingStore.userReports.length) {
+                reportingStore.loadUserReports(userObj.id);
+              }
             }
           } else {
             set({ 
@@ -218,13 +254,12 @@ export const useAuthStore = create<AuthState>()(
             isUpdatingAvatar: false 
           });
 
-          console.log('头像更新成功:', avatarUrl);
-        } catch (error: any) {
+          } catch (error: any) {
           set({ 
             error: "アバターの更新に失敗しました。もう一度お試しください。", 
             isUpdatingAvatar: false 
           });
-          console.error('头像更新错误:', error);
+          console.error('Avatar update error:', error);
           throw error;
         }
       }

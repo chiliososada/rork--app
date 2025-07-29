@@ -1,14 +1,16 @@
 import React, { useState, memo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Alert, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MapPin, MessageCircle, Users, Heart, Bookmark, MoreHorizontal, Trash2 } from 'lucide-react-native';
+import { MapPin, MessageCircle, Users, Heart, Bookmark, MoreHorizontal, Trash2, Flag, Shield } from 'lucide-react-native';
 import { Topic } from '@/types';
 import Colors from '@/constants/colors';
 import { TopicCardImage } from '@/components/TopicImage';
 import { TopicCardAvatar } from '@/components/UserAvatar';
 import TopicTags from '@/components/TopicTags';
 import { useAuthStore } from '@/store/auth-store';
+import { useUserBlocking } from '@/store/blocking-store';
 import { formatChatListTime } from '@/lib/utils/timeUtils';
+import ReportModal from '@/components/ReportModal';
 
 interface TopicCardProps {
   topic: Topic;
@@ -19,8 +21,20 @@ interface TopicCardProps {
 function TopicCard({ topic, showMenuButton = false, onDelete }: TopicCardProps) {
   const router = useRouter();
   const { user } = useAuthStore();
+  const { isUserBlockedSync, blockUserWithConfirmation, unblockUserWithConfirmation } = useUserBlocking();
   const [showActionMenu, setShowActionMenu] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
   const scaleValue = useState(new Animated.Value(1))[0];
+
+  // Check if the topic author is blocked
+  const isAuthorBlocked = user && topic.author.id !== user.id ? isUserBlockedSync(topic.author.id) : false;
+  const isOwnTopic = user?.id === topic.author.id;
+
+  // Initialize block status
+  React.useEffect(() => {
+    setIsBlocked(isAuthorBlocked);
+  }, [isAuthorBlocked]);
   
   const formatDistance = (meters: number) => {
     if (meters < 1000) {
@@ -57,6 +71,29 @@ function TopicCard({ topic, showMenuButton = false, onDelete }: TopicCardProps) 
   const handleMenuPress = (e: any) => {
     e.stopPropagation();
     setShowActionMenu(true);
+  };
+
+  const handleReportPress = () => {
+    setShowActionMenu(false);
+    setShowReportModal(true);
+  };
+
+  const handleBlockPress = async () => {
+    setShowActionMenu(false);
+    
+    if (isBlocked) {
+      // Unblock user
+      const success = await unblockUserWithConfirmation(topic.author.id, topic.author.name);
+      if (success) {
+        setIsBlocked(false);
+      }
+    } else {
+      // Block user
+      const success = await blockUserWithConfirmation(topic.author.id, topic.author.name);
+      if (success) {
+        setIsBlocked(true);
+      }
+    }
   };
   
   const handleDeletePress = () => {
@@ -106,11 +143,24 @@ function TopicCard({ topic, showMenuButton = false, onDelete }: TopicCardProps) 
       <View style={styles.header}>
         <View style={styles.authorContainer}>
           <TopicCardAvatar user={topic.author} />
-          <Text style={styles.authorName}>{topic.author.name}</Text>
+          <View style={styles.authorInfo}>
+            <View style={styles.authorNameRow}>
+              <Text style={styles.authorName}>{topic.author.name}</Text>
+            </View>
+            <Text style={styles.time}>{formatChatListTime(topic.createdAt)}</Text>
+          </View>
         </View>
-        <View style={styles.headerRight}>
-          <Text style={styles.time}>{formatChatListTime(topic.createdAt)}</Text>
-        </View>
+
+        {/* Menu Button - Show only for other users' topics */}
+        {!isOwnTopic && !isAuthorBlocked && (
+          <TouchableOpacity 
+            style={styles.menuButton}
+            onPress={handleMenuPress}
+            activeOpacity={0.7}
+          >
+            <MoreHorizontal size={20} color={Colors.text.secondary} />
+          </TouchableOpacity>
+        )}
       </View>
       
       <View style={styles.content}>
@@ -160,17 +210,6 @@ function TopicCard({ topic, showMenuButton = false, onDelete }: TopicCardProps) 
             <Text style={styles.statText}>{topic.participantCount}</Text>
           </View>
         </View>
-        
-        {/* Menu Button */}
-        {showMenuButton && (
-          <TouchableOpacity 
-            style={styles.menuButton}
-            onPress={handleMenuPress}
-            activeOpacity={0.7}
-          >
-            <MoreHorizontal size={20} color={Colors.text.secondary} />
-          </TouchableOpacity>
-        )}
       </View>
         </Animated.View>
       </TouchableOpacity>
@@ -188,14 +227,40 @@ function TopicCard({ topic, showMenuButton = false, onDelete }: TopicCardProps) 
           onPress={closeMenu}
         >
           <View style={styles.actionMenu}>
-            <TouchableOpacity 
-              style={styles.actionMenuItem}
-              onPress={handleDeletePress}
-              activeOpacity={0.7}
-            >
-              <Trash2 size={20} color={Colors.error} />
-              <Text style={styles.deleteText}>削除</Text>
-            </TouchableOpacity>
+            {isOwnTopic && onDelete && (
+              <TouchableOpacity 
+                style={styles.actionMenuItem}
+                onPress={handleDeletePress}
+                activeOpacity={0.7}
+              >
+                <Trash2 size={20} color={Colors.error} />
+                <Text style={styles.deleteText}>削除</Text>
+              </TouchableOpacity>
+            )}
+            
+            {!isOwnTopic && (
+              <>
+                <TouchableOpacity 
+                  style={styles.actionMenuItem}
+                  onPress={handleReportPress}
+                  activeOpacity={0.7}
+                >
+                  <Flag size={20} color="#FF9500" />
+                  <Text style={styles.reportText}>通報</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.actionMenuItem}
+                  onPress={handleBlockPress}
+                  activeOpacity={0.7}
+                >
+                  <Shield size={20} color={isBlocked ? '#34C759' : '#FF3B30'} />
+                  <Text style={styles.blockText}>
+                    {isBlocked ? 'ブロック解除' : 'ブロック'}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
             
             <TouchableOpacity 
               style={[styles.actionMenuItem, styles.cancelItem]}
@@ -207,6 +272,17 @@ function TopicCard({ topic, showMenuButton = false, onDelete }: TopicCardProps) 
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Report Modal */}
+      <ReportModal
+        visible={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        reportedUserId={topic.author.id}
+        reportedUserName={topic.author.name}
+        contentType="topic"
+        contentId={topic.id}
+        contentPreview={`${topic.title}: ${topic.description?.substring(0, 100)}...`}
+      />
     </>
   );
 }
@@ -215,7 +291,7 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: Colors.card,
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 20,
     borderBottomWidth: 0.5,
     borderBottomColor: Colors.borderLight,
     position: 'relative',
@@ -224,22 +300,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   authorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    flex: 1,
+  },
+  authorInfo: {
+    flex: 1,
+  },
+  authorNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   authorName: {
     fontSize: 15,
     fontWeight: '600',
     color: Colors.text.primary,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
   },
   time: {
     fontSize: 13,
@@ -247,7 +327,7 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
   content: {
-    marginBottom: 16,
+    marginBottom: 20,
   },
   tagsContainer: {
     marginTop: 6,
@@ -302,17 +382,8 @@ const styles = StyleSheet.create({
     minWidth: 16,
   },
   menuButton: {
-    position: 'absolute',
-    bottom: 16,
-    right: 16,
     padding: 8,
-    borderRadius: 20,
-    backgroundColor: Colors.background,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    marginLeft: 8,
   },
   modalOverlay: {
     flex: 1,
@@ -349,6 +420,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: Colors.text.primary,
+  },
+  reportText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#FF9500',
+    marginLeft: 12,
+  },
+  blockText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: Colors.text.secondary,
+    marginLeft: 12,
   },
 });
 

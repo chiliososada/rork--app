@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LogOut, Settings, MapPin, Bell, Shield, HelpCircle, MessageSquare, Heart, Bookmark, ThumbsUp } from "lucide-react-native";
+import { LogOut, Settings, MapPin, Bell, Shield, HelpCircle, MessageSquare, Heart, Bookmark, ThumbsUp, FileText, ScrollText, ShoppingBag, Users } from "lucide-react-native";
 import Colors from "@/constants/colors";
 import { useAuthStore } from "@/store/auth-store";
 import CustomHeader from "@/components/CustomHeader";
@@ -11,7 +11,6 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { useTopicDetailsStore } from "@/store/topic-details-store";
 import { useCallback } from "react";
 import { useFollowStore } from "@/store/follow-store";
-import { Users } from "lucide-react-native";
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -142,22 +141,22 @@ export default function ProfileScreen() {
     {
       icon: <Settings size={20} color="#007AFF" />,
       title: "アカウント設定",
-      onPress: () => {}
+      onPress: () => router.push('/settings/account')
     },
     {
       icon: <MapPin size={20} color="#34C759" />,
       title: "位置情報設定",
-      onPress: () => {}
+      onPress: () => router.push('/settings/location')
     },
     {
       icon: <Bell size={20} color="#FF9500" />,
       title: "通知設定",
-      onPress: () => {}
+      onPress: () => router.push('/settings/notifications')
     },
     {
       icon: <Shield size={20} color="#5856D6" />,
       title: "プライバシー設定",
-      onPress: () => {}
+      onPress: () => router.push('/settings/privacy')
     },
     {
       icon: <HelpCircle size={20} color="#FF3B30" />,
@@ -262,6 +261,7 @@ export default function ProfileScreen() {
             ))}
           </View>
           
+          
           <TouchableOpacity 
             style={styles.logoutButton}
             onPress={handleLogout}
@@ -269,6 +269,14 @@ export default function ProfileScreen() {
           >
             <LogOut size={20} color={Colors.error} />
             <Text style={styles.logoutText}>ログアウト</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            onPress={() => router.push('/legal/commercial-law')}
+            style={styles.legalLinkContainer}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.legalLinkText}>特定商取引法に基づく表記</Text>
           </TouchableOpacity>
           
           <Text style={styles.versionText}>バージョン 1.0.0</Text>
@@ -402,5 +410,14 @@ const styles = StyleSheet.create({
     color: Colors.text.secondary,
     textAlign: "center",
     marginBottom: 24,
+  },
+  legalLinkContainer: {
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  legalLinkText: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    textDecorationLine: 'underline',
   },
 });

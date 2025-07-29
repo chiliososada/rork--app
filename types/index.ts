@@ -237,3 +237,93 @@ export interface ChallengeActivity {
 
 // 探索页面交互类型
 export type ExploreInteractionType = 'view' | 'click' | 'like' | 'share' | 'similar_post' | 'category_click';
+
+// 用户阻止相关接口
+export interface BlockedUser {
+  blocked_user_id: string;
+  blocked_user_name: string;
+  blocked_user_avatar: string | null;
+  reason: string | null;
+  is_mutual: boolean;
+  blocked_at: string;
+}
+
+export interface BlockStatus {
+  is_blocked_by_user1: boolean;
+  is_blocked_by_user2: boolean;
+  is_any_blocked: boolean;
+}
+
+export interface BlockAction {
+  action: 'blocked' | 'unblocked';
+  is_blocked: boolean;
+  is_mutual?: boolean;
+}
+
+// 举报系统相关接口
+export interface ReportCategory {
+  id: string;
+  category_key: string;
+  display_name_ja: string;
+  display_name_en: string;
+  description_ja: string | null;
+  description_en: string | null;
+  requires_details: boolean;
+  sort_order: number;
+}
+
+export interface UserReport {
+  report_id: string;
+  reported_user_name: string;
+  content_type: 'topic' | 'comment' | 'chat_message' | 'user' | 'private_message';
+  category_name: string;
+  reason: string;
+  status: 'pending' | 'reviewing' | 'resolved' | 'dismissed' | 'escalated';
+  created_at: string;
+  resolved_at: string | null;
+}
+
+export interface ReportSubmissionResult {
+  report_id: string | null;
+  success: boolean;
+  message: string;
+}
+
+export interface ContentReportStatus {
+  is_reported: boolean;
+  report_status: string | null;
+  report_date: string | null;
+}
+
+export interface ReportStats {
+  total: number;
+  pending: number;
+  resolved: number;
+  dismissed: number;
+  recentReports: UserReport[];
+}
+
+// 年龄验证相关接口
+export interface AgeVerificationResult {
+  success: boolean;
+  age: number;
+  message: string;
+  requires_parent_consent: boolean;
+}
+
+export interface AgeComplianceCheck {
+  is_compliant: boolean;
+  age: number | null;
+  verification_status: boolean;
+  verification_date: string | null;
+  needs_reverification: boolean;
+}
+
+// 增强的用户接口，包含安全相关信息
+export interface SafeUser extends User {
+  is_blocked?: boolean;
+  is_reported?: boolean;
+  age_verified?: boolean;
+  birth_date?: string;
+  verification_method?: 'self_declared' | 'document' | 'parent_consent' | 'credit_card';
+}

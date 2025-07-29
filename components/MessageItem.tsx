@@ -5,8 +5,9 @@ import { Message } from '@/types';
 import Colors from '@/constants/colors';
 import { useAuthStore } from '@/store/auth-store';
 import { useChatStore } from '@/store/chat-store';
-import { Quote, Copy } from 'lucide-react-native';
+import { Quote, Copy, Flag } from 'lucide-react-native';
 import { formatMessageTime } from '@/lib/utils/timeUtils';
+import ReportModal from '@/components/ReportModal';
 
 interface MessageItemProps {
   message: Message;
@@ -16,6 +17,7 @@ export default function MessageItem({ message }: MessageItemProps) {
   const { user } = useAuthStore();
   const { setQuotedMessage } = useChatStore();
   const [showContextMenu, setShowContextMenu] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
   const isCurrentUser = user?.id === message.author.id;
   
   // コピー機能
@@ -28,6 +30,12 @@ export default function MessageItem({ message }: MessageItemProps) {
       console.error('Copy failed:', error);
       Alert.alert('エラー', 'コピーに失敗しました');
     }
+  };
+
+  // 通報機能
+  const handleReportPress = () => {
+    setShowContextMenu(false);
+    setShowReportModal(true);
   };
   
   // URLを検出する関数
@@ -136,9 +144,31 @@ export default function MessageItem({ message }: MessageItemProps) {
               <Quote size={18} color={Colors.text.primary} />
               <Text style={styles.contextMenuText}>引用返信</Text>
             </TouchableOpacity>
+            
+            {/* 他のユーザーのメッセージにのみ通報オプションを表示 */}
+            {!isCurrentUser && (
+              <TouchableOpacity
+                style={styles.contextMenuItem}
+                onPress={handleReportPress}
+              >
+                <Flag size={18} color="#FF9500" />
+                <Text style={[styles.contextMenuText, styles.reportText]}>メッセージを通報</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Report Modal */}
+      <ReportModal
+        visible={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        reportedUserId={message.author.id}
+        reportedUserName={message.author.name}
+        contentType="chat_message"
+        contentId={message.id}
+        contentPreview={message.text.substring(0, 100)}
+      />
       
     </View>
   );
@@ -253,5 +283,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.text.primary,
     marginLeft: 8,
+  },
+  reportText: {
+    color: '#FF9500',
+    fontWeight: '500',
   },
 });
