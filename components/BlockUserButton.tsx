@@ -11,6 +11,7 @@ import { Shield, ShieldOff } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useUserBlocking } from '@/store/blocking-store';
 import { useAuthStore } from '@/store/auth-store';
+import { useToast } from '@/hooks/useToast';
 
 interface BlockUserButtonProps {
   userId: string;
@@ -37,6 +38,7 @@ export default function BlockUserButton({
     isUserBlocked,
     loadBlockedUsers,
   } = useUserBlocking();
+  const toast = useToast();
 
   const [isBlocked, setIsBlocked] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -96,10 +98,26 @@ export default function BlockUserButton({
               text: 'ブロック解除',
               style: 'default',
               onPress: async () => {
-                const success = await unblockUserWithConfirmation(userId, userName);
-                if (success) {
-                  setIsBlocked(false);
-                  onBlockChange?.(false);
+                try {
+                  const success = await unblockUserWithConfirmation(userId, userName);
+                  if (success) {
+                    setIsBlocked(false);
+                    onBlockChange?.(false);
+                    toast.success(
+                      'ブロック解除完了',
+                      `${userName}さんのブロックを解除しました`
+                    );
+                  } else {
+                    toast.error(
+                      'ブロック解除失敗',
+                      'ブロック解除に失敗しました。もう一度お試しください。'
+                    );
+                  }
+                } catch (error) {
+                  toast.error(
+                    'エラー',
+                    'ネットワークエラーが発生しました。接続を確認してお試しください。'
+                  );
                 }
                 setIsLoading(false);
               },
@@ -134,14 +152,30 @@ export default function BlockUserButton({
                       text: 'ブロックする',
                       style: 'destructive',
                       onPress: async (reason) => {
-                        const success = await blockUserWithConfirmation(
-                          userId, 
-                          userName, 
-                          reason || undefined
-                        );
-                        if (success) {
-                          setIsBlocked(true);
-                          onBlockChange?.(true);
+                        try {
+                          const success = await blockUserWithConfirmation(
+                            userId, 
+                            userName, 
+                            reason || undefined
+                          );
+                          if (success) {
+                            setIsBlocked(true);
+                            onBlockChange?.(true);
+                            toast.success(
+                              'ブロック完了',
+                              `${userName}さんをブロックしました`
+                            );
+                          } else {
+                            toast.error(
+                              'ブロック失敗',
+                              'ブロックに失敗しました。もう一度お試しください。'
+                            );
+                          }
+                        } catch (error) {
+                          toast.error(
+                            'エラー',
+                            'ネットワークエラーが発生しました。接続を確認してお試しください。'
+                          );
                         }
                         setIsLoading(false);
                       },
@@ -158,7 +192,10 @@ export default function BlockUserButton({
       }
     } catch (error) {
       console.error('Error in block toggle:', error);
-      Alert.alert('エラー', 'ブロック操作に失敗しました。もう一度お試しください。');
+      toast.error(
+        'エラー',
+        '予期しないエラーが発生しました。アプリを再起動してお試しください。'
+      );
       setIsLoading(false);
     }
   };
@@ -236,7 +273,14 @@ export default function BlockUserButton({
       activeOpacity={0.7}
     >
       {isLoading ? (
-        <ActivityIndicator size="small" color={variantStyles.iconColor} />
+        <>
+          <ActivityIndicator size="small" color={variantStyles.iconColor} />
+          {showText && (
+            <Text style={[styles.text, variantStyles.text, sizeStyles.text]}>
+              {isBlocked ? 'ブロック解除中...' : 'ブロック中...'}
+            </Text>
+          )}
+        </>
       ) : (
         <>
           {isBlocked ? (

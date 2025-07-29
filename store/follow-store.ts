@@ -21,11 +21,11 @@ interface FollowState {
   isTogglingFollow: boolean;
   
   // アクション
-  fetchFollowStats: (userIds: string[]) => Promise<void>;
+  fetchFollowStats: (userIds: string[], viewingUserId?: string) => Promise<void>;
   fetchFollowStatus: (currentUserId: string, targetUserIds: string[]) => Promise<void>;
   toggleFollow: (currentUserId: string, targetUserId: string) => Promise<boolean>;
-  fetchFollowers: (userId: string, limit?: number, offset?: number) => Promise<User[]>;
-  fetchFollowing: (userId: string, limit?: number, offset?: number) => Promise<User[]>;
+  fetchFollowers: (userId: string, limit?: number, offset?: number, viewingUserId?: string) => Promise<User[]>;
+  fetchFollowing: (userId: string, limit?: number, offset?: number, viewingUserId?: string) => Promise<User[]>;
   
   // キャッシュクリア
   clearCache: () => void;
@@ -47,14 +47,15 @@ export const useFollowStore = create<FollowState>((set, get) => ({
   isLoadingFollowStatus: false,
   isTogglingFollow: false,
 
-  fetchFollowStats: async (userIds: string[]) => {
+  fetchFollowStats: async (userIds: string[], viewingUserId?: string) => {
     if (userIds.length === 0) return;
     
     set({ isLoadingFollowStats: true });
     
     try {
       const { data, error } = await supabase.rpc('get_user_follow_stats', {
-        user_ids: userIds
+        user_ids: userIds,
+        viewing_user_id: viewingUserId || null
       });
 
       if (error) throw error;
@@ -171,10 +172,11 @@ export const useFollowStore = create<FollowState>((set, get) => ({
     }
   },
 
-  fetchFollowers: async (userId: string, limit = 20, offset = 0) => {
+  fetchFollowers: async (userId: string, limit = 20, offset = 0, viewingUserId?: string) => {
     try {
       const { data, error } = await supabase.rpc('get_recent_followers', {
         user_id_param: userId,
+        viewing_user_id: viewingUserId || null,
         limit_count: limit,
         offset_count: offset
       });
@@ -202,10 +204,11 @@ export const useFollowStore = create<FollowState>((set, get) => ({
     }
   },
 
-  fetchFollowing: async (userId: string, limit = 20, offset = 0) => {
+  fetchFollowing: async (userId: string, limit = 20, offset = 0, viewingUserId?: string) => {
     try {
       const { data, error } = await supabase.rpc('get_following_users', {
         user_id_param: userId,
+        viewing_user_id: viewingUserId || null,
         limit_count: limit,
         offset_count: offset
       });

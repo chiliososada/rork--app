@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ScrollView,
   Text,
@@ -13,13 +13,67 @@ import { Stack } from 'expo-router';
 import { User, Eye, Users, Download, Trash2, Lock, Mail, ChevronRight } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useAuthStore } from '@/store/auth-store';
+import { supabase } from '@/lib/supabase';
 
 export default function AccountSettingsScreen() {
   const { user } = useAuthStore();
   
   // アカウント設定の状態
-  const [profileVisible, setProfileVisible] = useState(true);
-  const [followersVisible, setFollowersVisible] = useState(true);
+  const [profileVisible, setProfileVisible] = useState(user?.isProfilePublic ?? true);
+  const [followersVisible, setFollowersVisible] = useState(user?.isFollowersVisible ?? true);
+  const [isUpdating, setIsUpdating] = useState(false);
+  
+  // ユーザー情報が更新されたら設定を同期
+  useEffect(() => {
+    if (user) {
+      setProfileVisible(user.isProfilePublic ?? true);
+      setFollowersVisible(user.isFollowersVisible ?? true);
+    }
+  }, [user]);
+  
+  // プライバシー設定を更新する関数
+  const updatePrivacySettings = async (isProfilePublic: boolean, isFollowersVisible: boolean) => {
+    if (!user) {
+      return;
+    }
+    
+    setIsUpdating(true);
+    try {
+      const { data, error } = await supabase
+        .rpc('update_user_privacy_settings', {
+          user_id_param: user.id,
+          is_profile_public_param: isProfilePublic,
+          is_followers_visible_param: isFollowersVisible
+        });
+      
+      if (error) throw error;
+      
+      if (data && data.length > 0 && data[0].success) {
+        Alert.alert('成功', 'プライバシー設定を更新しました');
+      } else {
+        const message = data?.[0]?.message || 'プライバシー設定の更新に失敗しました';
+        Alert.alert('エラー', message);
+      }
+    } catch (error) {
+      Alert.alert('エラー', 'プライバシー設定の更新に失敗しました');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+  
+  const handleProfileVisibilityChange = (value: boolean) => {
+    setProfileVisible(value);
+    if (user) {
+      updatePrivacySettings(value, followersVisible);
+    }
+  };
+  
+  const handleFollowersVisibilityChange = (value: boolean) => {
+    setFollowersVisible(value);
+    if (user) {
+      updatePrivacySettings(profileVisible, value);
+    }
+  };
 
   const handleEditProfile = () => {
     // プロフィール編集画面への遷移
@@ -140,7 +194,7 @@ export default function AccountSettingsScreen() {
 
           {/* プライバシー設定セクション */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>公開設定</Text>
+            <Text style={styles.sectionTitle}>公開設定 {(!user || !user.id) && '(読み込み中...)'}</Text>
             
             <View style={styles.settingItem}>
               <View style={styles.settingContent}>
@@ -154,9 +208,10 @@ export default function AccountSettingsScreen() {
               </View>
               <Switch
                 value={profileVisible}
-                onValueChange={setProfileVisible}
+                onValueChange={handleProfileVisibilityChange}
                 trackColor={{ false: '#E5E5E5', true: Colors.primary }}
                 thumbColor="#FFFFFF"
+                disabled={isUpdating || !user || !user.id}
               />
             </View>
 
@@ -172,9 +227,10 @@ export default function AccountSettingsScreen() {
               </View>
               <Switch
                 value={followersVisible}
-                onValueChange={setFollowersVisible}
+                onValueChange={handleFollowersVisibilityChange}
                 trackColor={{ false: '#E5E5E5', true: Colors.primary }}
                 thumbColor="#FFFFFF"
+                disabled={isUpdating || !user || !user.id}
               />
             </View>
           </View>

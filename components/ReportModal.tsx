@@ -11,9 +11,10 @@ import {
   ActivityIndicator,
   SafeAreaView,
 } from 'react-native';
-import { X, Flag, AlertTriangle, Shield, Zap } from 'lucide-react-native';
+import { X, Flag, AlertTriangle, Shield, Zap, RefreshCw, XCircle } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useReporting } from '@/store/reporting-store';
+import { useToast } from '@/hooks/useToast';
 
 interface ReportModalProps {
   visible: boolean;
@@ -41,11 +42,13 @@ export default function ReportModal({
     canSubmitReport,
     isSubmitting,
   } = useReporting();
+  const toast = useToast();
 
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
   const [customReason, setCustomReason] = useState('');
   const [description, setDescription] = useState('');
   const [step, setStep] = useState<'category' | 'details' | 'confirmation'>('category');
+  const [submitError, setSubmitError] = useState<string>('');
 
   const reportLimits = canSubmitReport();
   const selectedCategory = reportCategories.find(cat => cat.id === selectedCategoryId);
@@ -63,6 +66,7 @@ export default function ReportModal({
       setCustomReason('');
       setDescription('');
       setStep('category');
+      setSubmitError('');
     }
   }, [visible]);
 
@@ -83,18 +87,20 @@ export default function ReportModal({
   };
 
   const handleSubmit = async () => {
+    setSubmitError('');
+
     if (!selectedCategoryId) {
-      Alert.alert('エラー', '通報理由を選択してください');
+      toast.warning('入力エラー', '通報理由を選択してください');
       return;
     }
 
     if (selectedCategory?.requires_details && !description.trim()) {
-      Alert.alert('エラー', '詳細な説明を入力してください');
+      toast.warning('入力エラー', '詳細な説明を入力してください');
       return;
     }
 
     if (!reportLimits.canReport) {
-      Alert.alert(
+      toast.warning(
         '通報制限',
         `1時間以内に送信できる通報は5件までです。\n次回通報可能時刻: ${reportLimits.resetTime.toLocaleTimeString()}`
       );
@@ -112,18 +118,35 @@ export default function ReportModal({
       });
 
       if (result.success) {
-        Alert.alert(
+        toast.success(
           '通報完了',
-          result.message + '\n\n通報内容を確認し、適切な対応を行います。ご協力ありがとうございました。',
-          [{ text: 'OK', onPress: handleClose }]
+          '通報内容を確認し、適切な対応を行います。ご協力ありがとうございました。'
         );
+        handleClose();
       } else {
-        Alert.alert('エラー', result.message);
+        setSubmitError(result.message);
+        toast.error('通報失敗', result.message);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error submitting report:', error);
-      Alert.alert('エラー', '通報の送信に失敗しました。もう一度お試しください。');
+      
+      let errorMessage = '通報の送信に失敗しました。';
+      if (error?.message?.includes('network') || error?.message?.includes('timeout')) {
+        errorMessage = 'ネットワークエラーが発生しました。接続を確認してお試しください。';
+      } else if (error?.message?.includes('rate limit')) {
+        errorMessage = '送信回数の制限に達しました。しばらく時間をおいてからお試しください。';
+      } else if (error?.message?.includes('validation')) {
+        errorMessage = '入力内容に問題があります。内容を確認してお試しください。';
+      }
+      
+      setSubmitError(errorMessage);
+      toast.error('エラー', errorMessage);
     }
+  };
+
+  const handleRetry = () => {
+    setSubmitError('');
+    handleSubmit();
   };
 
   const renderCategoryIcon = (categoryKey: string) => {
@@ -292,10 +315,28 @@ export default function ReportModal({
         </Text>
       </View>
 
+      {submitError && (
+        <View style={styles.errorCard}>
+          <XCircle size={20} color="#DC3545" />
+          <View style={styles.errorContent}>
+            <Text style={styles.errorText}>{submitError}</Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={handleRetry}
+              disabled={isSubmitting}
+            >
+              <RefreshCw size={16} color="#007AFF" />
+              <Text style={styles.retryButtonText}>再試行</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       <View style={styles.buttonContainer}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => setStep(selectedCategory?.requires_details ? 'details' : 'category')}
+          disabled={isSubmitting}
         >
           <Text style={styles.backButtonText}>戻る</Text>
         </TouchableOpacity>
@@ -305,7 +346,10 @@ export default function ReportModal({
           disabled={isSubmitting}
         >
           {isSubmitting ? (
-            <ActivityIndicator color="#FFFFFF" size="small" />
+            <>
+              <ActivityIndicator color="#FFFFFF" size="small" />
+              <Text style={[styles.submitButtonText, { marginLeft: 8 }]}>送信中...</Text>
+            </>
           ) : (
             <Text style={styles.submitButtonText}>通報する</Text>
           )}
@@ -550,6 +594,38 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     flex: 1,
     lineHeight: 18,
+  },
+  errorCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#F8D7DA',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#F5C6CB',
+  },
+  errorContent: {
+    flex: 1,
+    marginLeft: 8,
+  },
+  errorText: {
+    fontSize: 13,
+    color: '#721C24',
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+  },
+  retryButtonText: {
+    fontSize: 13,
+    color: '#007AFF',
+    fontWeight: '600',
+    marginLeft: 4,
   },
   buttonContainer: {
     flexDirection: 'row',

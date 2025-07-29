@@ -50,7 +50,7 @@ export const useAuthStore = create<AuthState>()(
             // Get user profile from users table
             const { data: userProfile, error: profileError } = await supabase
               .from('users')
-              .select('*')
+              .select('id, nickname, avatar_url, email, gender, created_at, is_profile_public, is_followers_visible')
               .eq('id', data.user.id)
               .single();
 
@@ -66,7 +66,9 @@ export const useAuthStore = create<AuthState>()(
               id: userProfile.id,
               name: userProfile.nickname,
               avatar: userProfile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(userProfile.nickname)}&background=random`,
-              email: userProfile.email || data.user.email
+              email: userProfile.email || data.user.email,
+              isProfilePublic: userProfile.is_profile_public ?? true,
+              isFollowersVisible: userProfile.is_followers_visible ?? true
             };
 
             set({ 
@@ -169,7 +171,7 @@ export const useAuthStore = create<AuthState>()(
           if (user) {
             const { data: userProfile, error: profileError } = await supabase
               .from('users')
-              .select('*')
+              .select('id, nickname, avatar_url, email, gender, created_at, is_profile_public, is_followers_visible')
               .eq('id', user.id)
               .single();
 
@@ -178,7 +180,9 @@ export const useAuthStore = create<AuthState>()(
                 id: userProfile.id,
                 name: userProfile.nickname,
                 avatar: userProfile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(userProfile.nickname)}&background=random`,
-                email: userProfile.email || user.email
+                email: userProfile.email || user.email,
+                isProfilePublic: userProfile.is_profile_public ?? true,
+                isFollowersVisible: userProfile.is_followers_visible ?? true
               };
 
               set({ 

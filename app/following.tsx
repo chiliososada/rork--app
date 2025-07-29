@@ -11,13 +11,14 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, Stack, useFocusEffect } from 'expo-router';
-import { ArrowLeft, UserCheck, Users } from 'lucide-react-native';
+import { ArrowLeft, UserCheck, Users, Lock } from 'lucide-react-native';
 import { useCallback } from 'react';
 import Colors from '@/constants/colors';
 import { useFollowStore } from '@/store/follow-store';
 import { useAuthStore } from '@/store/auth-store';
 import FollowButton from '@/components/FollowButton';
 import { User } from '@/types';
+import { supabase } from '@/lib/supabase';
 
 export default function FollowingScreen() {
   const router = useRouter();
@@ -30,24 +31,56 @@ export default function FollowingScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [canViewFollowers, setCanViewFollowers] = useState(true);
+  const [targetUserName, setTargetUserName] = useState('');
   
   const userId = targetUserId || currentUser?.id;
   const userFollowing = following.get(userId || '') || [];
   
   useEffect(() => {
     if (userId) {
-      loadFollowing();
+      checkPrivacyAndLoadFollowing();
     }
   }, [userId]);
   
   // 画面にフォーカスが戻った時にリストを更新
   useFocusEffect(
     useCallback(() => {
-      if (userId) {
+      if (userId && canViewFollowers) {
         loadFollowing(true);
       }
-    }, [userId])
+    }, [userId, canViewFollowers])
   );
+  
+  const checkPrivacyAndLoadFollowing = async () => {
+    if (!userId) return;
+    
+    try {
+      // まずプライバシー設定をチェック
+      const { data: profileData, error: profileError } = await supabase
+        .rpc('get_user_profile_with_privacy', {
+          requested_user_id: userId,
+          viewing_user_id: currentUser?.id || null
+        });
+      
+      if (profileError) throw profileError;
+      
+      if (profileData && profileData.length > 0) {
+        const userData = profileData[0];
+        setTargetUserName(userData.nickname || 'ユーザー');
+        setCanViewFollowers(userData.can_view_followers);
+        
+        if (userData.can_view_followers) {
+          await loadFollowing();
+        } else {
+          setIsLoading(false);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking privacy settings:', error);
+      setIsLoading(false);
+    }
+  };
   
   const loadFollowing = async (refresh = false) => {
     if (!userId) return;
@@ -57,7 +90,7 @@ export default function FollowingScreen() {
     }
     
     try {
-      const result = await fetchFollowing(userId, 20, refresh ? 0 : userFollowing.length);
+      const result = await fetchFollowing(userId, 20, refresh ? 0 : userFollowing.length, currentUser?.id);
       setHasMore(result.length === 20);
     } catch (error) {
       console.error('Error loading following:', error);
@@ -113,6 +146,16 @@ export default function FollowingScreen() {
   const renderEmpty = () => {
     if (isLoading) return null;
     
+    if (!canViewFollowers) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Lock size={64} color={Colors.text.secondary} />
+          <Text style={styles.emptyText}>このユーザーのフォローリストは非公開です</Text>
+          <Text style={styles.emptySubtext}>{targetUserName}さんはフォローリストを非公開に設定しています</Text>
+        </View>
+      );
+    }
+    
     return (
       <View style={styles.emptyContainer}>
         <Users size={64} color={Colors.text.secondary} />
@@ -158,7 +201,7 @@ export default function FollowingScreen() {
         </View>
       ) : (
         <FlatList
-          data={userFollowing}
+          data={canViewFollowers ? userFollowing : []}
           renderItem={renderFollowing}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
@@ -247,6 +290,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.text.secondary,
     marginTop: 16,
+    textAlign: 'center',
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    marginTop: 8,
+    textAlign: 'center',
+    paddingHorizontal: 32,
   },
   footerLoader: {
     paddingVertical: 16,

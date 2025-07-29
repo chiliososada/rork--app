@@ -9,6 +9,9 @@ export interface User {
   followingCount?: number;
   isFollowing?: boolean;
   isFollowedBy?: boolean;
+  // プライバシー設定
+  isProfilePublic?: boolean;
+  isFollowersVisible?: boolean;
 }
 
 export interface Location {

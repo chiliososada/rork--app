@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LogOut, Settings, MapPin, Bell, Shield, HelpCircle, MessageSquare, Heart, Bookmark, ThumbsUp, FileText, ScrollText, ShoppingBag, Users } from "lucide-react-native";
+import { LogOut, Settings, MapPin, Bell, Shield, MessageSquare, Heart, Bookmark, ThumbsUp, FileText, ScrollText, ShoppingBag, Users, Flag } from "lucide-react-native";
 import Colors from "@/constants/colors";
 import { useAuthStore } from "@/store/auth-store";
 import CustomHeader from "@/components/CustomHeader";
@@ -27,7 +27,7 @@ export default function ProfileScreen() {
     if (user?.id) {
       fetchUserStats();
       fetchFavoriteTopics(user.id);
-      fetchFollowStats([user.id]);
+      fetchFollowStats([user.id], user.id);
     }
   }, [user?.id]);
   
@@ -36,7 +36,7 @@ export default function ProfileScreen() {
     useCallback(() => {
       if (user?.id) {
         fetchUserStats();
-        fetchFollowStats([user.id]);
+        fetchFollowStats([user.id], user.id);
       }
     }, [user?.id])
   );
@@ -154,14 +154,14 @@ export default function ProfileScreen() {
       onPress: () => router.push('/settings/notifications')
     },
     {
-      icon: <Shield size={20} color="#5856D6" />,
-      title: "プライバシー設定",
-      onPress: () => router.push('/settings/privacy')
+      icon: <Shield size={20} color="#FF3B30" />,
+      title: "ブロック中のユーザー",
+      onPress: () => router.push('/settings/blocked-users')
     },
     {
-      icon: <HelpCircle size={20} color="#FF3B30" />,
-      title: "ヘルプとサポート",
-      onPress: () => {}
+      icon: <Flag size={20} color="#5856D6" />,
+      title: "通報履歴",
+      onPress: () => router.push('/settings/reports')
     }
   ];
   

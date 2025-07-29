@@ -45,10 +45,12 @@ export default function UserProfileScreen() {
   const [favoriteCount, setFavoriteCount] = useState(0);
   const [showReportModal, setShowReportModal] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
+  const [canViewProfile, setCanViewProfile] = useState(true);
+  const [canViewFollowers, setCanViewFollowers] = useState(true);
   
   const stats = followStats.get(id);
-  const followersCount = stats?.followersCount || 0;
-  const followingCount = stats?.followingCount || 0;
+  const followersCount = canViewFollowers ? (stats?.followersCount || 0) : null;
+  const followingCount = canViewFollowers ? (stats?.followingCount || 0) : null;
   
   const status = followStatus.get(id);
   const isFollowedBy = status?.isFollowedBy || false;
@@ -81,26 +83,38 @@ export default function UserProfileScreen() {
     }
     
     try {
-      // ユーザー情報を取得
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', id)
-        .single();
+      // プライバシー設定を考慮してユーザー情報を取得
+      const { data: profileData, error: profileError } = await supabase
+        .rpc('get_user_profile_with_privacy', {
+          requested_user_id: id,
+          viewing_user_id: currentUser?.id || null
+        });
       
-      if (userError) throw userError;
+      if (profileError) throw profileError;
       
-      const userInfo: User = {
-        id: userData.id,
-        name: userData.nickname || 'ユーザー',
-        avatar: userData.avatar_url || '',
-        email: userData.email,
-      };
-      
-      setUser(userInfo);
-      
-      // フォロー統計を取得
-      await fetchFollowStats([id]);
+      if (profileData && profileData.length > 0) {
+        const userData = profileData[0];
+        
+        const userInfo: User = {
+          id: userData.id,
+          name: userData.nickname || 'ユーザー',
+          avatar: userData.avatar_url || '',
+          email: userData.can_view_profile ? userData.email : undefined,
+          isProfilePublic: userData.is_profile_public,
+          isFollowersVisible: userData.is_followers_visible,
+        };
+        
+        setUser(userInfo);
+        setCanViewProfile(userData.can_view_profile);
+        setCanViewFollowers(userData.can_view_followers);
+        
+        // フォロー統計を取得（プライバシー設定に基づいて表示）
+        if (userData.can_view_followers) {
+          await fetchFollowStats([id], currentUser?.id);
+        }
+      } else {
+        throw new Error('User not found');
+      }
       
       // ユーザーの投稿を取得
       const { data: topics, error: topicsError } = await supabase
@@ -366,27 +380,27 @@ export default function UserProfileScreen() {
             <View style={styles.statsContainer}>
               <TouchableOpacity 
                 style={styles.statItem}
-                onPress={() => router.push({
+                onPress={() => canViewFollowers ? router.push({
                   pathname: '/followers',
                   params: { userId: user.id }
-                })}
+                }) : Alert.alert('非公開', 'このユーザーのフォロワーリストは非公開です')}
                 activeOpacity={0.7}
               >
                 <Users size={20} color={Colors.text.secondary} />
-                <Text style={styles.statNumber}>{followersCount}</Text>
+                <Text style={styles.statNumber}>{canViewFollowers ? followersCount : '非公開'}</Text>
                 <Text style={styles.statLabel}>フォロワー</Text>
               </TouchableOpacity>
               <View style={styles.statDivider} />
               <TouchableOpacity 
                 style={styles.statItem}
-                onPress={() => router.push({
+                onPress={() => canViewFollowers ? router.push({
                   pathname: '/following',
                   params: { userId: user.id }
-                })}
+                }) : Alert.alert('非公開', 'このユーザーのフォローリストは非公開です')}
                 activeOpacity={0.7}
               >
                 <Users size={20} color={Colors.text.secondary} />
-                <Text style={styles.statNumber}>{followingCount}</Text>
+                <Text style={styles.statNumber}>{canViewFollowers ? followingCount : '非公開'}</Text>
                 <Text style={styles.statLabel}>フォロー中</Text>
               </TouchableOpacity>
             </View>

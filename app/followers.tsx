@@ -11,12 +11,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
-import { ArrowLeft, UserCheck, Users } from 'lucide-react-native';
+import { ArrowLeft, UserCheck, Users, Lock } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useFollowStore } from '@/store/follow-store';
 import { useAuthStore } from '@/store/auth-store';
 import FollowButton from '@/components/FollowButton';
 import { User } from '@/types';
+import { supabase } from '@/lib/supabase';
 
 export default function FollowersScreen() {
   const router = useRouter();
@@ -29,15 +30,47 @@ export default function FollowersScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [canViewFollowers, setCanViewFollowers] = useState(true);
+  const [targetUserName, setTargetUserName] = useState('');
   
   const userId = targetUserId || currentUser?.id;
   const userFollowers = followers.get(userId || '') || [];
   
   useEffect(() => {
     if (userId) {
-      loadFollowers();
+      checkPrivacyAndLoadFollowers();
     }
   }, [userId]);
+  
+  const checkPrivacyAndLoadFollowers = async () => {
+    if (!userId) return;
+    
+    try {
+      // まずプライバシー設定をチェック
+      const { data: profileData, error: profileError } = await supabase
+        .rpc('get_user_profile_with_privacy', {
+          requested_user_id: userId,
+          viewing_user_id: currentUser?.id || null
+        });
+      
+      if (profileError) throw profileError;
+      
+      if (profileData && profileData.length > 0) {
+        const userData = profileData[0];
+        setTargetUserName(userData.nickname || 'ユーザー');
+        setCanViewFollowers(userData.can_view_followers);
+        
+        if (userData.can_view_followers) {
+          await loadFollowers();
+        } else {
+          setIsLoading(false);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking privacy settings:', error);
+      setIsLoading(false);
+    }
+  };
   
   const loadFollowers = async (refresh = false) => {
     if (!userId) return;
@@ -47,7 +80,7 @@ export default function FollowersScreen() {
     }
     
     try {
-      const result = await fetchFollowers(userId, 20, refresh ? 0 : userFollowers.length);
+      const result = await fetchFollowers(userId, 20, refresh ? 0 : userFollowers.length, currentUser?.id);
       setHasMore(result.length === 20);
     } catch (error) {
       console.error('Error loading followers:', error);
@@ -97,6 +130,16 @@ export default function FollowersScreen() {
   const renderEmpty = () => {
     if (isLoading) return null;
     
+    if (!canViewFollowers) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Lock size={64} color={Colors.text.secondary} />
+          <Text style={styles.emptyText}>このユーザーのフォロワーリストは非公開です</Text>
+          <Text style={styles.emptySubtext}>{targetUserName}さんはフォロワーリストを非公開に設定しています</Text>
+        </View>
+      );
+    }
+    
     return (
       <View style={styles.emptyContainer}>
         <Users size={64} color={Colors.text.secondary} />
@@ -142,7 +185,7 @@ export default function FollowersScreen() {
         </View>
       ) : (
         <FlatList
-          data={userFollowers}
+          data={canViewFollowers ? userFollowers : []}
           renderItem={renderFollower}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
@@ -231,6 +274,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.text.secondary,
     marginTop: 16,
+    textAlign: 'center',
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    marginTop: 8,
+    textAlign: 'center',
+    paddingHorizontal: 32,
   },
   footerLoader: {
     paddingVertical: 16,

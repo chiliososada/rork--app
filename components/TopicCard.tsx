@@ -11,6 +11,7 @@ import { useAuthStore } from '@/store/auth-store';
 import { useUserBlocking } from '@/store/blocking-store';
 import { formatChatListTime } from '@/lib/utils/timeUtils';
 import ReportModal from '@/components/ReportModal';
+import { useToast } from '@/hooks/useToast';
 
 interface TopicCardProps {
   topic: Topic;
@@ -22,6 +23,7 @@ function TopicCard({ topic, showMenuButton = false, onDelete }: TopicCardProps) 
   const router = useRouter();
   const { user } = useAuthStore();
   const { isUserBlockedSync, blockUserWithConfirmation, unblockUserWithConfirmation } = useUserBlocking();
+  const toast = useToast();
   const [showActionMenu, setShowActionMenu] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
@@ -81,18 +83,28 @@ function TopicCard({ topic, showMenuButton = false, onDelete }: TopicCardProps) 
   const handleBlockPress = async () => {
     setShowActionMenu(false);
     
-    if (isBlocked) {
-      // Unblock user
-      const success = await unblockUserWithConfirmation(topic.author.id, topic.author.name);
-      if (success) {
-        setIsBlocked(false);
+    try {
+      if (isBlocked) {
+        // Unblock user
+        const success = await unblockUserWithConfirmation(topic.author.id, topic.author.name);
+        if (success) {
+          setIsBlocked(false);
+          toast.success('ブロック解除完了', `${topic.author.name}さんのブロックを解除しました`);
+        } else {
+          toast.error('ブロック解除失敗', 'ブロック解除に失敗しました。もう一度お試しください。');
+        }
+      } else {
+        // Block user
+        const success = await blockUserWithConfirmation(topic.author.id, topic.author.name);
+        if (success) {
+          setIsBlocked(true);
+          toast.success('ブロック完了', `${topic.author.name}さんをブロックしました`);
+        } else {
+          toast.error('ブロック失敗', 'ブロックに失敗しました。もう一度お試しください。');
+        }
       }
-    } else {
-      // Block user
-      const success = await blockUserWithConfirmation(topic.author.id, topic.author.name);
-      if (success) {
-        setIsBlocked(true);
-      }
+    } catch (error) {
+      toast.error('エラー', 'ネットワークエラーが発生しました。接続を確認してお試しください。');
     }
   };
   
