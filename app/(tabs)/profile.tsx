@@ -271,13 +271,40 @@ export default function ProfileScreen() {
             <Text style={styles.logoutText}>ログアウト</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity 
-            onPress={() => router.push('/legal/commercial-law')}
-            style={styles.legalLinkContainer}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.legalLinkText}>特定商取引法に基づく表記</Text>
-          </TouchableOpacity>
+          {/* 法律文件链接区域 */}
+          <View style={styles.legalLinksContainer}>
+            <TouchableOpacity 
+              onPress={() => router.push('/legal/privacy-policy')}
+              style={styles.legalLinkContainer}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.legalLinkText}>プライバシーポリシー</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              onPress={() => router.push('/legal/terms-of-service')}
+              style={styles.legalLinkContainer}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.legalLinkText}>利用規約</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              onPress={() => router.push('/legal/community-guidelines')}
+              style={styles.legalLinkContainer}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.legalLinkText}>コミュニティガイドライン</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              onPress={() => router.push('/legal/commercial-law')}
+              style={styles.legalLinkContainer}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.legalLinkText}>特定商取引法に基づく表記</Text>
+            </TouchableOpacity>
+          </View>
           
           <Text style={styles.versionText}>バージョン 1.0.0</Text>
         </ScrollView>
@@ -410,6 +437,10 @@ const styles = StyleSheet.create({
     color: Colors.text.secondary,
     textAlign: "center",
     marginBottom: 24,
+  },
+  legalLinksContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
   },
   legalLinkContainer: {
     alignItems: 'center',

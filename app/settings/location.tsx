@@ -10,26 +10,14 @@ import {
   Alert,
 } from 'react-native';
 import { Stack } from 'expo-router';
-import { MapPin, Eye, Settings, Navigation, ChevronRight } from 'lucide-react-native';
+import { MapPin, Eye, ChevronRight } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 
 export default function LocationSettingsScreen() {
   // 位置情報設定の状態
   const [locationVisible, setLocationVisible] = useState(true);
-  const [preciseLocation, setPreciseLocation] = useState(false);
   const [locationHistory, setLocationHistory] = useState(true);
-  const [nearbyNotifications, setNearbyNotifications] = useState(true);
 
-  const handleLocationPermission = () => {
-    Alert.alert(
-      '位置情報許可',
-      'この設定を変更するには、端末の設定画面で位置情報の許可を変更してください。',
-      [
-        { text: 'キャンセル', style: 'cancel' },
-        { text: '設定を開く', onPress: () => {} }
-      ]
-    );
-  };
 
   const handleClearHistory = () => {
     Alert.alert(
@@ -67,7 +55,7 @@ export default function LocationSettingsScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>表示設定</Text>
             
-            <View style={styles.settingItem}>
+            <View style={[styles.settingItem, { borderBottomWidth: 0 }]}>
               <View style={styles.settingContent}>
                 <View style={styles.settingIcon}>
                   <Eye size={20} color="#34C759" />
@@ -80,24 +68,6 @@ export default function LocationSettingsScreen() {
               <Switch
                 value={locationVisible}
                 onValueChange={setLocationVisible}
-                trackColor={{ false: '#E5E5E5', true: Colors.primary }}
-                thumbColor="#FFFFFF"
-              />
-            </View>
-
-            <View style={[styles.settingItem, { borderBottomWidth: 0 }]}>
-              <View style={styles.settingContent}>
-                <View style={styles.settingIcon}>
-                  <Navigation size={20} color="#007AFF" />
-                </View>
-                <View style={styles.settingTexts}>
-                  <Text style={styles.settingTitle}>高精度位置情報</Text>
-                  <Text style={styles.settingSubtitle}>より正確な位置情報を使用する</Text>
-                </View>
-              </View>
-              <Switch
-                value={preciseLocation}
-                onValueChange={setPreciseLocation}
                 trackColor={{ false: '#E5E5E5', true: Colors.primary }}
                 thumbColor="#FFFFFF"
               />
@@ -139,45 +109,6 @@ export default function LocationSettingsScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* 通知設定セクション */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>位置ベースの通知</Text>
-            
-            <View style={[styles.settingItem, { borderBottomWidth: 0 }]}>
-              <View style={styles.settingContent}>
-                <View style={styles.settingIcon}>
-                  <MapPin size={20} color="#FF9500" />
-                </View>
-                <View style={styles.settingTexts}>
-                  <Text style={styles.settingTitle}>近くの話題通知</Text>
-                  <Text style={styles.settingSubtitle}>近くで新しい話題が投稿されたときに通知</Text>
-                </View>
-              </View>
-              <Switch
-                value={nearbyNotifications}
-                onValueChange={setNearbyNotifications}
-                trackColor={{ false: '#E5E5E5', true: Colors.primary }}
-                thumbColor="#FFFFFF"
-              />
-            </View>
-          </View>
-
-          {/* システム設定セクション */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>システム設定</Text>
-            
-            <TouchableOpacity 
-              style={[styles.menuItem, { borderBottomWidth: 0 }]}
-              onPress={handleLocationPermission}
-              activeOpacity={0.7}
-            >
-              <View style={styles.menuIcon}>
-                <Settings size={20} color="#666666" />
-              </View>
-              <Text style={styles.menuTitle}>端末の位置情報設定</Text>
-              <ChevronRight size={20} color={Colors.text.secondary} />
-            </TouchableOpacity>
-          </View>
 
           {/* 注意事項 */}
           <View style={styles.notice}>
