@@ -26,7 +26,7 @@ export default function PrivacyPolicyScreen() {
         >
           <View style={styles.header}>
             <Text style={styles.title}>プライバシーポリシー</Text>
-            <Text style={styles.lastUpdated}>最終更新日: 2025年1月29日</Text>
+            <Text style={styles.lastUpdated}>最終更新日: 2025年1月30日</Text>
           </View>
 
           <View style={styles.section}>
@@ -45,7 +45,7 @@ export default function PrivacyPolicyScreen() {
             <Text style={styles.listItem}>• 性別（任意）</Text>
             
             <Text style={styles.subsectionTitle}>1.2 自動的に収集される情報</Text>
-            <Text style={styles.listItem}>• 位置情報（GPS）</Text>
+            <Text style={styles.listItem}>• 位置情報（GPS）※詳細は「3. 位置情報の取り扱い」をご参照ください</Text>
             <Text style={styles.listItem}>• デバイス情報（OS、アプリバージョン等）</Text>
             <Text style={styles.listItem}>• 利用ログ（アクセス日時、利用機能等）</Text>
             
@@ -71,10 +71,21 @@ export default function PrivacyPolicyScreen() {
             <Text style={styles.paragraph}>
               本サービスは位置情報を基にした機能を提供しています。位置情報は以下のように取り扱います：
             </Text>
+            <Text style={styles.subsectionTitle}>位置情報の利用目的</Text>
             <Text style={styles.listItem}>• 話題投稿時の位置情報は他のユーザーに表示されます</Text>
             <Text style={styles.listItem}>• 現在地から近い話題を表示するために使用します</Text>
             <Text style={styles.listItem}>• 位置情報の精度は設定で調整可能です</Text>
             <Text style={styles.listItem}>• 位置情報の使用は端末の設定でいつでも無効にできます</Text>
+            
+            <Text style={styles.subsectionTitle}>位置情報の保存と削除</Text>
+            <Text style={styles.listItem}>• 投稿時の位置情報は投稿と紐付けて保存されます</Text>
+            <Text style={styles.listItem}>• 投稿を削除すると関連する位置情報も削除されます</Text>
+            <Text style={styles.listItem}>• 現在地の位置情報は一時的に使用され、保存されません</Text>
+            
+            <Text style={styles.subsectionTitle}>位置情報のプライバシー保護</Text>
+            <Text style={styles.listItem}>• 他のユーザーのリアルタイム位置は追跡しません</Text>
+            <Text style={styles.listItem}>• 位置情報は暗号化された通信で送信されます</Text>
+            <Text style={styles.listItem}>• 第三者に位置情報を販売または提供することはありません</Text>
           </View>
 
           <View style={styles.section}>
@@ -127,10 +138,14 @@ export default function PrivacyPolicyScreen() {
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>9. 子供のプライバシー</Text>
+            <Text style={styles.sectionTitle}>9. 年齢制限および年齢確認</Text>
             <Text style={styles.paragraph}>
-              本サービスは13歳未満の子供を対象としていません。13歳未満の方は保護者の同意を得てご利用ください。
+              本サービスは18歳以上の成人向けサービスです。18歳未満の方の利用を禁止しており、登録時に年齢確認を実施しています。
             </Text>
+            <Text style={styles.listItem}>• 生年月日による年齢確認システムを導入</Text>
+            <Text style={styles.listItem}>• 年齢確認ログの記録と管理</Text>
+            <Text style={styles.listItem}>• 年齢詐称が発覚した場合のアカウント停止措置</Text>
+            <Text style={styles.listItem}>• 18歳未満の個人情報は意図的に収集しません</Text>
           </View>
 
           <View style={styles.section}>

@@ -976,6 +976,6 @@ CREATE INDEX private_messages_created_at_idx ON public.private_messages(created_
 所有新页面的导航都适用router 中框架的 导航尤其是后退按钮要统一 不要存在双重后退 Stack.Screenのナビゲーションのみを使用する       
 符合日本人的用户习惯的ui设计
 我现在的项目是制作阶段 还没有上线
-需要上线appstore 和 Google store
+需要上线appstore 和 Google store 面向18+的年龄段
 
-
+如果涉及到sql 把sql文件放到supabase/migrations

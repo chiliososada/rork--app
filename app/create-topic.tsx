@@ -16,6 +16,9 @@ import SmartTagSelector from "@/components/SmartTagSelector";
 import CategorySelector from "@/components/CategorySelector";
 import { supabase } from "@/lib/supabase";
 import { eventBus, EVENT_TYPES } from "@/lib/event-bus";
+import { filterContent, getModerationMessage } from "@/lib/content-filter";
+import { ContentFilterResult } from "@/types";
+import { ContentPendingNotice, ContentApprovedNotice } from "@/components/ContentModerationNotice";
 
 export default function CreateTopicScreen() {
   const router = useRouter();
@@ -46,6 +49,11 @@ export default function CreateTopicScreen() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>();
   
+  // Moderation notice states
+  const [showPendingNotice, setShowPendingNotice] = useState(false);
+  const [showApprovedNotice, setShowApprovedNotice] = useState(false);
+  const [moderationReason, setModerationReason] = useState<string>();
+
   // Category selection callback
   const handleCategoryChange = (categoryKey: string) => {
     setSelectedCategory(categoryKey);
@@ -193,6 +201,54 @@ export default function CreateTopicScreen() {
     originalWidth?: number,
     originalHeight?: number
   ) => {
+    // コンテンツフィルタリングチェック
+    if (!user) {
+      Alert.alert("エラー", "ユーザー情報が見つかりません。");
+      return;
+    }
+
+    try {
+      // コンテンツを審査
+      const filterResult = await filterContent(description, user.id, title);
+      
+      // 審査結果の処理
+      if (filterResult.status === 'rejected') {
+        Alert.alert(
+          "投稿できません",
+          filterResult.message,
+          [{ text: "OK" }]
+        );
+        return;
+      }
+
+      // すべてのケースで投稿を実行
+      await proceedWithFiltering(filterResult, imageUrl, imageAspectRatio, originalWidth, originalHeight);
+      
+      // 審査結果に応じて適切な通知を表示
+      if (filterResult.status === 'pending') {
+        setModerationReason(filterResult.details);
+        setShowPendingNotice(true);
+      } else if (filterResult.status === 'approved') {
+        setShowApprovedNotice(true);
+      }
+      
+    } catch (error) {
+      console.error('Content filtering error:', error);
+      Alert.alert(
+        "エラー",
+        "コンテンツの審査中にエラーが発生しました。もう一度お試しください。",
+        [{ text: "OK" }]
+      );
+    }
+  };
+
+  const proceedWithFiltering = async (
+    filterResult: ContentFilterResult,
+    imageUrl?: string, 
+    imageAspectRatio?: '1:1' | '4:5' | '1.91:1',
+    originalWidth?: number,
+    originalHeight?: number
+  ) => {
     // 記録標籤使用情況
     if (selectedTags.length > 0 && user && currentLocation) {
       
@@ -229,6 +285,9 @@ export default function CreateTopicScreen() {
       originalHeight,
       tags: selectedTags.length > 0 ? selectedTags : undefined,
       category: selectedCategory,
+      // 審査結果を話題データに含める
+      moderationStatus: filterResult.status,
+      moderationReason: filterResult.reason || undefined,
     });
     
     // 发送话题创建事件，让首页实时更新
@@ -372,6 +431,26 @@ export default function CreateTopicScreen() {
           />
         </ScrollView>
       </KeyboardAvoidingView>
+      
+      {/* Content Moderation Notices */}
+      <ContentPendingNotice
+        visible={showPendingNotice}
+        onClose={() => {
+          setShowPendingNotice(false);
+          router.back();
+        }}
+        contentType="topic"
+        reason={moderationReason}
+      />
+      
+      <ContentApprovedNotice
+        visible={showApprovedNotice}
+        onClose={() => {
+          setShowApprovedNotice(false);
+          router.back();
+        }}
+        contentType="topic"
+      />
     </SafeAreaView>
   );
 }

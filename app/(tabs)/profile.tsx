@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LogOut, Settings, MapPin, Bell, Shield, MessageSquare, Heart, Bookmark, ThumbsUp, FileText, ScrollText, ShoppingBag, Users, Flag } from "lucide-react-native";
+import { LogOut, Settings, MapPin, Bell, Shield, MessageSquare, Heart, Bookmark, ThumbsUp, FileText, ScrollText, ShoppingBag, Users, Flag, RotateCcw } from "lucide-react-native";
 import Colors from "@/constants/colors";
 import { useAuthStore } from "@/store/auth-store";
 import CustomHeader from "@/components/CustomHeader";
@@ -11,12 +11,14 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { useTopicDetailsStore } from "@/store/topic-details-store";
 import { useCallback } from "react";
 import { useFollowStore } from "@/store/follow-store";
+import { useAdultContentStore } from "@/store/adult-content-store";
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, logout, updateAvatar, isUpdatingAvatar } = useAuthStore();
   const { favoriteTopics, fetchFavoriteTopics, profileStatsVersion } = useTopicDetailsStore();
   const { followStats, fetchFollowStats } = useFollowStore();
+  const { resetConfirmation } = useAdultContentStore();
   const [topicCount, setTopicCount] = useState(0);
   const [likeCount, setLikeCount] = useState(0);
   const [favoriteCount, setFavoriteCount] = useState(0);
@@ -136,6 +138,31 @@ export default function ProfileScreen() {
       ]
     );
   };
+
+  const handleResetAdultContentConfirmation = () => {
+    Alert.alert(
+      "成人向けコンテンツ確認のリセット",
+      "成人向けコンテンツの確認状態をリセットします。次回アプリを起動時に再度確認が必要になります。",
+      [
+        {
+          text: "キャンセル",
+          style: "cancel"
+        },
+        {
+          text: "リセット",
+          onPress: () => {
+            resetConfirmation();
+            Alert.alert(
+              "完了",
+              "成人向けコンテンツの確認状態をリセットしました。",
+              [{ text: "OK" }]
+            );
+          },
+          style: "destructive"
+        }
+      ]
+    );
+  };
   
   const menuItems = [
     {
@@ -162,6 +189,11 @@ export default function ProfileScreen() {
       icon: <Flag size={20} color="#5856D6" />,
       title: "通報履歴",
       onPress: () => router.push('/settings/reports')
+    },
+    {
+      icon: <RotateCcw size={20} color="#FF9500" />,
+      title: "成人向けコンテンツ確認リセット",
+      onPress: handleResetAdultContentConfirmation
     }
   ];
   
@@ -295,6 +327,14 @@ export default function ProfileScreen() {
               activeOpacity={0.7}
             >
               <Text style={styles.legalLinkText}>コミュニティガイドライン</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              onPress={() => router.push('/legal/adult-content-disclaimer')}
+              style={styles.legalLinkContainer}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.legalLinkText}>成人向けコンテンツ免責事項</Text>
             </TouchableOpacity>
             
             <TouchableOpacity 

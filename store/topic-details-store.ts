@@ -3,6 +3,8 @@ import { Topic, Comment } from '@/types';
 import { supabase } from '@/lib/supabase';
 import { withNetworkRetry, isNetworkError } from '@/lib/retry';
 import { getCachedBatchTopicInteractionStatus } from '@/lib/database-optimizers';
+import { filterContent } from '@/lib/content-filter';
+import { ContentFilterResult } from '@/types';
 
 /**
  * 专门处理话题详情的 Store
@@ -309,7 +311,10 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
     set({ isLoading: true, error: null });
     
     try {
-      // Insert comment into Supabase
+      // Content filtering check
+      const filterResult = await filterContent(text, userId);
+      
+      // Insert comment into Supabase with moderation status
       const { data: insertedComment, error: insertError } = await supabase
         .from('comments')
         .insert([
@@ -317,7 +322,10 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
             topic_id: topicId,
             user_id: userId,
             content: text,
-            likes_count: 0
+            likes_count: 0,
+            moderation_status: filterResult.status,
+            moderation_reason: filterResult.reason,
+            moderation_date: filterResult.status !== 'approved' ? new Date().toISOString() : null
           }
         ])
         .select(`
@@ -348,7 +356,11 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
         },
         likes: insertedComment.likes_count || 0,
         topicId,
-        isLikedByUser: false
+        isLikedByUser: false,
+        // Add moderation fields
+        moderationStatus: insertedComment.moderation_status as 'pending' | 'approved' | 'rejected' | undefined,
+        moderationReason: insertedComment.moderation_reason || undefined,
+        moderationDate: insertedComment.moderation_date || undefined
       };
       
       set(state => ({ 
@@ -472,7 +484,10 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
             original_width: topicData.originalWidth,
             original_height: topicData.originalHeight,
             tags: topicData.tags || [],
-            category: topicData.category
+            category: topicData.category,
+            moderation_status: topicData.moderationStatus || 'approved',
+            moderation_reason: topicData.moderationReason || null,
+            moderation_date: topicData.moderationStatus ? new Date().toISOString() : null
           }
         ])
         .select(`
@@ -556,7 +571,11 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
         })(),
         isFavorited: false,
         isLiked: false,
-        likesCount: 0
+        likesCount: 0,
+        // Add moderation fields
+        moderationStatus: insertedTopic.moderation_status as 'pending' | 'approved' | 'rejected' | undefined,
+        moderationReason: insertedTopic.moderation_reason || undefined,
+        moderationDate: insertedTopic.moderation_date || undefined
       };
       
       set({ 

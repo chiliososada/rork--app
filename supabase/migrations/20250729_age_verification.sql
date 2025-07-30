@@ -60,8 +60,7 @@ AS $$
 DECLARE
   calculated_age INTEGER;
   current_verification_status BOOLEAN;
-  minimum_age_constant INTEGER := 13; -- Japan's minimum age for social media
-  parent_consent_age INTEGER := 16; -- Age below which parent consent is recommended
+  minimum_age_constant INTEGER := 18; -- Adult content age requirement
 BEGIN
   -- Calculate age
   calculated_age := calculate_age(birth_date_param);
@@ -88,7 +87,7 @@ BEGIN
     verification_method_param,
     calculated_age >= minimum_age_constant,
     CASE 
-      WHEN calculated_age < minimum_age_constant THEN '年齢制限に満たない（13歳未満）'
+      WHEN calculated_age < minimum_age_constant THEN '年齢制限に満たない（18歳未満）'
       WHEN calculated_age > 120 THEN '無効な生年月日'
       ELSE NULL
     END,
@@ -101,7 +100,7 @@ BEGIN
     RETURN QUERY SELECT 
       FALSE, 
       calculated_age, 
-      'このサービスは13歳以上の方のみご利用いただけます'::TEXT,
+      'このサービスは18歳以上の方のみご利用いただけます'::TEXT,
       FALSE;
     RETURN;
   END IF;
@@ -125,17 +124,12 @@ BEGIN
     minimum_age_met = TRUE
   WHERE id = user_id_param;
 
-  -- Return success with parent consent recommendation for younger users
+  -- Return success
   RETURN QUERY SELECT 
     TRUE, 
     calculated_age,
-    CASE 
-      WHEN calculated_age < parent_consent_age THEN 
-        '年齢確認が完了しました。16歳未満の方は保護者の同意を得ることをお勧めします'
-      ELSE 
-        '年齢確認が完了しました'
-    END::TEXT,
-    calculated_age < parent_consent_age;
+    '年齢確認が完了しました'::TEXT,
+    FALSE;
 END;
 $$;
 
@@ -214,7 +208,7 @@ BEGIN
     COUNT(*)::INTEGER as total_attempts,
     COUNT(CASE WHEN verification_successful THEN 1 END)::INTEGER as successful_verifications,
     COUNT(CASE WHEN NOT verification_successful THEN 1 END)::INTEGER as failed_verifications,
-    COUNT(CASE WHEN calculated_age < 13 THEN 1 END)::INTEGER as underage_attempts,
+    COUNT(CASE WHEN calculated_age < 18 THEN 1 END)::INTEGER as underage_attempts,
     ROUND(AVG(CASE WHEN verification_successful THEN calculated_age END), 1) as average_age,
     jsonb_object_agg(
       verification_method,
@@ -253,14 +247,14 @@ BEGIN
   FROM users
   WHERE id = user_id_param;
 
-  -- If user is under 13 or not verified, restrict account
-  IF user_age < 13 OR NOT user_verified THEN
+  -- If user is under 18 or not verified, restrict account
+  IF user_age < 18 OR NOT user_verified THEN
     -- Note: In a full implementation, you might want to add an account_status column
     -- For now, we'll just return the restriction info
     RETURN QUERY SELECT 
       TRUE,
       CASE 
-        WHEN user_age < 13 THEN '13歳未満のため利用を制限しています'
+        WHEN user_age < 18 THEN '18歳未満のため利用を制限しています'
         WHEN NOT user_verified THEN '年齢確認が完了していません'
         ELSE 'アカウントが制限されています'
       END::TEXT;
@@ -278,7 +272,7 @@ DECLARE
 BEGIN
   IF NEW.birth_date IS NOT NULL AND NEW.birth_date != OLD.birth_date THEN
     calculated_age := calculate_age(NEW.birth_date);
-    NEW.minimum_age_met := calculated_age >= 13;
+    NEW.minimum_age_met := calculated_age >= 18;
     
     -- If age verification was not explicitly set, auto-verify if minimum age is met
     IF NEW.age_verified IS NULL OR NEW.age_verified = OLD.age_verified THEN
@@ -311,7 +305,7 @@ CREATE POLICY "Users can view their own age verification logs" ON public.age_ver
 CREATE POLICY "System can insert age verification logs" ON public.age_verification_logs
   FOR INSERT WITH CHECK (TRUE);
 
--- 11. Create a view for compliant users (13+ and verified)
+-- 11. Create a view for compliant users (18+ and verified)
 CREATE OR REPLACE VIEW compliant_users AS
 SELECT 
   u.*,
@@ -320,7 +314,7 @@ FROM users u
 WHERE 
   u.birth_date IS NOT NULL 
   AND u.age_verified = TRUE 
-  AND calculate_age(u.birth_date) >= 13;
+  AND calculate_age(u.birth_date) >= 18;
 
 -- Grant access to the view
 GRANT SELECT ON compliant_users TO authenticated;

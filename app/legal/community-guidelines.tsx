@@ -26,7 +26,7 @@ export default function CommunityGuidelinesScreen() {
         >
           <View style={styles.header}>
             <Text style={styles.title}>コミュニティガイドライン</Text>
-            <Text style={styles.lastUpdated}>最終更新日: 2025年1月29日</Text>
+            <Text style={styles.lastUpdated}>最終更新日: 2025年1月30日</Text>
           </View>
 
           <View style={styles.intro}>
@@ -87,7 +87,7 @@ export default function CommunityGuidelinesScreen() {
             <View style={styles.prohibition}>
               <Text style={styles.prohibitionTitle}>不適切なコンテンツ</Text>
               <Text style={styles.prohibitionText}>
-                暴力的、性的、差別的な内容。未成年者に有害な情報
+                暴力的、性的、差別的な内容。不適切な成人向けコンテンツ
               </Text>
             </View>
             
@@ -118,7 +118,7 @@ export default function CommunityGuidelinesScreen() {
             
             <Text style={styles.locationTip}>• 自宅や職場など、プライベートな場所の詳細は共有しない</Text>
             <Text style={styles.locationTip}>• 他人の居場所を無断で公開しない</Text>
-            <Text style={styles.locationTip}>• 子供の通学路や遊び場の情報は慎重に扱う</Text>
+            <Text style={styles.locationTip}>• プライベートな場所の詳細な情報は慎重に扱う</Text>
             <Text style={styles.locationTip}>• ストーカー行為や待ち伏せに利用しない</Text>
           </View>
 
@@ -140,9 +140,9 @@ export default function CommunityGuidelinesScreen() {
             </View>
             
             <View style={styles.safetyTip}>
-              <Text style={styles.safetyTitle}>未成年者の利用</Text>
+              <Text style={styles.safetyTitle}>成人向けサービスの利用</Text>
               <Text style={styles.safetyText}>
-                13歳未満の方は保護者の同意が必要です。保護者の方は適切な監督をお願いします。
+                本サービスは18歳以上の成人向けサービスです。成人としての責任ある行動と相互尊重をお願いします。
               </Text>
             </View>
           </View>

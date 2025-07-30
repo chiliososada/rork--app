@@ -8,6 +8,7 @@ import Colors from '@/constants/colors';
 import { useAuthStore } from '@/store/auth-store';
 import { supabase } from '@/lib/supabase';
 import { Square, CheckSquare, Calendar, AlertTriangle } from 'lucide-react-native';
+import AdultContentModal from '@/components/AdultContentModal';
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -20,6 +21,7 @@ export default function RegisterScreen() {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [ageVerified, setAgeVerified] = useState(false);
   const [isVerifyingAge, setIsVerifyingAge] = useState(false);
+  const [showAdultModal, setShowAdultModal] = useState(false);
   
   // If user is already authenticated, redirect to main app
   if (isAuthenticated) {
@@ -57,33 +59,19 @@ export default function RegisterScreen() {
       const monthDiff = today.getMonth() - birth.getMonth();
       const calculatedAge = monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate()) ? age - 1 : age;
 
-      if (calculatedAge < 13) {
+      if (calculatedAge < 18) {
         setIsVerifyingAge(false);
         Alert.alert(
           '年齢制限',
-          'このサービスは13歳以上の方のみご利用いただけます。',
+          'このサービスは18歳以上の方のみご利用いただけます。',
           [{ text: 'OK' }]
         );
         return;
       }
 
-      // Mark as verified for registration flow
-      setAgeVerified(true);
+      // Show adult content confirmation modal
       setIsVerifyingAge(false);
-      
-      if (calculatedAge < 16) {
-        Alert.alert(
-          '年齢確認完了',
-          '年齢確認が完了しました。\n\n16歳未満の方は、サービスをご利用いただく前に保護者の同意を得ることをお勧めします。',
-          [{ text: '理解しました' }]
-        );
-      } else {
-        Alert.alert(
-          '年齢確認完了',
-          '年齢確認が完了しました。アカウント作成を続行できます。',
-          [{ text: 'OK' }]
-        );
-      }
+      setShowAdultModal(true);
     } catch (error) {
       console.error('Age verification error:', error);
       setIsVerifyingAge(false);
@@ -208,7 +196,7 @@ export default function RegisterScreen() {
             <View style={styles.ageVerificationSection}>
               <Text style={styles.ageVerificationTitle}>年齢確認</Text>
               <Text style={styles.ageVerificationSubtitle}>
-                このサービスは13歳以上の方のみご利用いただけます
+                このサービスは18歳以上の方のみご利用いただけます
               </Text>
               
               <View style={styles.birthDateContainer}>
@@ -267,7 +255,7 @@ export default function RegisterScreen() {
               <View style={styles.ageVerificationNotice}>
                 <AlertTriangle size={16} color="#FF9500" />
                 <Text style={styles.ageVerificationNoticeText}>
-                  16歳未満の方は保護者の同意が必要です。虚偽の情報を入力することは禁止されています。
+                  虚偽の情報を入力することは利用規約違反となり、アカウントが停止される場合があります。
                 </Text>
               </View>
             </View>
@@ -319,6 +307,29 @@ export default function RegisterScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      
+      <AdultContentModal
+        visible={showAdultModal}
+        onConfirm={() => {
+          setShowAdultModal(false);
+          setAgeVerified(true);
+          Alert.alert(
+            '年齢確認完了',
+            '年齢確認が完了しました。アカウント作成を続行できます。',
+            [{ text: 'OK' }]
+          );
+        }}
+        onDecline={() => {
+          setShowAdultModal(false);
+          setAgeVerified(false);
+          setBirthDate('');
+          Alert.alert(
+            '年齢制限',
+            'このサービスは18歳以上の方のみご利用いただけます。',
+            [{ text: 'OK' }]
+          );
+        }}
+      />
     </SafeAreaView>
   );
 }

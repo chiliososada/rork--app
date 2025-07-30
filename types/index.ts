@@ -54,6 +54,11 @@ export interface Topic {
   
   // 分类相关
   category?: string; // Topic category
+  
+  // コンテンツ審査関連
+  moderationStatus?: 'pending' | 'approved' | 'rejected'; // Content moderation status
+  moderationReason?: string; // Reason for moderation action
+  moderationDate?: string; // When the moderation was applied
 }
 
 export interface Comment {
@@ -64,6 +69,11 @@ export interface Comment {
   likes: number;
   topicId: string;
   isLikedByUser?: boolean;
+  
+  // コンテンツ審査関連
+  moderationStatus?: 'pending' | 'approved' | 'rejected'; // Content moderation status
+  moderationReason?: string; // Reason for moderation action
+  moderationDate?: string; // When the moderation was applied
 }
 
 export interface Message {
@@ -311,7 +321,6 @@ export interface AgeVerificationResult {
   success: boolean;
   age: number;
   message: string;
-  requires_parent_consent: boolean;
 }
 
 export interface AgeComplianceCheck {
@@ -329,4 +338,36 @@ export interface SafeUser extends User {
   age_verified?: boolean;
   birth_date?: string;
   verification_method?: 'self_declared' | 'document' | 'parent_consent' | 'credit_card';
+}
+
+// コンテンツフィルタリング関連接口
+export type ModerationStatus = 'pending' | 'approved' | 'rejected';
+
+export type ModerationReason = 
+  | 'sensitive_words' 
+  | 'excessive_urls' 
+  | 'duplicate_content'
+  | 'manual_review'
+  | null;
+
+export interface ContentFilterResult {
+  status: ModerationStatus;
+  reason: ModerationReason;
+  message: string;
+  details?: string;
+  matchedWords?: string[]; // 検出された敏感語のリスト
+}
+
+export interface ModerationLogEntry {
+  id: string;
+  contentType: 'topic' | 'comment';
+  contentId: string;
+  userId: string;
+  moderationStatus: ModerationStatus;
+  moderationReason?: string;
+  automated: boolean;
+  moderatorId?: string;
+  createdAt: string;
+  filterDetails?: Record<string, any>;
+  originalContent?: string;
 }
