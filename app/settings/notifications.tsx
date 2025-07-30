@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect } from 'react';
 import {
   ScrollView,
   Text,
@@ -6,16 +6,75 @@ import {
   StyleSheet,
   SafeAreaView,
   Switch,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
-import { Stack } from 'expo-router';
-import { Bell, MessageSquare, Users } from 'lucide-react-native';
+import { Stack, useFocusEffect } from 'expo-router';
+import { Bell, MessageSquare, Users, Heart, MessageCircle } from 'lucide-react-native';
 import Colors from '@/constants/colors';
+import { useNotificationSettingsStore } from '@/store/notification-settings-store';
+import { useAuthStore } from '@/store/auth-store';
+import { useCallback } from 'react';
 
 export default function NotificationsSettingsScreen() {
-  // 通知設定の状態（簡化版）
-  const [pushNotifications, setPushNotifications] = useState(true);
-  const [messageNotifications, setMessageNotifications] = useState(true);
-  const [followNotifications, setFollowNotifications] = useState(true);
+  const { user } = useAuthStore();
+  const {
+    settings,
+    isLoading,
+    error,
+    fetchSettings,
+    updatePushNotifications,
+    updateMessageNotifications,
+    updateFollowNotifications,
+    updateLikeNotifications,
+    updateCommentNotifications,
+    resetError,
+  } = useNotificationSettingsStore();
+
+  // 初期データの読み込み
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.id) {
+        fetchSettings(user.id);
+      }
+    }, [user?.id, fetchSettings])
+  );
+
+  // エラーが発生した場合のアラート表示
+  useEffect(() => {
+    if (error) {
+      Alert.alert(
+        'エラー',
+        error,
+        [
+          {
+            text: 'OK',
+            onPress: () => resetError(),
+          },
+        ]
+      );
+    }
+  }, [error, resetError]);
+
+  const handlePushNotificationsChange = async (value: boolean) => {
+    await updatePushNotifications(value);
+  };
+
+  const handleMessageNotificationsChange = async (value: boolean) => {
+    await updateMessageNotifications(value);
+  };
+
+  const handleFollowNotificationsChange = async (value: boolean) => {
+    await updateFollowNotifications(value);
+  };
+
+  const handleLikeNotificationsChange = async (value: boolean) => {
+    await updateLikeNotifications(value);
+  };
+
+  const handleCommentNotificationsChange = async (value: boolean) => {
+    await updateCommentNotifications(value);
+  };
 
   return (
     <>
@@ -26,11 +85,17 @@ export default function NotificationsSettingsScreen() {
         }}
       />
       <SafeAreaView style={styles.container}>
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.contentContainer}
-          showsVerticalScrollIndicator={false}
-        >
+        {isLoading && !settings ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+            <Text style={styles.loadingText}>設定を読み込み中...</Text>
+          </View>
+        ) : (
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.contentContainer}
+            showsVerticalScrollIndicator={false}
+          >
           {/* 基本通知設定セクション */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>基本設定</Text>
@@ -46,10 +111,11 @@ export default function NotificationsSettingsScreen() {
                 </View>
               </View>
               <Switch
-                value={pushNotifications}
-                onValueChange={setPushNotifications}
+                value={settings?.pushNotifications ?? true}
+                onValueChange={handlePushNotificationsChange}
                 trackColor={{ false: '#E5E5E5', true: Colors.primary }}
                 thumbColor="#FFFFFF"
+                disabled={isLoading}
               />
             </View>
           </View>
@@ -69,14 +135,52 @@ export default function NotificationsSettingsScreen() {
                 </View>
               </View>
               <Switch
-                value={messageNotifications}
-                onValueChange={setMessageNotifications}
+                value={settings?.messageNotifications ?? true}
+                onValueChange={handleMessageNotificationsChange}
                 trackColor={{ false: '#E5E5E5', true: Colors.primary }}
                 thumbColor="#FFFFFF"
-                disabled={!pushNotifications}
+                disabled={isLoading || !settings?.pushNotifications}
               />
             </View>
 
+
+            <View style={styles.settingItem}>
+              <View style={styles.settingContent}>
+                <View style={styles.settingIcon}>
+                  <Heart size={20} color="#FF3B30" />
+                </View>
+                <View style={styles.settingTexts}>
+                  <Text style={styles.settingTitle}>いいね通知</Text>
+                  <Text style={styles.settingSubtitle}>あなたの投稿にいいねがついたとき</Text>
+                </View>
+              </View>
+              <Switch
+                value={settings?.likeNotifications ?? true}
+                onValueChange={handleLikeNotificationsChange}
+                trackColor={{ false: '#E5E5E5', true: Colors.primary }}
+                thumbColor="#FFFFFF"
+                disabled={isLoading || !settings?.pushNotifications}
+              />
+            </View>
+
+            <View style={styles.settingItem}>
+              <View style={styles.settingContent}>
+                <View style={styles.settingIcon}>
+                  <MessageCircle size={20} color="#34C759" />
+                </View>
+                <View style={styles.settingTexts}>
+                  <Text style={styles.settingTitle}>コメント通知</Text>
+                  <Text style={styles.settingSubtitle}>あなたの投稿にコメントがついたとき</Text>
+                </View>
+              </View>
+              <Switch
+                value={settings?.commentNotifications ?? true}
+                onValueChange={handleCommentNotificationsChange}
+                trackColor={{ false: '#E5E5E5', true: Colors.primary }}
+                thumbColor="#FFFFFF"
+                disabled={isLoading || !settings?.pushNotifications}
+              />
+            </View>
 
             <View style={[styles.settingItem, { borderBottomWidth: 0 }]}>
               <View style={styles.settingContent}>
@@ -89,15 +193,16 @@ export default function NotificationsSettingsScreen() {
                 </View>
               </View>
               <Switch
-                value={followNotifications}
-                onValueChange={setFollowNotifications}
+                value={settings?.followNotifications ?? true}
+                onValueChange={handleFollowNotificationsChange}
                 trackColor={{ false: '#E5E5E5', true: Colors.primary }}
                 thumbColor="#FFFFFF"
-                disabled={!pushNotifications}
+                disabled={isLoading || !settings?.pushNotifications}
               />
             </View>
           </View>
-        </ScrollView>
+          </ScrollView>
+        )}
       </SafeAreaView>
     </>
   );
@@ -213,5 +318,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 22,
     color: '#6C5300',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 100,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: Colors.text.secondary,
   },
 });

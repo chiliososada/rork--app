@@ -124,6 +124,17 @@ export const useAuthStore = create<AuthState>()(
               return;
             }
 
+            // Create default notification settings for new user
+            const { error: notificationError } = await supabase
+              .rpc('create_default_notification_settings', { 
+                user_id_param: data.user.id 
+              });
+
+            if (notificationError) {
+              console.warn('Failed to create default notification settings:', notificationError);
+              // This is not a critical error, so we don't stop the registration process
+            }
+
             const user: User = {
               id: data.user.id,
               name: name,
