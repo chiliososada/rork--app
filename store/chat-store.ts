@@ -40,7 +40,7 @@ interface ChatState {
   searchResults: Message[];
   
   // 单一全局连接管理
-  globalChannel: any | null;
+  globalChannel: import('@supabase/supabase-js').RealtimeChannel | null;
   isGlobalChannelConnected: boolean;
   userParticipatingTopics: Set<string>; // 用户参与的所有topic ID
   currentUserId: string | null;
@@ -100,7 +100,7 @@ interface ChatState {
 }
 
 // 辅助函数：安全地添加消息到状态中，避免重复
-const addMessageToState = (state: any, topicId: string, newMessage: Message) => {
+const addMessageToState = (state: ChatState, topicId: string, newMessage: Message): ChatState => {
   // 初始化该话题的消息数组和ID集合（如果不存在）
   if (!state.messages[topicId]) {
     state.messages[topicId] = [];
@@ -512,7 +512,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   // 消息路由分发
-  routeMessage: async (message: any) => {
+  routeMessage: async (message: { id: string; topic_id: string; user_id: string; message: string; created_at: string }) => {
     try {
       const topicId = message.topic_id;
       const { userParticipatingTopics, messages } = get();

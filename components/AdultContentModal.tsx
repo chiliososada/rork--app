@@ -59,14 +59,14 @@ export default function AdultContentModal({ visible, onConfirm, onDecline, isFir
             <FileText size={16} color="#856404" />
             <Text style={styles.legalNoticeText}>
               このサービスの利用により、成人向けコンテンツの閲覧に同意し、{'\n'}
-              18歳以上であることを確認します。
+              18歳以上であることを確認いたします。
             </Text>
           </View>
           
           <View style={styles.warningBox}>
             <Text style={styles.warningText}>
               虚偽の申告は利用規約違反となり、{'\n'}
-              アカウントが停止される場合があります。
+              アカウントが停止される場合がございます。
             </Text>
           </View>
           

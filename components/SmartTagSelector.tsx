@@ -64,6 +64,15 @@ export default function SmartTagSelector({
     }
   }, [user?.id, currentLocation]);
 
+  // コンポーネントアンマウント時にタイマーをクリーンアップ
+  useEffect(() => {
+    return () => {
+      if (searchTimer) {
+        clearTimeout(searchTimer);
+      }
+    };
+  }, [searchTimer]);
+
   // 推薦タグ取得
   const fetchRecommendations = async () => {
     if (!user?.id || !currentLocation) {
@@ -83,7 +92,7 @@ export default function SmartTagSelector({
 
       if (!error && data) {
         // データベースのフィールド名をTypeScript型に合わせて変換
-        const formattedRecommendations = data.map((item: any) => ({
+        const formattedRecommendations = data.map((item: { tag_name: string; recommendation_type: string; score: number }) => ({
           tagName: item.tag_name,
           recommendationType: item.recommendation_type,
           score: item.score
@@ -124,8 +133,8 @@ export default function SmartTagSelector({
       if (!error && data) {
         // タイプ変換とフィルタリング
         const formattedResults = data
-          .filter((item: any) => !selectedTags.includes(item.tag_name))
-          .map((item: any) => ({
+          .filter((item: { tag_name: string; source: string; usage_count: number; relevance_score: number }) => !selectedTags.includes(item.tag_name))
+          .map((item: { tag_name: string; source: string; usage_count: number; relevance_score: number }) => ({
             name: item.tag_name,
             source: item.source,
             usageCount: item.usage_count,

@@ -234,10 +234,28 @@ export default function CreateTopicScreen() {
       
     } catch (error) {
       console.error('Content filtering error:', error);
+      
+      // 更友好的错误处理
+      let errorMessage = "コンテンツの審査中にエラーが発生しました。";
+      let errorDetail = "もう一度お試しください。";
+      
+      if (error instanceof Error) {
+        if (error.message.includes('network') || error.message.includes('timeout')) {
+          errorMessage = "ネットワークエラーが発生しました。";
+          errorDetail = "インターネット接続を確認してお試しください。";
+        } else if (error.message.includes('database') || error.message.includes('supabase')) {
+          errorMessage = "サービス接続エラーが発生しました。";
+          errorDetail = "しばらく時間をおいてお試しください。";
+        }
+      }
+      
       Alert.alert(
-        "エラー",
-        "コンテンツの審査中にエラーが発生しました。もう一度お試しください。",
-        [{ text: "OK" }]
+        "投稿エラー",
+        `${errorMessage}\n\n${errorDetail}`,
+        [
+          { text: "再試行", onPress: () => proceedWithTopicCreation(imageUrl, imageAspectRatio, originalWidth, originalHeight) },
+          { text: "キャンセル", style: "cancel" }
+        ]
       );
     }
   };

@@ -49,13 +49,17 @@ export default function ReportModal({
   const [description, setDescription] = useState('');
   const [step, setStep] = useState<'category' | 'details' | 'confirmation'>('category');
   const [submitError, setSubmitError] = useState<string>('');
+  const [isLoadingCategories, setIsLoadingCategories] = useState(false);
 
   const reportLimits = canSubmitReport();
   const selectedCategory = reportCategories.find(cat => cat.id === selectedCategoryId);
 
   useEffect(() => {
     if (visible && reportCategories.length === 0) {
-      loadReportCategories();
+      setIsLoadingCategories(true);
+      loadReportCategories().finally(() => {
+        setIsLoadingCategories(false);
+      });
     }
   }, [visible, reportCategories.length]);
 
@@ -180,7 +184,13 @@ export default function ReportModal({
       )}
 
       <ScrollView style={styles.categoriesContainer} showsVerticalScrollIndicator={false}>
-        {['critical', 'important', 'standard'].map((priority) => {
+        {isLoadingCategories ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+            <Text style={styles.loadingText}>通報カテゴリを読み込み中...</Text>
+          </View>
+        ) : (
+          ['critical', 'important', 'standard'].map((priority) => {
           const categories = reportCategories.filter(cat => {
             if (priority === 'critical') {
               return ['harassment', 'hate_speech', 'underage_user'].includes(cat.category_key);
@@ -231,7 +241,8 @@ export default function ReportModal({
               ))}
             </View>
           );
-        })}
+        }))
+        )}
       </ScrollView>
     </View>
   );
@@ -678,5 +689,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    marginTop: 12,
+    textAlign: 'center',
   },
 });

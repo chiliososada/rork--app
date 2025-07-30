@@ -8,6 +8,7 @@ import { formatMessageTime } from '@/lib/utils/timeUtils';
 import { useAuthStore } from '@/store/auth-store';
 import { useUserBlockStatus } from '@/hooks/useContentFilter';
 import ReportModal from '@/components/ReportModal';
+import ModerationStatusIndicator from '@/components/ModerationStatusIndicator';
 
 interface CommentItemProps {
   comment: Comment;
@@ -80,6 +81,16 @@ export default function CommentItem({ comment, onLike }: CommentItemProps) {
         </View>
         
         <Text style={styles.text}>{comment.text}</Text>
+        
+        {/* Show moderation status if not approved */}
+        {comment.moderationStatus && comment.moderationStatus !== 'approved' && (
+          <ModerationStatusIndicator
+            status={comment.moderationStatus}
+            reason={comment.moderationReason as any}
+            compact={true}
+            style={styles.moderationIndicator}
+          />
+        )}
         
         <View style={styles.footer}>
           <TouchableOpacity 
@@ -186,5 +197,10 @@ const styles = StyleSheet.create({
   moreButton: {
     padding: 4,
     borderRadius: 8,
+  },
+  moderationIndicator: {
+    marginTop: 8,
+    marginBottom: 4,
+    marginLeft: 36,
   },
 });

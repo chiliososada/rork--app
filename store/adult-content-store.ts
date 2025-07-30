@@ -22,6 +22,7 @@ interface AdultContentState {
   setFirstTimeUser: (isFirstTime: boolean) => void;
   checkConfirmationNeeded: () => boolean;
   markConfirmationShown: () => void;
+  validateState: () => boolean; // 状态验证方法
 }
 
 export const useAdultContentStore = create<AdultContentState>()(
@@ -84,6 +85,24 @@ export const useAdultContentStore = create<AdultContentState>()(
       // 标记确认弹窗已显示（防止重复显示）
       markConfirmationShown: () => {
         set({ needsConfirmation: false });
+      },
+
+      // 状态验证方法
+      validateState: () => {
+        const state = get();
+        
+        // 检查状态一致性
+        if (state.hasConfirmedAdultContent && !state.confirmationDate) {
+          console.warn('Adult content: invalid state - confirmed but no date');
+          return false;
+        }
+        
+        if (!state.hasConfirmedAdultContent && state.confirmationDate) {
+          console.warn('Adult content: invalid state - not confirmed but has date');
+          return false;
+        }
+        
+        return true;
       }
     }),
     {
@@ -107,6 +126,14 @@ export const useAdultContentStore = create<AdultContentState>()(
           // 根据已有状态计算是否需要确认
           const needsConfirmation = !state.hasConfirmedAdultContent || !state.confirmationDate;
           state.needsConfirmation = needsConfirmation;
+          
+          // 确保状态一致性：如果已确认但没有日期，重置确认状态
+          if (state.hasConfirmedAdultContent && !state.confirmationDate) {
+            console.warn('Adult content: inconsistent state detected, resetting confirmation');
+            state.hasConfirmedAdultContent = false;
+            state.needsConfirmation = true;
+            state.isFirstTimeUser = true;
+          }
         }
       }
     }

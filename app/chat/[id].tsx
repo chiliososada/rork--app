@@ -77,7 +77,7 @@ export default function ChatRoomScreen() {
   const messageGroups = groupMessagesByDate(messages);
   
   // 日付分隔符と消息を平展的な配列に結合
-  const flattenedItems = messageGroups.reduce((acc: any[], group: MessageGroup) => {
+  const flattenedItems = messageGroups.reduce((acc: Array<{ type: 'date-separator'; id: string; dateString: string } | ({ type: 'message' } & Message)>, group: MessageGroup) => {
     // 日期分隔符
     acc.push({
       type: 'date-separator',
@@ -120,53 +120,74 @@ export default function ChatRoomScreen() {
   };
   
   useEffect(() => {
-    const initializeConnection = async () => {
-      if (user?.id && !isConnected()) {
-        await initializeGlobalConnection(user.id);
-      }
+    let isMounted = true;
+    let presenceInterval: NodeJS.Timeout | null = null;
+    
+    const initializeChat = async () => {
+      if (!id || !user || !isMounted) return;
       
-      // 更新用户presence状态
-      setTimeout(() => {
-        if (user?.id && id) {
-          updateUserPresence(id, user.id, user.nickname || user.name);
+      try {
+        // Set current topic first (synchronous)
+        setCurrentTopic(id);
+        
+        // Load topic details and messages in parallel
+        const [topicResult, messagesResult] = await Promise.allSettled([
+          loadTopicDetail(),
+          fetchMessages(id)
+        ]);
+        
+        if (!isMounted) return;
+        
+        // Mark as read after messages are loaded
+        markAsRead(id);
+        
+        // Initialize global connection (if needed)
+        if (!isConnected()) {
+          await initializeGlobalConnection(user.id);
         }
-      }, 1000);
+        
+        if (!isMounted) return;
+        
+        // Update user presence after connection is established
+        setTimeout(() => {
+          if (isMounted && user?.id && id) {
+            updateUserPresence(id, user.id, user.nickname || user.name);
+          }
+        }, 1000);
+        
+        // Set up presence interval
+        presenceInterval = setInterval(() => {
+          if (isMounted && user?.id && id) {
+            updateUserPresence(id, user.id, user.nickname || user.name);
+          }
+        }, 20000);
+        
+      } catch (error) {
+        console.error('Failed to initialize chat:', error);
+      }
     };
     
-    if (id && user) {
-      // トピック情報を独立して取得
-      loadTopicDetail();
+    // Start initialization
+    initializeChat();
+    
+    // Cleanup function
+    return () => {
+      isMounted = false;
       
-      // 現在のトピックを設定
-      setCurrentTopic(id);
-      
-      // メッセージを取得
-      fetchMessages(id);
-      
-      // 既読マーク
-      markAsRead(id);
-      
-      // 全局连接初始化（非同期）
-      initializeConnection();
-      
-      // 定期的にプレゼンス状態を更新 (20秒毎)
-      const presenceInterval = setInterval(() => {
-        if (user?.id && id) {
-          updateUserPresence(id, user.id, user.nickname || user.name);
-        }
-      }, 20000);
-      
-      // クリーンアップ関数
-      return () => {
-        // ユーザーのオンライン状態を削除
-        if (user?.id && id) {
-          removeUserPresence(id, user.id);
-        }
+      // Clear presence interval
+      if (presenceInterval) {
         clearInterval(presenceInterval);
-        setCurrentTopic(null);
-      };
-    }
-  }, [id, user, currentLocation, initializeGlobalConnection, isConnected, updateUserPresence, removeUserPresence, setCurrentTopic, fetchMessages, markAsRead]);
+      }
+      
+      // Remove user presence
+      if (user?.id && id) {
+        removeUserPresence(id, user.id);
+      }
+      
+      // Clear current topic
+      setCurrentTopic(null);
+    };
+  }, [id, user, currentLocation]);
   
   useEffect(() => {
     // Scroll to bottom when messages change, but only if user is already at bottom
@@ -267,7 +288,7 @@ export default function ChatRoomScreen() {
     }
   };
   
-  const renderItem = ({ item }: { item: any }) => {
+  const renderItem = ({ item }: { item: { type: 'date-separator'; id: string; dateString: string } | ({ type: 'message' } & Message) }) => {
     if (item.type === 'date-separator') {
       return <DateSeparator dateString={item.dateString} />;
     } else if (item.type === 'message') {

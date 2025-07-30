@@ -36,6 +36,9 @@ const SENSITIVE_WORDS_CACHE_KEY = 'sensitive_words_cache';
 // メモリキャッシュ（アプリ実行中のみ有効）
 let memoryCache: SensitiveWordsCache | null = null;
 
+// キャッシュクリーンアップのタイマー
+let cacheCleanupTimer: NodeJS.Timeout | null = null;
+
 // URL検出の正規表現
 const URL_REGEX = /(https?:\/\/[^\s]+)/gi;
 
@@ -182,10 +185,26 @@ async function getSensitiveWords(): Promise<SensitiveWordEntry[]> {
       console.warn('Failed to save sensitive words cache:', error);
     }
 
+    // 自动清理计时器设置
+    scheduleMemoryCacheCleanup();
+
     return normalizedWords;
 
   } catch (error) {
     console.error('Error in getSensitiveWords:', error);
+    
+    // 尝试从本地缓存获取数据作为fallback
+    try {
+      const cachedData = await AsyncStorage.getItem(SENSITIVE_WORDS_CACHE_KEY);
+      if (cachedData) {
+        const cache: SensitiveWordsCache = JSON.parse(cachedData);
+        console.warn('Using cached sensitive words due to fetch error');
+        return cache.words;
+      }
+    } catch (cacheError) {
+      console.error('Failed to read cache as fallback:', cacheError);
+    }
+    
     return [];
   }
 }
@@ -319,21 +338,45 @@ export async function checkDuplicateContent(
 }
 
 /**
- * 包括的なコンテンツフィルタリング
+ * 带重试机制的内容过滤
  */
-export async function filterContent(
+async function filterContentWithRetry(
+  content: string, 
+  userId: string,
+  title?: string,
+  retryCount: number = 0
+): Promise<ContentFilterResult> {
+  const maxRetries = 2;
+  
+  try {
+    return await filterContentInternal(content, userId, title);
+  } catch (error) {
+    if (retryCount < maxRetries) {
+      console.warn(`Content filtering failed, retrying... (${retryCount + 1}/${maxRetries})`);
+      await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))); // 递增延迟
+      return filterContentWithRetry(content, userId, title, retryCount + 1);
+    }
+    throw error;
+  }
+}
+
+/**
+ * 包括的なコンテンツフィルタリング (内部实现)
+ */
+async function filterContentInternal(
   content: string, 
   userId: string,
   title?: string
 ): Promise<ContentFilterResult> {
   // 空のコンテンツチェック
   if (!content.trim()) {
-    return {
+    const result: ContentFilterResult = {
       status: 'rejected',
       reason: 'manual_review',
       message: 'コンテンツが空です',
       details: '有効なコンテンツを入力してください'
     };
+    return result;
   }
 
   // タイトルがある場合は組み合わせてチェック
@@ -348,51 +391,67 @@ export async function filterContent(
     
     // 高い重要度の場合は直接拒否
     if (highestSeverity >= 3) {
-      return {
+      const result: ContentFilterResult = {
         status: 'rejected',
         reason: 'sensitive_words',
         message: 'コンテンツが承認されませんでした',
-        details: '不適切な表現が含まれています',
+        details: '不適切な表現が含まれております',
         matchedWords: sensitiveWordResult.matchedWords.map(w => w.word)
       };
+      return result;
     }
     
-    return {
+    const result: ContentFilterResult = {
       status: criticalWord?.auto_action || 'pending',
       reason: 'sensitive_words',
       message: 'コンテンツが審査待ちです',
-      details: '不適切な表現が含まれている可能性があります',
+      details: '不適切な表現が含まれている可能性がございます',
       matchedWords: sensitiveWordResult.matchedWords.map(w => w.word)
     };
+    return result;
   }
 
   // 2. 過剰URL検出
   if (checkExcessiveUrls(fullContent)) {
-    return {
+    const result: ContentFilterResult = {
       status: 'pending',
       reason: 'excessive_urls',
       message: 'コンテンツが審査待ちです',
-      details: 'URLが多すぎる可能性があります'
+      details: 'URLが多すぎる可能性がございます'
     };
+    return result;
   }
 
   // 3. 重複コンテンツチェック
   const isDuplicate = await checkDuplicateContent(fullContent, userId);
   if (isDuplicate) {
-    return {
+    const result: ContentFilterResult = {
       status: 'pending',
       reason: 'duplicate_content',
       message: 'コンテンツが審査待ちです',
-      details: '最近同じ内容を投稿している可能性があります'
+      details: '最近同じ内容を投稿している可能性がございます'
     };
+    return result;
   }
 
   // すべてのチェックを通過
-  return {
+  const result: ContentFilterResult = {
     status: 'approved',
     reason: null,
     message: 'コンテンツが承認されました'
   };
+  return result;
+}
+
+/**
+ * 包括的なコンテンツフィルタリング (公开接口)
+ */
+export async function filterContent(
+  content: string, 
+  userId: string,
+  title?: string
+): Promise<ContentFilterResult> {
+  return filterContentWithRetry(content, userId, title);
 }
 
 /**
@@ -467,12 +526,39 @@ async function logSensitiveWordMatches(
 }
 
 /**
+ * 内存缓存自动清理调度
+ */
+function scheduleMemoryCacheCleanup(): void {
+  // 清除现有计时器
+  if (cacheCleanupTimer) {
+    clearTimeout(cacheCleanupTimer);
+  }
+  
+  // 设置新的清理计时器（缓存过期时间的2倍，确保过期缓存被清理）
+  cacheCleanupTimer = setTimeout(() => {
+    if (memoryCache && (Date.now() - memoryCache.lastUpdated) > CACHE_DURATION * 2) {
+      console.log('Cleaning up expired memory cache');
+      memoryCache = null;
+    }
+    cacheCleanupTimer = null;
+  }, CACHE_DURATION * 2);
+}
+
+/**
  * 敏感語キャッシュをクリア（管理用）
  */
 export async function clearSensitiveWordsCache(): Promise<void> {
   try {
     memoryCache = null;
+    
+    // 清除计时器
+    if (cacheCleanupTimer) {
+      clearTimeout(cacheCleanupTimer);
+      cacheCleanupTimer = null;
+    }
+    
     await AsyncStorage.removeItem(SENSITIVE_WORDS_CACHE_KEY);
+    console.log('Sensitive words cache cleared');
   } catch (error) {
     console.warn('Failed to clear sensitive words cache:', error);
   }
@@ -486,6 +572,26 @@ export async function clearDuplicateCache(): Promise<void> {
     await AsyncStorage.removeItem(DUPLICATE_CACHE_KEY);
   } catch (error) {
     console.warn('Failed to clear duplicate cache:', error);
+  }
+}
+
+/**
+ * 应用退出时清理所有缓存和计时器
+ */
+export function cleanupContentFilter(): void {
+  try {
+    // 清理内存缓存
+    memoryCache = null;
+    
+    // 清理计时器
+    if (cacheCleanupTimer) {
+      clearTimeout(cacheCleanupTimer);
+      cacheCleanupTimer = null;
+    }
+    
+    console.log('Content filter cleanup completed');
+  } catch (error) {
+    console.warn('Failed to cleanup content filter:', error);
   }
 }
 

@@ -355,7 +355,7 @@ export interface ContentFilterResult {
   reason: ModerationReason;
   message: string;
   details?: string;
-  matchedWords?: string[]; // 検出された敏感語のリスト
+  matchedWords?: string[]; // 検出された敏感語のリスト (オプショナル)
 }
 
 export interface ModerationLogEntry {

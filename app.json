@@ -15,14 +15,33 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "app.rork.location-based-topic-discussion"
+      "bundleIdentifier": "app.rork.location-based-topic-discussion",
+      "contentRating": {
+        "ageRating": "17+",
+        "categories": [
+          "mature-suggestive-themes",
+          "social-networking"
+        ]
+      },
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "このアプリは近くのトピックを表示するために位置情報を使用します。",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "このアプリは近くのトピックを表示するために位置情報を使用します。",
+        "LSApplicationQueriesSchemes": ["tel", "mailto"]
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "app.rork.location-based-topic-discussion"
+      "package": "app.rork.location-based-topic-discussion",
+      "contentRating": "MATURE_17",
+      "permissions": [
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE"
+      ]
     },
     "web": {
       "favicon": "./assets/images/favicon.png"

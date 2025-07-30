@@ -70,15 +70,26 @@ export const useBlockingStore = create<BlockingStore>((set, get) => ({
           currentLoadingUserId: userId 
         });
         
-        // Add timeout to prevent hanging
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Request timeout')), 10000)
-        );
+        // Add timeout to prevent hanging with proper cleanup
+        let timeoutId: NodeJS.Timeout;
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error('Request timeout')), 10000);
+        });
         
         const supabasePromise = supabase
           .rpc('get_blocked_users', { user_id_param: userId });
         
-        const { data, error } = await Promise.race([supabasePromise, timeoutPromise]) as any;
+        let result;
+        try {
+          result = await Promise.race([supabasePromise, timeoutPromise]);
+        } finally {
+          // Always clear timeout to prevent memory leaks
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+        }
+        
+        const { data, error } = result as { data: BlockedUser[] | null; error: any };
 
         if (error) {
           console.error('Error loading blocked users:', error);

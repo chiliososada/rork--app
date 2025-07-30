@@ -45,12 +45,17 @@ export default function RootLayout() {
   // 檢查是否需要顯示成人內容確認
   useEffect(() => {
     if (isInitialized && isAuthenticated) {
-      const needsConfirmation = checkConfirmationNeeded();
-      if (needsConfirmation && !hasConfirmedAdultContent) {
-        setShowAdultModal(true);
-      }
+      // 添加小延迟确保store已完全恢复
+      const checkTimer = setTimeout(() => {
+        const needsConfirmation = checkConfirmationNeeded();
+        if (needsConfirmation && !hasConfirmedAdultContent && !showAdultModal) {
+          setShowAdultModal(true);
+        }
+      }, 200);
+      
+      return () => clearTimeout(checkTimer);
     }
-  }, [isInitialized, isAuthenticated, checkConfirmationNeeded, hasConfirmedAdultContent]);
+  }, [isInitialized, isAuthenticated, checkConfirmationNeeded, hasConfirmedAdultContent, showAdultModal]);
 
   const handleAdultContentConfirm = () => {
     setShowAdultModal(false);

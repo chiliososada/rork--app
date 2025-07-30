@@ -9,10 +9,12 @@ import { useAuthStore } from '@/store/auth-store';
 import { supabase } from '@/lib/supabase';
 import { Square, CheckSquare, Calendar, AlertTriangle } from 'lucide-react-native';
 import AdultContentModal from '@/components/AdultContentModal';
+import { useAdultContentStore } from '@/store/adult-content-store';
 
 export default function RegisterScreen() {
   const router = useRouter();
   const { register, isLoading, error, isAuthenticated, clearError } = useAuthStore();
+  const { confirmAdultContent } = useAdultContentStore();
   
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -114,14 +116,27 @@ export default function RegisterScreen() {
           birth_date_param: birthDate,
           verification_method_param: 'self_declared',
           ip_address_param: null,
-          user_agent_param: navigator.userAgent || null
+          user_agent_param: (typeof navigator !== 'undefined' ? navigator.userAgent : null)
         });
 
       if (verifyError) {
         console.error('Error verifying age:', verifyError);
-        // Continue anyway since user is already registered
-      } else {
-        console.log('Age verification result:', data);
+        Alert.alert(
+          '年齢確認エラー',
+          '年齢確認の処理中にエラーが発生しましたが、アカウントは正常に作成されました。アプリにログインしてから年齢確認を再度お試しください。',
+          [{ text: 'OK' }]
+        );
+      } else if (data && data.length > 0) {
+        const result = data[0];
+        if (!result.success) {
+          Alert.alert(
+            '年齢確認失敗',
+            result.message || '年齢確認に失敗しました。',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+        console.log('Age verification successful:', result);
       }
     } catch (error) {
       console.error('Registration error:', error);
@@ -311,6 +326,8 @@ export default function RegisterScreen() {
       <AdultContentModal
         visible={showAdultModal}
         onConfirm={() => {
+          // 同步确认状态到全局store
+          confirmAdultContent('modal');
           setShowAdultModal(false);
           setAgeVerified(true);
           Alert.alert(

@@ -5,6 +5,7 @@ import { User } from '@/types';
 import { supabase } from '@/lib/supabase';
 import { useBlockingStore } from '@/store/blocking-store';
 import { useReportingStore } from '@/store/reporting-store';
+import { cleanupContentFilter } from '@/lib/content-filter';
 
 interface AuthState {
   user: User | null;
@@ -153,6 +154,9 @@ export const useAuthStore = create<AuthState>()(
         
         blockingStore.clearBlockStatusCache();
         reportingStore.clearReportCache();
+        
+        // Clean up content filter caches and timers
+        cleanupContentFilter();
         
         set({ 
           user: null, 

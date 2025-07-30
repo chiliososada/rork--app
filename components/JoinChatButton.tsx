@@ -11,7 +11,7 @@ interface JoinChatButtonProps {
   isParticipated: boolean;
   onJoin?: () => void;
   onLeave?: () => void;
-  style?: any;
+  style?: import('react-native').ViewStyle;
 }
 
 export default function JoinChatButton({
@@ -41,7 +41,8 @@ export default function JoinChatButton({
       onJoin?.();
     } catch (error) {
       console.error('Failed to join topic:', error);
-      // TODO: Show error toast
+      // Error toast - user-friendly message in Japanese
+      alert('チャットルームへの参加に失敗しました。ネットワーク接続を確認してから再試行してください。');
     } finally {
       setIsLoading(false);
     }
