@@ -12,6 +12,7 @@ import { useUserBlocking } from '@/store/blocking-store';
 import { formatChatListTime } from '@/lib/utils/timeUtils';
 import ReportModal from '@/components/ReportModal';
 import { useToast } from '@/hooks/useToast';
+import PrivacyAwareLocation from '@/components/PrivacyAwareLocation';
 
 interface TopicCardProps {
   topic: Topic;
@@ -193,12 +194,14 @@ function TopicCard({ topic, showMenuButton = false, onDelete }: TopicCardProps) 
       </View>
       
       <View style={styles.footer}>
-        <View style={styles.locationContainer}>
-          <MapPin size={14} color={Colors.location} />
-          <Text style={styles.locationText}>
-            {topic.location.name || '不明な場所'} • {formatDistance(topic.distance || 0)}
-          </Text>
-        </View>
+        <PrivacyAwareLocation
+          topicId={topic.id}
+          topicUserId={topic.author.id}
+          originalLocation={topic.location}
+          distance={topic.distance}
+          style={styles.locationContainer}
+          showDistance={true}
+        />
         
         <View style={styles.statsContainer}>
           <View style={styles.stat}>

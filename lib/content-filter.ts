@@ -1,5 +1,4 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createHash } from 'crypto';
 import { supabase } from '@/lib/supabase';
 import { ModerationStatus, ModerationReason, ContentFilterResult } from '@/types';
 
@@ -50,32 +49,16 @@ const DUPLICATE_CACHE_KEY = 'content_filter_duplicate_cache';
 
 /**
  * コンテンツハッシュを生成する
+ * React Native環境で動作する簡単なハッシュ関数
  */
 function generateContentHash(content: string): string {
-  // Node.js環境以外では簡単なハッシュ関数を使用
-  if (typeof window !== 'undefined') {
-    let hash = 0;
-    for (let i = 0; i < content.length; i++) {
-      const char = content.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // 32bit integer に変換
-    }
-    return Math.abs(hash).toString(36);
+  let hash = 0;
+  for (let i = 0; i < content.length; i++) {
+    const char = content.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // 32bit integer に変換
   }
-  
-  // Node.js環境では crypto を使用
-  try {
-    return createHash('md5').update(content).digest('hex');
-  } catch {
-    // fallback to simple hash
-    let hash = 0;
-    for (let i = 0; i < content.length; i++) {
-      const char = content.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash;
-    }
-    return Math.abs(hash).toString(36);
-  }
+  return Math.abs(hash).toString(36);
 }
 
 /**

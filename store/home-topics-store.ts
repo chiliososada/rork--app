@@ -10,6 +10,7 @@ import { CACHE_PRESETS } from '@/lib/cache/base-store';
 import { getCachedBatchTopicInteractionStatus } from '@/lib/database-optimizers';
 import { requestDeduplicator } from '@/lib/cache/request-deduplicator';
 import { useSearchSettingsStore } from './search-settings-store';
+import { useAuthStore } from './auth-store';
 
 interface HomeTopicsState {
   topics: Topic[];
@@ -179,6 +180,9 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
     // Get search radius from settings store
     const searchSettings = useSearchSettingsStore.getState().settings;
     
+    // Get current user ID for privacy filtering
+    const { data: { user } } = await supabase.auth.getUser();
+    
     const queryParams: GeoQueryParams = {
       latitude,
       longitude,
@@ -186,7 +190,8 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
       timeRange: searchSettings.timeRange,
       limit: 10,
       cursor: refresh ? undefined : get().nextCursor,
-      sortBy: 'distance'
+      sortBy: 'distance',
+      currentUserId: user?.id
     };
 
     // Use unified caching system
@@ -333,6 +338,9 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
     // Get search radius from settings store
     const searchSettings = useSearchSettingsStore.getState().settings;
     
+    // Get current user ID for privacy filtering
+    const { data: { user } } = await supabase.auth.getUser();
+    
     const queryParams: GeoQueryParams = {
       latitude,
       longitude,
@@ -340,7 +348,8 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
       timeRange: searchSettings.timeRange,
       limit: 10,
       cursor: nextCursor,
-      sortBy: 'distance'
+      sortBy: 'distance',
+      currentUserId: user?.id
     };
 
     // Use unified caching for pagination as well
@@ -508,13 +517,17 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
         // Get search settings
         const searchSettings = useSearchSettingsStore.getState().settings;
         
+        // Get current user ID for privacy filtering
+        const { data: { user } } = await supabase.auth.getUser();
+        
         const searchParams = {
           latitude: currentLocation.latitude,
           longitude: currentLocation.longitude,
           radiusKm: searchSettings.radiusKm,
           timeRange: searchSettings.timeRange,
           searchQuery: normalizedQuery,
-          limit: 20 // More results for search
+          limit: 20, // More results for search
+          currentUserId: user?.id
         };
         
         const result = await withNetworkRetry(async () => {
@@ -530,7 +543,6 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
         });
         
         // Check user interaction status for search results
-        const { data: { user } } = await supabase.auth.getUser();
         if (user?.id && result.topics.length > 0) {
           const topicIds = result.topics.map(t => t.id);
           await get().checkInteractionStatus(topicIds, user.id);
@@ -570,6 +582,9 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
     try {
       const searchSettings = useSearchSettingsStore.getState().settings;
       
+      // Get current user ID for privacy filtering
+      const { data: { user } } = await supabase.auth.getUser();
+      
       const searchParams = {
         latitude: currentLocation.latitude,
         longitude: currentLocation.longitude,
@@ -577,7 +592,8 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
         timeRange: searchSettings.timeRange,
         searchQuery: searchQuery.trim(),
         cursor: searchNextCursor,
-        limit: 20
+        limit: 20,
+        currentUserId: user?.id
       };
       
       const result = await searchNearbyTopics(searchParams);
@@ -596,7 +612,6 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
       });
       
       // Check interaction status for new topics
-      const { data: { user } } = await supabase.auth.getUser();
       if (user?.id && newTopics.length > 0) {
         const newTopicIds = newTopics.map(t => t.id);
         await get().checkInteractionStatus(newTopicIds, user.id);
@@ -647,12 +662,16 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
     try {
       const searchSettings = useSearchSettingsStore.getState();
       
+      // Get current user ID for privacy filtering
+      const { data: { user } } = await supabase.auth.getUser();
+      
       const params = {
         latitude: currentLocation.latitude,
         longitude: currentLocation.longitude,
         radiusKm: searchSettings.maxDistance,
         limit: TOPICS_PER_PAGE,
         searchQuery: tag, // 使用标签作为搜索词
+        currentUserId: user?.id
       };
 
       const result = await withNetworkRetry(() => 
@@ -668,7 +687,6 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
       });
 
       // Check user interactions for search results
-      const { data: { user } } = await supabase.auth.getUser();
       if (user?.id && result.topics.length > 0) {
         const topicIds = result.topics.map(t => t.id);
         await get().checkInteractionStatus(topicIds, user.id);

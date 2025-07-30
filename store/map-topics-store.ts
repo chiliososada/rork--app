@@ -140,6 +140,9 @@ export const useMapTopicsStore = create<MapTopicsState>((set, get) => {
     // Get search settings from settings store
     const searchSettings = useSearchSettingsStore.getState().settings;
     
+    // Get current user ID for privacy filtering
+    const { data: { user } } = await supabase.auth.getUser();
+    
     const queryParams = {
       latitude,
       longitude,
@@ -147,7 +150,8 @@ export const useMapTopicsStore = create<MapTopicsState>((set, get) => {
       timeRange: searchSettings.timeRange,
       limit: Math.max(TOPICS_PER_PAGE, MINIMUM_MAP_TOPICS),
       cursor: refresh ? undefined : get().nextCursor,
-      sortBy: 'activity' as const
+      sortBy: 'activity' as const,
+      currentUserId: user?.id
     };
 
     // Use unified caching system
@@ -286,6 +290,9 @@ export const useMapTopicsStore = create<MapTopicsState>((set, get) => {
     // Get search settings from settings store
     const searchSettings = useSearchSettingsStore.getState().settings;
     
+    // Get current user ID for privacy filtering
+    const { data: { user } } = await supabase.auth.getUser();
+    
     const queryParams = {
       latitude,
       longitude,
@@ -293,7 +300,8 @@ export const useMapTopicsStore = create<MapTopicsState>((set, get) => {
       timeRange: searchSettings.timeRange,
       limit: TOPICS_PER_PAGE,
       cursor: nextCursor,
-      sortBy: 'activity' as const
+      sortBy: 'activity' as const,
+      currentUserId: user?.id
     };
 
     // Use unified caching for pagination
@@ -455,13 +463,17 @@ export const useMapTopicsStore = create<MapTopicsState>((set, get) => {
         // Get search settings
         const searchSettings = useSearchSettingsStore.getState().settings;
         
+        // Get current user ID for privacy filtering
+        const { data: { user } } = await supabase.auth.getUser();
+        
         const searchParams = {
           latitude: currentLocation.latitude,
           longitude: currentLocation.longitude,
           radiusKm: searchSettings.radiusKm * 2, // Larger radius for map
           timeRange: searchSettings.timeRange,
           searchQuery: normalizedQuery,
-          limit: 30 // More results for map
+          limit: 30, // More results for map
+          currentUserId: user?.id
         };
         
         const result = await withNetworkRetry(async () => {
@@ -517,6 +529,9 @@ export const useMapTopicsStore = create<MapTopicsState>((set, get) => {
     try {
       const searchSettings = useSearchSettingsStore.getState().settings;
       
+      // Get current user ID for privacy filtering
+      const { data: { user } } = await supabase.auth.getUser();
+      
       const searchParams = {
         latitude: currentLocation.latitude,
         longitude: currentLocation.longitude,
@@ -524,7 +539,8 @@ export const useMapTopicsStore = create<MapTopicsState>((set, get) => {
         timeRange: searchSettings.timeRange,
         searchQuery: searchQuery.trim(),
         cursor: searchNextCursor,
-        limit: 30
+        limit: 30,
+        currentUserId: user?.id
       };
       
       const result = await searchMapTopics(searchParams);
@@ -635,11 +651,15 @@ export const useMapTopicsStore = create<MapTopicsState>((set, get) => {
   },
 
   fetchTopicsInViewport: async (bounds) => {
+    // Get current user ID for privacy filtering
+    const { data: { user } } = await supabase.auth.getUser();
+    
     const boundsParams = {
       north: bounds.north,
       south: bounds.south,
       east: bounds.east,
-      west: bounds.west
+      west: bounds.west,
+      currentUserId: user?.id
     };
 
     // Use unified caching for viewport queries
@@ -692,7 +712,7 @@ export const useMapTopicsStore = create<MapTopicsState>((set, get) => {
       set({ isLoading: true, error: null });
       
       const requestPromise = (async () => {
-        const result = await fetchTopicsInBounds(bounds);
+        const result = await fetchTopicsInBounds(bounds, user?.id);
         return result;
       })();
       

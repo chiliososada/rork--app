@@ -241,7 +241,7 @@ export default function ReportModal({
               ))}
             </View>
           );
-        }))
+        })
         )}
       </ScrollView>
     </View>

@@ -11,6 +11,7 @@ export interface GeoQueryParams {
   cursor?: string; // For cursor-based pagination
   sortBy?: 'distance' | 'activity' | 'time';
   timeRange?: TimeRange; // Time filter
+  currentUserId?: string; // Current user ID for privacy filtering
 }
 
 export interface QueryResult {
@@ -57,7 +58,8 @@ export async function fetchNearbyTopics(params: GeoQueryParams): Promise<QueryRe
     radiusKm = DEFAULT_RADIUS_KM, 
     limit = 10,
     cursor,
-    timeRange = 'all'
+    timeRange = 'all',
+    currentUserId
   } = params;
 
 
@@ -82,7 +84,8 @@ export async function fetchNearbyTopics(params: GeoQueryParams): Promise<QueryRe
           id,
           nickname,
           avatar_url,
-          email
+          email,
+          is_location_visible
         ),
         comments!comments_topic_id_fkey (count),
         chat_messages!chat_messages_topic_id_fkey (
@@ -119,8 +122,19 @@ export async function fetchNearbyTopics(params: GeoQueryParams): Promise<QueryRe
     }
 
 
+    // Filter out topics from users with location privacy enabled
+    const visibleTopicsData = (topicsData || []).filter(topic => {
+      // Always show user's own topics regardless of privacy settings
+      if (currentUserId && topic.user_id === currentUserId) {
+        return true;
+      }
+      
+      // For other users, only show if location is visible
+      return topic.users?.is_location_visible !== false;
+    });
+
     // Transform and calculate exact distances
-    const topics: Topic[] = (topicsData || []).map(topic => {
+    const topics: Topic[] = visibleTopicsData.map(topic => {
       const distance = calculateDistance(
         latitude, 
         longitude, 
@@ -232,7 +246,8 @@ export async function fetchMapTopics(params: GeoQueryParams): Promise<QueryResul
     radiusKm = DEFAULT_RADIUS_KM * 2, // Larger radius for map view
     limit = 30, // More topics for map
     cursor,
-    timeRange = 'all'
+    timeRange = 'all',
+    currentUserId
   } = params;
 
   try {
@@ -245,7 +260,8 @@ export async function fetchMapTopics(params: GeoQueryParams): Promise<QueryResul
           id,
           nickname,
           avatar_url,
-          email
+          email,
+          is_location_visible
         ),
         comments!comments_topic_id_fkey (count),
         chat_messages!chat_messages_topic_id_fkey (
@@ -278,8 +294,19 @@ export async function fetchMapTopics(params: GeoQueryParams): Promise<QueryResul
       throw topicsError;
     }
 
+    // Filter out topics from users with location privacy enabled  
+    const visibleTopicsData = (topicsData || []).filter(topic => {
+      // Always show user's own topics regardless of privacy settings
+      if (currentUserId && topic.user_id === currentUserId) {
+        return true;
+      }
+      
+      // For other users, only show if location is visible
+      return topic.users?.is_location_visible !== false;
+    });
+
     // Transform and calculate activity scores
-    const topics: Topic[] = (topicsData || []).slice(0, limit).map(topic => {
+    const topics: Topic[] = visibleTopicsData.slice(0, limit).map(topic => {
       const distance = calculateDistance(
         latitude, 
         longitude, 
@@ -425,7 +452,8 @@ export async function fetchParticipatedTopics(userId: string, params: Omit<GeoQu
           id,
           nickname,
           avatar_url,
-          email
+          email,
+          is_location_visible
         ),
         comments!comments_topic_id_fkey (count),
         chat_messages!chat_messages_topic_id_fkey (
@@ -588,7 +616,8 @@ export async function searchNearbyTopics(params: GeoQueryParams & { searchQuery:
     limit = 20,
     cursor,
     timeRange = 'all',
-    searchQuery
+    searchQuery,
+    currentUserId
   } = params;
 
   // Return empty results if no search query
@@ -611,7 +640,8 @@ export async function searchNearbyTopics(params: GeoQueryParams & { searchQuery:
           id,
           nickname,
           avatar_url,
-          email
+          email,
+          is_location_visible
         ),
         comments!comments_topic_id_fkey (count),
         chat_messages!chat_messages_topic_id_fkey (
@@ -649,8 +679,19 @@ export async function searchNearbyTopics(params: GeoQueryParams & { searchQuery:
       throw topicsError;
     }
 
+    // Filter out topics from users with location privacy enabled
+    const visibleTopicsData = (topicsData || []).filter(topic => {
+      // Always show user's own topics regardless of privacy settings
+      if (currentUserId && topic.user_id === currentUserId) {
+        return true;
+      }
+      
+      // For other users, only show if location is visible
+      return topic.users?.is_location_visible !== false;
+    });
+
     // Transform and calculate exact distances
-    const topics: Topic[] = (topicsData || []).slice(0, limit).map(topic => {
+    const topics: Topic[] = visibleTopicsData.slice(0, limit).map(topic => {
       const distance = calculateDistance(
         latitude, 
         longitude, 
@@ -790,7 +831,8 @@ export async function searchMapTopics(params: GeoQueryParams & { searchQuery: st
           id,
           nickname,
           avatar_url,
-          email
+          email,
+          is_location_visible
         ),
         comments!comments_topic_id_fkey (count),
         chat_messages!chat_messages_topic_id_fkey (
@@ -940,7 +982,7 @@ export async function fetchTopicsInBounds(bounds: {
   south: number;
   east: number;
   west: number;
-}, limit = 50): Promise<QueryResult> {
+}, currentUserId?: string, limit = 50): Promise<QueryResult> {
   try {
     const { data: topicsData, error: topicsError } = await supabase
       .from('topics')
@@ -950,7 +992,8 @@ export async function fetchTopicsInBounds(bounds: {
           id,
           nickname,
           avatar_url,
-          email
+          email,
+          is_location_visible
         ),
         comments!comments_topic_id_fkey (count),
         chat_messages!chat_messages_topic_id_fkey (
@@ -1035,8 +1078,18 @@ export async function fetchTopicsInBounds(bounds: {
       };
     });
 
+    // Filter out topics from users who have location privacy disabled
+    const visibleTopics = topics.filter(topic => {
+      // Always show user's own topics
+      if (currentUserId && topic.author.id === currentUserId) {
+        return true;
+      }
+      // Show topics from users with location visibility enabled (default behavior)
+      return topic.author.isLocationVisible !== false;
+    });
+
     return {
-      topics,
+      topics: visibleTopics,
       hasMore: topics.length === limit
     };
   } catch (error) {

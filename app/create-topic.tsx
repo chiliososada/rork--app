@@ -2,12 +2,13 @@ import React, { useState, useEffect } from "react";
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform, Alert } from "react-native";
 import { useRouter, Stack, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MapPin, ChevronLeft, X } from "lucide-react-native";
+import { MapPin, ChevronLeft, X, Eye, EyeOff, Shield } from "lucide-react-native";
 import Colors from "@/constants/colors";
 import Input from "@/components/Input";
 import Button from "@/components/Button";
 import ImagePicker from "@/components/ImagePicker";
 import { useLocationStore } from "@/store/location-store";
+import { useLocationSettingsStore } from "@/store/location-settings-store";
 import { useTopicDetailsStore } from "@/store/topic-details-store";
 import { useAuthStore } from "@/store/auth-store";
 import { uploadTopicImage } from "@/lib/image-upload";
@@ -25,6 +26,7 @@ export default function CreateTopicScreen() {
   const { user } = useAuthStore();
   const { currentLocation, requestPermission } = useLocationStore();
   const { createTopic, isLoading } = useTopicDetailsStore();
+  const { saveLocationHistory, isLocationVisible, locationPrecision, getLocationPrecisionLabel } = useLocationSettingsStore();
   
   // 获取模板参数
   const { templateTitle, templateTags, templateCategory } = useLocalSearchParams<{
@@ -308,6 +310,27 @@ export default function CreateTopicScreen() {
       moderationReason: filterResult.reason || undefined,
     });
     
+    // 位置情報履歴を保存（設定が有効な場合）
+    if (saveLocationHistory && user && currentLocation && newTopic.id) {
+      try {
+        const { error } = await supabase.rpc('save_location_history', {
+          user_id_param: user.id,
+          topic_id_param: newTopic.id,
+          latitude_param: currentLocation.latitude,
+          longitude_param: currentLocation.longitude,
+          location_name_param: currentLocation.name || null,
+          area_name_param: null, // TODO: エリア名を取得する
+          city_name_param: null  // TODO: 市名を取得する
+        });
+        
+        if (error) {
+          console.warn('Failed to save location history:', error);
+        }
+      } catch (error) {
+        console.warn('Error saving location history:', error);
+      }
+    }
+    
     // 发送话题创建事件，让首页实时更新
     eventBus.emit(EVENT_TYPES.TOPIC_CREATED, {
       topic: newTopic
@@ -418,12 +441,48 @@ export default function CreateTopicScreen() {
             <Text style={styles.locationLabel}>位置情報</Text>
             
             {currentLocation ? (
-              <View style={styles.locationContainer}>
-                <MapPin size={16} color={Colors.primary} />
-                <Text style={styles.locationText}>
-                  {currentLocation.name || '現在地を使用中'}
-                </Text>
-              </View>
+              <>
+                <View style={styles.locationContainer}>
+                  <MapPin size={16} color={Colors.primary} />
+                  <Text style={styles.locationText}>
+                    {currentLocation.name || '現在地を使用中'}
+                  </Text>
+                </View>
+                
+                {/* 位置情報プライバシー設定の表示 */}
+                <View style={styles.privacyIndicator}>
+                  {isLocationVisible ? (
+                    <View style={styles.privacyItem}>
+                      <Eye size={14} color={Colors.success} />
+                      <Text style={styles.privacyText}>
+                        位置情報: {getLocationPrecisionLabel(locationPrecision)}
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={styles.privacyItem}>
+                      <EyeOff size={14} color={Colors.text.secondary} />
+                      <Text style={[styles.privacyText, { color: Colors.text.secondary }]}>
+                        位置情報: 非表示
+                      </Text>
+                    </View>
+                  )}
+                  
+                  {saveLocationHistory && (
+                    <View style={styles.privacyItem}>
+                      <Shield size={14} color={Colors.primary} />
+                      <Text style={styles.privacyText}>履歴保存中</Text>
+                    </View>
+                  )}
+                </View>
+                
+                <TouchableOpacity 
+                  style={styles.settingsLink}
+                  onPress={() => router.push('/settings/location')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.settingsLinkText}>位置情報設定を変更</Text>
+                </TouchableOpacity>
+              </>
             ) : (
               <TouchableOpacity 
                 style={styles.locationButton}
@@ -613,5 +672,37 @@ const styles = StyleSheet.create({
   },
   createButton: {
     marginTop: 16,
+  },
+  privacyIndicator: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 8,
+    paddingHorizontal: 12,
+  },
+  privacyItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.card,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  privacyText: {
+    fontSize: 12,
+    color: Colors.text.primary,
+    fontWeight: '500',
+  },
+  settingsLink: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  settingsLinkText: {
+    fontSize: 12,
+    color: Colors.primary,
+    textDecorationLine: 'underline',
   },
 });
