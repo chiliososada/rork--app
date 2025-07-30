@@ -27,8 +27,8 @@ export async function getBatchTopicInteractionStatus(
 
 
   try {
-    // 1. 批量查询用户点赞状态
-    const [likesResult, favoritesResult, countsResult] = await Promise.all([
+    // 1. 批量查询用户点赞状态，使用 Promise.allSettled 以避免单个查询失败影响其他查询
+    const [likesResult, favoritesResult, countsResult] = await Promise.allSettled([
       // 用户点赞状态
       supabase
         .from('topic_likes')
@@ -48,26 +48,42 @@ export async function getBatchTopicInteractionStatus(
         .rpc('get_topic_interaction_counts', { topic_ids: topicIds })
     ]);
 
+    // 处理查询结果，确保即使部分查询失败也能返回可用数据
+    const likesData = likesResult.status === 'fulfilled' ? likesResult.value.data : [];
+    const favoritesData = favoritesResult.status === 'fulfilled' ? favoritesResult.value.data : [];
+    const countsData = countsResult.status === 'fulfilled' ? countsResult.value.data : [];
 
-    // 处理错误
-    if (likesResult.error) throw likesResult.error;
-    if (favoritesResult.error) throw favoritesResult.error;
-    if (countsResult.error) {
-      console.warn('Failed to get counts via RPC, falling back to individual queries');
-      // 如果RPC失败，回退到批量查询
-      const fallbackCounts = await getBatchTopicCountsFallback(topicIds);
-      return buildInteractionStatus(topicIds, likesResult.data, favoritesResult.data, fallbackCounts);
+    // 记录失败的查询
+    if (likesResult.status === 'rejected') {
+      console.error('Failed to fetch likes data:', likesResult.reason);
+    }
+    if (favoritesResult.status === 'rejected') {
+      console.error('Failed to fetch favorites data:', favoritesResult.reason);
+    }
+    if (countsResult.status === 'rejected') {
+      console.error('Failed to fetch counts data:', countsResult.reason);
     }
 
+
     // 构建结果
-    const likedTopicIds = new Set(likesResult.data?.map(l => l.topic_id) || []);
-    const favoritedTopicIds = new Set(favoritesResult.data?.map(f => f.topic_id) || []);
-    const countsMap = new Map(
-      (countsResult.data || []).map((item: any) => [
-        item.topic_id, 
-        { likesCount: item.likes_count || 0, commentsCount: item.comments_count || 0 }
-      ])
-    );
+    const likedTopicIds = new Set(likesData?.map(l => l.topic_id) || []);
+    const favoritedTopicIds = new Set(favoritesData?.map(f => f.topic_id) || []);
+    
+    // 处理 counts 数据，如果 RPC 查询失败则使用回退方案
+    let countsMap = new Map();
+    if (countsData && countsData.length > 0) {
+      countsMap = new Map(
+        countsData.map((item: any) => [
+          item.topic_id, 
+          { likesCount: item.likes_count || 0, commentsCount: item.comments_count || 0 }
+        ])
+      );
+    } else if (countsResult.status === 'rejected') {
+      console.error('Failed to get counts via RPC, falling back to individual queries');
+      // 如果RPC失败，回退到批量查询
+      const fallbackCounts = await getBatchTopicCountsFallback(topicIds);
+      countsMap = fallbackCounts;
+    }
 
 
     return topicIds.map(topicId => ({
@@ -92,8 +108,8 @@ export async function getBatchTopicInteractionStatus(
  */
 async function getBatchTopicCountsFallback(topicIds: string[]): Promise<Map<string, { likesCount: number; commentsCount: number }>> {
   try {
-    // 使用聚合查询而不是单独查询每个topic
-    const [likesCountResult, commentsCountResult] = await Promise.all([
+    // 使用聚合查询而不是单独查询每个topic，使用 Promise.allSettled 提高容错性
+    const [likesCountResult, commentsCountResult] = await Promise.allSettled([
       supabase
         .from('topic_likes')
         .select('topic_id')
@@ -105,21 +121,30 @@ async function getBatchTopicCountsFallback(topicIds: string[]): Promise<Map<stri
         .in('topic_id', topicIds)
     ]);
 
-    if (likesCountResult.error) throw likesCountResult.error;
-    if (commentsCountResult.error) throw commentsCountResult.error;
+    // 处理查询结果
+    const likesCountData = likesCountResult.status === 'fulfilled' ? likesCountResult.value.data : [];
+    const commentsCountData = commentsCountResult.status === 'fulfilled' ? commentsCountResult.value.data : [];
+
+    // 记录失败的查询
+    if (likesCountResult.status === 'rejected') {
+      console.error('Failed to fetch likes count data:', likesCountResult.reason);
+    }
+    if (commentsCountResult.status === 'rejected') {
+      console.error('Failed to fetch comments count data:', commentsCountResult.reason);
+    }
 
     // 计算每个topic的counts
     const likesCountMap = new Map<string, number>();
     const commentsCountMap = new Map<string, number>();
 
     // 统计likes
-    (likesCountResult.data || []).forEach(item => {
+    (likesCountData || []).forEach(item => {
       const count = likesCountMap.get(item.topic_id) || 0;
       likesCountMap.set(item.topic_id, count + 1);
     });
 
     // 统计comments
-    (commentsCountResult.data || []).forEach(item => {
+    (commentsCountData || []).forEach(item => {
       const count = commentsCountMap.get(item.topic_id) || 0;
       commentsCountMap.set(item.topic_id, count + 1);
     });
@@ -208,13 +233,31 @@ async function getFallbackInteractionStatus(
       return { topicId, count: count || 0 };
     });
 
-    const [likesCountResults, commentsCountResults] = await Promise.all([
-      Promise.all(likesCountPromises),
-      Promise.all(commentsCountPromises)
+    const [likesCountResults, commentsCountResults] = await Promise.allSettled([
+      Promise.allSettled(likesCountPromises),
+      Promise.allSettled(commentsCountPromises)
     ]);
 
-    const likesCountMap = new Map(likesCountResults.map(r => [r.topicId, r.count]));
-    const commentsCountMap = new Map(commentsCountResults.map(r => [r.topicId, r.count]));
+    // 处理 likes count 结果
+    const likesCountData = likesCountResults.status === 'fulfilled' 
+      ? likesCountResults.value.filter(result => result.status === 'fulfilled').map(result => result.value)
+      : [];
+    
+    // 处理 comments count 结果
+    const commentsCountData = commentsCountResults.status === 'fulfilled'
+      ? commentsCountResults.value.filter(result => result.status === 'fulfilled').map(result => result.value)
+      : [];
+
+    if (likesCountResults.status === 'rejected') {
+      console.error('Failed to fetch likes count in fallback:', likesCountResults.reason);
+    }
+    
+    if (commentsCountResults.status === 'rejected') {
+      console.error('Failed to fetch comments count in fallback:', commentsCountResults.reason);
+    }
+
+    const likesCountMap = new Map(likesCountData.map(r => [r.topicId, r.count]));
+    const commentsCountMap = new Map(commentsCountData.map(r => [r.topicId, r.count]));
 
     return topicIds.map(topicId => ({
       topicId,

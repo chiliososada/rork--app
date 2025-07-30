@@ -24,7 +24,7 @@ import { ContentPendingNotice, ContentApprovedNotice } from "@/components/Conten
 export default function CreateTopicScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
-  const { currentLocation, requestPermission } = useLocationStore();
+  const { currentLocation, requestPermission, getDetailedLocationInfo } = useLocationStore();
   const { createTopic, isLoading } = useTopicDetailsStore();
   const { saveLocationHistory, isLocationVisible, locationPrecision, getLocationPrecisionLabel } = useLocationSettingsStore();
   
@@ -313,21 +313,27 @@ export default function CreateTopicScreen() {
     // 位置情報履歴を保存（設定が有効な場合）
     if (saveLocationHistory && user && currentLocation && newTopic.id) {
       try {
+        // 詳細な地域情報を取得
+        const locationInfo = await getDetailedLocationInfo({
+          latitude: currentLocation.latitude,
+          longitude: currentLocation.longitude
+        });
+
         const { error } = await supabase.rpc('save_location_history', {
           user_id_param: user.id,
           topic_id_param: newTopic.id,
           latitude_param: currentLocation.latitude,
           longitude_param: currentLocation.longitude,
           location_name_param: currentLocation.name || null,
-          area_name_param: null, // TODO: エリア名を取得する
-          city_name_param: null  // TODO: 市名を取得する
+          area_name_param: locationInfo.areaName,
+          city_name_param: locationInfo.cityName
         });
         
         if (error) {
-          console.warn('Failed to save location history:', error);
+          console.error('Failed to save location history:', error);
         }
       } catch (error) {
-        console.warn('Error saving location history:', error);
+        console.error('Error saving location history:', error);
       }
     }
     

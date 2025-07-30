@@ -1,4 +1,4 @@
-import React, { useState, memo } from 'react';
+import React, { useState, memo, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Alert, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MapPin, MessageCircle, Users, Heart, Bookmark, MoreHorizontal, Trash2, Flag, Shield } from 'lucide-react-native';
@@ -28,7 +28,7 @@ function TopicCard({ topic, showMenuButton = false, onDelete }: TopicCardProps) 
   const [showActionMenu, setShowActionMenu] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
-  const scaleValue = useState(new Animated.Value(1))[0];
+  const scaleValue = useRef(new Animated.Value(1)).current;
 
   // Check if the topic author is blocked
   const isAuthorBlocked = user && topic.author.id !== user.id ? isUserBlockedSync(topic.author.id) : false;

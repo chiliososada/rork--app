@@ -22,6 +22,12 @@ interface LocationState {
   setSelectedLocation: (location: AppLocation) => void;
   clearSelectedLocation: () => void;
   reverseGeocode: (location: { latitude: number; longitude: number }) => Promise<AppLocation>;
+  getDetailedLocationInfo: (location: { latitude: number; longitude: number }) => Promise<{
+    areaName: string | null;
+    cityName: string | null;
+    regionName: string | null;
+    countryName: string | null;
+  }>;
 }
 
 export const useLocationStore = create<LocationState>((set, get) => ({
@@ -188,13 +194,59 @@ export const useLocationStore = create<LocationState>((set, get) => ({
         address: `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`
       };
     } catch (error) {
-      console.warn('Reverse geocoding failed:', error);
+      console.error('Reverse geocoding failed:', error);
       
       // Return location with fallback name
       return {
         ...location,
         name: '現在地',
         address: `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`
+      };
+    }
+  },
+
+  // 詳細な地域情報を取得する新しいメソッド
+  getDetailedLocationInfo: async (location: { latitude: number; longitude: number }) => {
+    try {
+      if (Platform.OS === 'web') {
+        // Web では簡易的な情報のみ
+        return {
+          areaName: null,
+          cityName: null,
+          regionName: null,
+          countryName: null,
+        };
+      }
+      
+      const reverseGeocodeResult = await ExpoLocation.reverseGeocodeAsync({
+        latitude: location.latitude,
+        longitude: location.longitude,
+      });
+      
+      if (reverseGeocodeResult && reverseGeocodeResult.length > 0) {
+        const result = reverseGeocodeResult[0];
+        
+        return {
+          areaName: result.district || result.subregion || null,
+          cityName: result.city || result.region || null,
+          regionName: result.region || result.administrativeArea || null,
+          countryName: result.country || null,
+        };
+      }
+      
+      return {
+        areaName: null,
+        cityName: null,
+        regionName: null,
+        countryName: null,
+      };
+    } catch (error) {
+      console.error('Failed to get detailed location info:', error);
+      return {
+        areaName: null,
+        cityName: null,
+        regionName: null,
+        countryName: null,
       };
     }
   },

@@ -18,6 +18,7 @@ import { useLocationStore } from '@/store/location-store';
 import { useAuthStore } from '@/store/auth-store';
 import { supabase } from '@/lib/supabase';
 import { Tag, TagRecommendation, TagCategoryMap } from '@/types/tag';
+import { useToast } from '@/hooks/useToast';
 
 interface SmartTagSelectorProps {
   selectedTags: string[];
@@ -46,6 +47,7 @@ export default function SmartTagSelector({
   const [showInput, setShowInput] = useState(false);
   const { currentLocation } = useLocationStore();
   const { user } = useAuthStore();
+  const toast = useToast();
   const fadeAnim = new Animated.Value(1); // 初期値を1に設定して即座に表示
   const [searchTimer, setSearchTimer] = useState<NodeJS.Timeout | null>(null);
   
@@ -169,8 +171,7 @@ export default function SmartTagSelector({
   // タグ追加処理
   const handleAddTag = (tagName: string) => {
     if (selectedTags.length >= maxTags) {
-      // TODO: より良いアラート実装
-      alert(`最大${maxTags}個までタグを選択できます`);
+      toast.show(`最大${maxTags}個までタグを選択できます`, 'warning');
       return;
     }
 

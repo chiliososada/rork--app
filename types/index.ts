@@ -1,17 +1,23 @@
 export interface User {
   id: string;
-  name: string;
-  avatar: string;
+  name: string; // maps to nickname in DB
+  avatar: string; // maps to avatar_url in DB
   email?: string;
   phone?: string;
+  gender?: string;
+  created_at?: string; // データベースのcreated_atフィールド
   // フォロー関連
   followersCount?: number;
   followingCount?: number;
   isFollowing?: boolean;
   isFollowedBy?: boolean;
   // プライバシー設定
-  isProfilePublic?: boolean;
-  isFollowersVisible?: boolean;
+  isProfilePublic?: boolean; // maps to is_profile_public in DB
+  isFollowersVisible?: boolean; // maps to is_followers_visible in DB
+  // 位置情報プライバシー設定
+  isLocationVisible?: boolean;
+  saveLocationHistory?: boolean;
+  locationPrecision?: 'exact' | 'area' | 'city' | 'hidden';
 }
 
 export interface Location {
@@ -25,17 +31,19 @@ export interface Topic {
   id: string;
   title: string;
   description: string;
-  createdAt: string;
+  createdAt: string; // maps to created_at in DB
   author: User;
   location: Location;
   distance?: number; // Distance from user in meters
   commentCount: number;
   participantCount: number;
   lastMessageTime?: string; // Time of the last message in this topic
-  imageUrl?: string; // URL of the topic image
-  aspectRatio?: '1:1' | '4:5' | '1.91:1'; // Image aspect ratio
-  originalWidth?: number; // Original image width in pixels
-  originalHeight?: number; // Original image height in pixels
+  
+  // 画像関連 - データベースフィールドに対応
+  imageUrl?: string; // maps to image_url in DB
+  aspectRatio?: '1:1' | '4:5' | '1.91:1'; // maps to image_aspect_ratio in DB
+  originalWidth?: number; // maps to original_width in DB
+  originalHeight?: number; // maps to original_height in DB
   
   // 点赞相关
   isLiked?: boolean; // Whether current user has liked this topic
@@ -49,11 +57,23 @@ export interface Topic {
   isParticipated?: boolean; // Whether current user has joined this topic's chat
   lastMessagePreview?: string; // Preview of the last message (for chat list)
   
-  // 标签相关
-  tags?: string[]; // Array of selected tags for this topic
+  // 标签相关 - データベースJSONBフィールドに対応
+  tags?: string[]; // Array of selected tags for this topic, maps to tags JSONB in DB
   
   // 分类相关
   category?: string; // Topic category
+  
+  // データベースのその他のフィールド
+  user_id?: string; // データベースの外部キー（通常はauthorから取得）
+  latitude?: number; // 直接のデータベースフィールド
+  longitude?: number; // 直接のデータベースフィールド
+  location_name?: string; // データベースフィールド
+  
+  // プロモーション関連（データベーススキーマより）
+  engagement_score?: number;
+  is_promoted?: boolean;
+  promotion_end_date?: string;
+  is_hidden?: boolean;
   
   // コンテンツ審査関連
   moderationStatus?: 'pending' | 'approved' | 'rejected'; // Content moderation status
@@ -63,12 +83,18 @@ export interface Topic {
 
 export interface Comment {
   id: string;
-  text: string;
-  createdAt: string;
+  text: string; // maps to content in DB
+  createdAt: string; // maps to created_at in DB
   author: User;
-  likes: number;
-  topicId: string;
+  likes: number; // maps to likes_count in DB
+  topicId: string; // maps to topic_id in DB
   isLikedByUser?: boolean;
+  
+  // データベースフィールドとの対応
+  content?: string; // 直接のデータベースフィールド
+  topic_id?: string; // 直接のデータベースフィールド
+  user_id?: string; // 直接のデータベースフィールド
+  likes_count?: number; // 直接のデータベースフィールド
   
   // コンテンツ審査関連
   moderationStatus?: 'pending' | 'approved' | 'rejected'; // Content moderation status

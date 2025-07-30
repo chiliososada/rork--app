@@ -175,11 +175,25 @@ export class TopicDetailService {
         return null;
       }
 
-      // 并行检查收藏和点赞状态
-      const [isFavorited, likeStatus] = await Promise.all([
+      // 并行检查收藏和点赞状态，使用 Promise.allSettled 以避免单个请求失败影响整个流程
+      const [favoriteResult, likeResult] = await Promise.allSettled([
         TopicDetailService.checkFavoriteStatus(topicId, userId),
         TopicDetailService.checkLikeStatus(topicId, userId)
       ]);
+
+      // 处理收藏状态结果
+      const isFavorited = favoriteResult.status === 'fulfilled' ? favoriteResult.value : false;
+      if (favoriteResult.status === 'rejected') {
+        console.error('Failed to check favorite status:', favoriteResult.reason);
+      }
+
+      // 处理点赞状态结果
+      const likeStatus = likeResult.status === 'fulfilled' 
+        ? likeResult.value 
+        : { isLiked: false, count: 0 };
+      if (likeResult.status === 'rejected') {
+        console.error('Failed to check like status:', likeResult.reason);
+      }
 
       // 更新话题状态
       topic.isFavorited = isFavorited;

@@ -131,7 +131,7 @@ export const useAuthStore = create<AuthState>()(
               });
 
             if (notificationError) {
-              console.warn('Failed to create default notification settings:', notificationError);
+              console.error('Failed to create default notification settings:', notificationError);
               // This is not a critical error, so we don't stop the registration process
             }
 
