@@ -12,6 +12,7 @@ import { usePrivateChatStore } from "@/store/private-chat-store";
 import SearchBar from "@/components/SearchBar";
 import CustomHeader from "@/components/CustomHeader";
 import AvatarPicker from "@/components/AvatarPicker";
+import NotificationHeaderButton from "@/components/NotificationHeaderButton";
 import { Topic, ChatListItem } from "@/types";
 import { formatChatListTime } from "@/lib/utils/timeUtils";
 
@@ -332,6 +333,7 @@ export default function ChatsScreen() {
       <CustomHeader
         title="チャットルーム"
         subtitle=""
+        rightElement={<NotificationHeaderButton />}
       />
       
       <SafeAreaView style={styles.content} edges={['left', 'right']}>

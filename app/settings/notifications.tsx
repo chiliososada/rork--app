@@ -15,6 +15,7 @@ import Colors from '@/constants/colors';
 import { useNotificationSettingsStore } from '@/store/notification-settings-store';
 import { useAuthStore } from '@/store/auth-store';
 import { useCallback } from 'react';
+import NotificationTestButton from '@/components/NotificationTestButton';
 
 export default function NotificationsSettingsScreen() {
   const { user } = useAuthStore();
@@ -201,6 +202,16 @@ export default function NotificationsSettingsScreen() {
               />
             </View>
           </View>
+
+          {/* 開発環境でのテスト通知ボタン */}
+          {process.env.NODE_ENV === 'development' && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>開発者向け</Text>
+              <View style={[styles.settingItem, { borderBottomWidth: 0, justifyContent: 'center' }]}>
+                <NotificationTestButton />
+              </View>
+            </View>
+          )}
           </ScrollView>
         )}
       </SafeAreaView>

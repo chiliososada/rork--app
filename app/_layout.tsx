@@ -10,6 +10,7 @@ import { useAuthStore } from '@/store/auth-store';
 import { useAdultContentStore } from '@/store/adult-content-store';
 import ToastContainer from '@/components/ToastContainer';
 import AdultContentModal from '@/components/AdultContentModal';
+import NotificationProvider from '@/components/NotificationProvider';
 
 // Only import reanimated on native platforms to avoid web bundling issues
 if (Platform.OS !== 'web') {
@@ -74,38 +75,40 @@ export default function RootLayout() {
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <View style={styles.container}>
-            <Stack>
-              <Stack.Screen name="(tabs)" options={{ headerShown: false, title: '' }} />
-              <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-              <Stack.Screen 
-                name="adult-content-confirmation" 
-                options={{ 
-                  headerShown: true,
-                  gestureEnabled: false,
-                  headerBackVisible: false,
-                }} 
+          <NotificationProvider>
+            <View style={styles.container}>
+              <Stack>
+                <Stack.Screen name="(tabs)" options={{ headerShown: false, title: '' }} />
+                <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+                <Stack.Screen 
+                  name="adult-content-confirmation" 
+                  options={{ 
+                    headerShown: true,
+                    gestureEnabled: false,
+                    headerBackVisible: false,
+                  }} 
+                />
+                <Stack.Screen 
+                  name="favorites" 
+                  options={{ 
+                    headerBackTitle: '',
+                    headerBackVisible: true,
+                  }} 
+                />
+                <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+                <Stack.Screen name="+not-found" />
+              </Stack>
+              <ToastContainer />
+              
+              {/* 成人內容確認模態框 */}
+              <AdultContentModal
+                visible={showAdultModal}
+                onConfirm={handleAdultContentConfirm}
+                onDecline={handleAdultContentDecline}
+                isFirstTime={true}
               />
-              <Stack.Screen 
-                name="favorites" 
-                options={{ 
-                  headerBackTitle: '',
-                  headerBackVisible: true,
-                }} 
-              />
-              <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-              <Stack.Screen name="+not-found" />
-            </Stack>
-            <ToastContainer />
-            
-            {/* 成人內容確認模態框 */}
-            <AdultContentModal
-              visible={showAdultModal}
-              onConfirm={handleAdultContentConfirm}
-              onDecline={handleAdultContentDecline}
-              isFirstTime={true}
-            />
-          </View>
+            </View>
+          </NotificationProvider>
         </ThemeProvider>
       </QueryClientProvider>
     </trpc.Provider>
