@@ -9,13 +9,14 @@ import {
   Switch,
   Alert,
 } from 'react-native';
-import { Stack } from 'expo-router';
-import { User, Eye, Users, Download, Trash2, Lock, Mail, ChevronRight } from 'lucide-react-native';
+import { Stack, useRouter } from 'expo-router';
+import { User, Eye, Users, Download, Trash2, Lock, ChevronRight } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useAuthStore } from '@/store/auth-store';
 import { supabase } from '@/lib/supabase';
 
 export default function AccountSettingsScreen() {
+  const router = useRouter();
   const { user } = useAuthStore();
   
   // アカウント設定の状態
@@ -77,16 +78,14 @@ export default function AccountSettingsScreen() {
 
   const handleEditProfile = () => {
     // プロフィール編集画面への遷移
-    Alert.alert('開発中', 'プロフィール編集機能は開発中です。');
+    router.push('/settings/profile-edit');
   };
 
   const handleChangePassword = () => {
-    Alert.alert('開発中', 'パスワード変更機能は開発中です。');
+    // パスワード変更画面への遷移
+    router.push('/settings/password-change');
   };
 
-  const handleChangeEmail = () => {
-    Alert.alert('開発中', 'メールアドレス変更機能は開発中です。');
-  };
 
   const handleDownloadData = () => {
     Alert.alert(
@@ -160,21 +159,6 @@ export default function AccountSettingsScreen() {
               <View style={styles.menuContent}>
                 <Text style={styles.menuTitle}>プロフィール編集</Text>
                 <Text style={styles.menuSubtitle}>{user?.name || 'ユーザー名'}</Text>
-              </View>
-              <ChevronRight size={20} color={Colors.text.secondary} />
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.menuItem}
-              onPress={handleChangeEmail}
-              activeOpacity={0.7}
-            >
-              <View style={styles.menuIcon}>
-                <Mail size={20} color="#34C759" />
-              </View>
-              <View style={styles.menuContent}>
-                <Text style={styles.menuTitle}>メールアドレス変更</Text>
-                <Text style={styles.menuSubtitle}>{user?.email || 'メールアドレス未設定'}</Text>
               </View>
               <ChevronRight size={20} color={Colors.text.secondary} />
             </TouchableOpacity>

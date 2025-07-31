@@ -221,6 +221,13 @@ export default function ProfileScreen() {
               <Text style={styles.name}>{user?.name}</Text>
               <Text style={styles.email}>{user?.email || "メールアドレスなし"}</Text>
               
+              {/* 自己紹介セクション */}
+              {user?.bio && (
+                <View style={styles.bioContainer}>
+                  <Text style={styles.bioText}>{user.bio}</Text>
+                </View>
+              )}
+              
               <View style={styles.statsContainer}>
                 <TouchableOpacity 
                   style={styles.statItem}
@@ -418,6 +425,28 @@ const styles = StyleSheet.create({
   email: {
     fontSize: 14,
     color: Colors.text.secondary,
+  },
+  bioContainer: {
+    backgroundColor: Colors.card,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginTop: 12,
+    marginHorizontal: 20,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  bioText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: Colors.text.primary,
+    textAlign: 'center',
   },
   menuSection: {
     backgroundColor: Colors.card,

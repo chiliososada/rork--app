@@ -13,12 +13,18 @@ interface AuthState {
   isLoading: boolean;
   error: string | null;
   isUpdatingAvatar: boolean;
+  isUpdatingProfile: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;
   checkAuth: () => Promise<void>;
   updateAvatar: (avatarUrl: string) => Promise<void>;
+  updateProfile: (profileData: {
+    nickname?: string;
+    bio?: string;
+    gender?: string;
+  }) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -28,6 +34,7 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isLoading: false,
       isUpdatingAvatar: false,
+      isUpdatingProfile: false,
       error: null,
 
       login: async (email, password) => {
@@ -51,7 +58,7 @@ export const useAuthStore = create<AuthState>()(
             // Get user profile from users table
             const { data: userProfile, error: profileError } = await supabase
               .from('users')
-              .select('id, nickname, avatar_url, email, gender, created_at, is_profile_public, is_followers_visible')
+              .select('id, nickname, avatar_url, email, gender, bio, created_at, is_profile_public, is_followers_visible')
               .eq('id', data.user.id)
               .single();
 
@@ -69,6 +76,8 @@ export const useAuthStore = create<AuthState>()(
               nickname: userProfile.nickname,
               avatar: userProfile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(userProfile.nickname)}&background=random`,
               email: userProfile.email || data.user.email,
+              gender: userProfile.gender,
+              bio: userProfile.bio,
               isProfilePublic: userProfile.is_profile_public ?? true,
               isFollowersVisible: userProfile.is_followers_visible ?? true
             };
@@ -141,7 +150,9 @@ export const useAuthStore = create<AuthState>()(
               name: name,
               nickname: name,
               avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`,
-              email: data.user.email || email
+              email: data.user.email || email,
+              bio: null,
+              gender: null
             };
 
             set({ 
@@ -188,7 +199,7 @@ export const useAuthStore = create<AuthState>()(
           if (user) {
             const { data: userProfile, error: profileError } = await supabase
               .from('users')
-              .select('id, nickname, avatar_url, email, gender, created_at, is_profile_public, is_followers_visible')
+              .select('id, nickname, avatar_url, email, gender, bio, created_at, is_profile_public, is_followers_visible')
               .eq('id', user.id)
               .single();
 
@@ -199,6 +210,8 @@ export const useAuthStore = create<AuthState>()(
                 nickname: userProfile.nickname,
                 avatar: userProfile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(userProfile.nickname)}&background=random`,
                 email: userProfile.email || user.email,
+                gender: userProfile.gender,
+                bio: userProfile.bio,
                 isProfilePublic: userProfile.is_profile_public ?? true,
                 isFollowersVisible: userProfile.is_followers_visible ?? true
               };
@@ -282,6 +295,58 @@ export const useAuthStore = create<AuthState>()(
             isUpdatingAvatar: false 
           });
           console.error('Avatar update error:', error);
+          throw error;
+        }
+      },
+
+      updateProfile: async (profileData: {
+        nickname?: string;
+        bio?: string;
+        gender?: string;
+      }) => {
+        const { user } = get();
+        if (!user) {
+          throw new Error('ユーザーがログインしていません');
+        }
+
+        set({ isUpdatingProfile: true, error: null });
+        
+        try {
+          // RPC関数を使用してプロフィールを更新
+          const { data, error } = await supabase
+            .rpc('update_user_profile', {
+              user_id_param: user.id,
+              nickname_param: profileData.nickname || null,
+              bio_param: profileData.bio || null,
+              gender_param: profileData.gender || null
+            });
+
+          if (error) {
+            throw error;
+          }
+
+          if (data && data.length > 0 && !data[0].success) {
+            throw new Error(data[0].message || 'プロフィールの更新に失敗しました');
+          }
+
+          // 本地状态更新
+          set({ 
+            user: {
+              ...user,
+              nickname: profileData.nickname || user.nickname,
+              name: profileData.nickname || user.name,
+              bio: profileData.bio || user.bio,
+              gender: profileData.gender || user.gender
+            },
+            isUpdatingProfile: false 
+          });
+
+        } catch (error: any) {
+          set({ 
+            error: "プロフィールの更新に失敗しました。もう一度お試しください。", 
+            isUpdatingProfile: false 
+          });
+          console.error('Profile update error:', error);
           throw error;
         }
       }

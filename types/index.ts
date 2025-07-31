@@ -6,6 +6,7 @@ export interface User {
   email?: string;
   phone?: string;
   gender?: string;
+  bio?: string; // maps to bio in DB - ユーザーの自己紹介文
   created_at?: string; // データベースのcreated_atフィールド
   // フォロー関連
   followersCount?: number;

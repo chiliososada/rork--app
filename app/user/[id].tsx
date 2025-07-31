@@ -101,6 +101,8 @@ export default function UserProfileScreen() {
           nickname: userData.nickname || 'ユーザー',
           avatar: userData.avatar_url || '',
           email: userData.can_view_profile ? userData.email : undefined,
+          bio: userData.can_view_profile ? userData.bio : undefined,
+          gender: userData.can_view_profile ? userData.gender : undefined,
           isProfilePublic: userData.is_profile_public,
           isFollowersVisible: userData.is_followers_visible,
         };
@@ -343,6 +345,13 @@ export default function UserProfileScreen() {
             />
             <Text style={styles.name}>{user.name}</Text>
             
+            {/* 自己紹介セクション */}
+            {canViewProfile && user.bio && (
+              <View style={styles.bioContainer}>
+                <Text style={styles.bioText}>{user.bio}</Text>
+              </View>
+            )}
+            
             <View style={styles.actionButtonsContainer}>
               <FollowButton
                 targetUserId={user.id}
@@ -481,6 +490,28 @@ const styles = StyleSheet.create({
     color: Colors.text.primary,
     marginTop: 16,
     marginBottom: 12,
+  },
+  bioContainer: {
+    backgroundColor: Colors.card,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginHorizontal: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  bioText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: Colors.text.primary,
+    textAlign: 'center',
   },
   actionButtonsContainer: {
     flexDirection: 'row',
