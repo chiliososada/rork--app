@@ -18,6 +18,7 @@ import CategorySelector from "@/components/CategorySelector";
 import { supabase } from "@/lib/supabase";
 import { eventBus, EVENT_TYPES } from "@/lib/event-bus";
 import { filterContent, getModerationMessage } from "@/lib/content-filter";
+import { contentModerationService } from "@/lib/content-moderation";
 import { ContentFilterResult } from "@/types";
 import { ContentPendingNotice, ContentApprovedNotice } from "@/components/ContentModerationNotice";
 
@@ -210,7 +211,24 @@ export default function CreateTopicScreen() {
     }
 
     try {
-      // コンテンツを審査
+      // 新しいコンテンツモデレーションシステムで事前チェック
+      const content = `${title} ${description}`.trim();
+      const preCheckResult = await contentModerationService.preCheckContent(
+        content,
+        'topic',
+        user.id
+      );
+      
+      if (!preCheckResult.canPost) {
+        Alert.alert(
+          "投稿できません",
+          preCheckResult.message,
+          [{ text: "OK" }]
+        );
+        return;
+      }
+
+      // 従来のフィルタリングも並行実行（後方互換性）
       const filterResult = await filterContent(description, user.id, title);
       
       // 審査結果の処理
@@ -461,7 +479,7 @@ export default function CreateTopicScreen() {
                     <View style={styles.privacyItem}>
                       <Eye size={14} color={Colors.success} />
                       <Text style={styles.privacyText}>
-                        位置情報: {getLocationPrecisionLabel(locationPrecision)}
+                        位置情報: {getLocationPrecisionLabel()}
                       </Text>
                     </View>
                   ) : (
@@ -520,7 +538,7 @@ export default function CreateTopicScreen() {
         visible={showPendingNotice}
         onClose={() => {
           setShowPendingNotice(false);
-          router.back();
+          router.push("/(tabs)");
         }}
         contentType="topic"
         reason={moderationReason}
@@ -530,7 +548,7 @@ export default function CreateTopicScreen() {
         visible={showApprovedNotice}
         onClose={() => {
           setShowApprovedNotice(false);
-          router.back();
+          router.push("/(tabs)");
         }}
         contentType="topic"
       />

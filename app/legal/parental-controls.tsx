@@ -83,13 +83,13 @@ export default function ParentalControlsScreen() {
             <Text style={styles.sectionTitle}>4. デバイス設定による制限方法</Text>
             
             <Text style={styles.subSectionTitle}>iOS（iPhone/iPad）の場合：</Text>
-            <Text style={styles.listItem}>1. 設定 > スクリーンタイム > コンテンツとプライバシーの制限</Text>
-            <Text style={styles.listItem}>2. iTunesおよびApp Storeでの購入 > アプリ > 17+ を許可しない</Text>
-            <Text style={styles.listItem}>3. Webコンテンツ > 成人向けWebサイトを制限</Text>
+            <Text style={styles.listItem}>1. 設定 {'>'}スクリーンタイム {'>'}コンテンツとプライバシーの制限</Text>
+            <Text style={styles.listItem}>2. iTunesおよびApp Storeでの購入 {'>'}アプリ {'>'}17+ を許可しない</Text>
+            <Text style={styles.listItem}>3. Webコンテンツ {'>'}成人向けWebサイトを制限</Text>
             
             <Text style={styles.subSectionTitle}>Android端末の場合：</Text>
-            <Text style={styles.listItem}>1. Google Play ストア > 設定 > 保護者による使用制限</Text>
-            <Text style={styles.listItem}>2. アプリとゲーム > 成人向けを許可しない</Text>
+            <Text style={styles.listItem}>1. Google Play ストア {'>'}設定 {'>'}保護者による使用制限</Text>
+            <Text style={styles.listItem}>2. アプリとゲーム {'>'}成人向けを許可しない</Text>
             <Text style={styles.listItem}>3. ファミリーリンクアプリを利用した制限設定</Text>
           </View>
 

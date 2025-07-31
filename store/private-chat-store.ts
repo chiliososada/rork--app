@@ -165,6 +165,7 @@ export const usePrivateChatStore = create<PrivateChatState>((set, get) => ({
       sender: senderInfo || {
         id: senderId,
         name: '送信中...', // 暂时显示，实时订阅会更新
+        nickname: '送信中...',
         avatar: '',
       },
     };
@@ -299,6 +300,7 @@ export const usePrivateChatStore = create<PrivateChatState>((set, get) => ({
                   sender: {
                     id: newMessage.sender_id,
                     name: user?.nickname || 'Unknown',
+                    nickname: user?.nickname || 'Unknown',
                     avatar: user?.avatar_url || '',
                   },
                 };

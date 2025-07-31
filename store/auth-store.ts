@@ -66,6 +66,7 @@ export const useAuthStore = create<AuthState>()(
             const user: User = {
               id: userProfile.id,
               name: userProfile.nickname,
+              nickname: userProfile.nickname,
               avatar: userProfile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(userProfile.nickname)}&background=random`,
               email: userProfile.email || data.user.email,
               isProfilePublic: userProfile.is_profile_public ?? true,
@@ -138,6 +139,7 @@ export const useAuthStore = create<AuthState>()(
             const user: User = {
               id: data.user.id,
               name: name,
+              nickname: name,
               avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`,
               email: data.user.email || email
             };
@@ -194,6 +196,7 @@ export const useAuthStore = create<AuthState>()(
               const userObj: User = {
                 id: userProfile.id,
                 name: userProfile.nickname,
+                nickname: userProfile.nickname,
                 avatar: userProfile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(userProfile.nickname)}&background=random`,
                 email: userProfile.email || user.email,
                 isProfilePublic: userProfile.is_profile_public ?? true,
@@ -223,7 +226,7 @@ export const useAuthStore = create<AuthState>()(
               }
               
               // Load report data only if needed
-              if (!reportingStore.categories.length) {
+              if (!reportingStore.reportCategories.length) {
                 reportingStore.loadReportCategories();
               }
               

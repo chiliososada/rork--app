@@ -16,6 +16,7 @@ import CategoryBadge from "@/components/CategoryBadge";
 import { formatMessageTime } from "@/lib/utils/timeUtils";
 import FollowButton from "@/components/FollowButton";
 import { useFollowStore } from "@/store/follow-store";
+import { contentModerationService } from "@/lib/content-moderation";
 
 export default function TopicDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -95,10 +96,43 @@ export default function TopicDetailScreen() {
     if (!commentText.trim() || !id || !user) return;
     
     try {
+      // Content moderation pre-check
+      const preCheckResult = await contentModerationService.preCheckContent(
+        commentText,
+        'comment',
+        user.id
+      );
+      
+      if (!preCheckResult.canPost) {
+        alert(preCheckResult.message);
+        return;
+      }
+      
       await addComment(id, commentText, user.id);
       setCommentText("");
+      
+      // Post-moderation analysis (async, non-blocking)
+      if (preCheckResult.canPost) {
+        contentModerationService.moderateContent(
+          commentText,
+          'comment',
+          id, // topic ID for context
+          user.id
+        ).catch(error => {
+          console.error('Post-moderation error:', error);
+        });
+      }
     } catch (error) {
-      // Error is handled in the store
+      console.error('コメント投稿エラー:', error);
+      
+      // User-friendly error handling
+      if (error instanceof Error) {
+        if (error.message.includes('moderation') || error.message.includes('content')) {
+          alert("コメントの確認中にエラーが発生しました。もう一度お試しください。");
+        } else {
+          alert("コメントの投稿に失敗しました。接続を確認してお試しください。");
+        }
+      }
     }
   };
 

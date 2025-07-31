@@ -179,6 +179,7 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
         author: {
           id: topicData.users.id,
           name: topicData.users.nickname,
+          nickname: topicData.users.nickname,
           avatar: topicData.users.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(topicData.users.nickname)}&background=random`,
           email: topicData.users.email
         },
@@ -279,6 +280,7 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
         author: {
           id: comment.users.id,
           name: comment.users.nickname,
+          nickname: comment.users.nickname,
           avatar: comment.users.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(comment.users.nickname)}&background=random`,
           email: comment.users.email
         },
@@ -351,6 +353,7 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
         author: {
           id: insertedComment.users.id,
           name: insertedComment.users.nickname,
+          nickname: insertedComment.users.nickname,
           avatar: insertedComment.users.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(insertedComment.users.nickname)}&background=random`,
           email: insertedComment.users.email
         },
@@ -528,6 +531,7 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
         author: {
           id: insertedTopic.users.id,
           name: insertedTopic.users.nickname,
+          nickname: insertedTopic.users.nickname,
           avatar: insertedTopic.users.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(insertedTopic.users.nickname)}&background=random`,
           email: insertedTopic.users.email
         },
@@ -692,6 +696,7 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
               author: {
                 id: topicData.users.id,
                 name: topicData.users.nickname,
+                nickname: topicData.users.nickname,
                 avatar: topicData.users.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(topicData.users.nickname)}&background=random`,
                 email: topicData.users.email
               },
@@ -834,6 +839,7 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
           author: {
             id: topic.users.id,
             name: topic.users.nickname,
+            nickname: topic.users.nickname,
             avatar: topic.users.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(topic.users.nickname)}&background=random`,
             email: topic.users.email
           },
@@ -975,6 +981,7 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
         author: {
           id: topic.users.id,
           name: topic.users.nickname,
+          nickname: topic.users.nickname,
           avatar: topic.users.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(topic.users.nickname)}&background=random`,
           email: topic.users.email
         },
@@ -1050,6 +1057,7 @@ export const useTopicDetailsStore = create<TopicDetailsState>((set, get) => ({
           author: {
             id: topic.users.id,
             name: topic.users.nickname,
+            nickname: topic.users.nickname,
             avatar: topic.users.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(topic.users.nickname)}&background=random`,
             email: topic.users.email
           },

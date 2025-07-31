@@ -30,7 +30,7 @@ export default function ChatsScreen() {
   const { 
     getUnreadCount, 
     fetchUnreadCountsForTopics,
-    initializeGlobalConnection,
+    initializeConnection,
     updateUserTopics,
     isConnected
   } = useChatStore();
@@ -59,13 +59,13 @@ export default function ChatsScreen() {
       
       // 初始化全局连接（如果还未连接）
       if (user?.id && !isConnected()) {
-        initializeGlobalConnection(user.id);
+        initializeConnection(user.id);
       } else if (user?.id) {
         // 更新用户参与的topics
         updateUserTopics(user.id);
       }
     }
-  }, [filteredTopics, user, fetchUnreadCountsForTopics, initializeGlobalConnection, updateUserTopics, isConnected]);
+  }, [filteredTopics, user, fetchUnreadCountsForTopics, initializeConnection, updateUserTopics, isConnected]);
   
   const handleChatPress = useCallback((item: ChatListItem) => {
     if (item.type === 'topic') {

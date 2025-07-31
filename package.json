@@ -5,18 +5,20 @@
   "scripts": {
     "start": "npx rork start -p fk5xtgrzfc6pibtnqill4 --tunnel",
     "start-web": "npx rork start -p fk5xtgrzfc6pibtnqill4 --web --tunnel",
-    "start-web-dev": "DEBUG=expo* npx rork start -p fk5xtgrzfc6pibtnqill4 --web --tunnel"
+    "start-web-dev": "DEBUG=expo* npx rork start -p fk5xtgrzfc6pibtnqill4 --web --tunnel",
+    "migrate-encryption": "npx tsx scripts/encryption-migration.ts"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",
     "@hono/trpc-server": "^0.4.0",
-    "@react-native-async-storage/async-storage": "2.1.2",
+    "@react-native-async-storage/async-storage": "^2.1.2",
     "@react-navigation/native": "^7.1.6",
     "@supabase/supabase-js": "^2.50.3",
     "@tanstack/react-query": "^5.81.5",
     "@trpc/client": "^11.4.3",
     "@trpc/react-query": "^11.4.3",
     "@trpc/server": "^11.4.3",
+    "crypto-js": "^4.2.0",
     "date-fns": "^4.1.0",
     "expo": "^53.0.4",
     "expo-blur": "~14.1.4",
@@ -45,6 +47,7 @@
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-native": "^0.79.5",
+    "react-native-calendars": "^1.1313.0",
     "react-native-gesture-handler": "~2.24.0",
     "react-native-get-random-values": "^1.11.0",
     "react-native-maps": "1.20.1",
@@ -53,7 +56,6 @@
     "react-native-screens": "~4.11.1",
     "react-native-svg": "15.11.2",
     "react-native-swipe-list-view": "^3.2.9",
-    "react-native-swipe-row": "^1.0.3",
     "react-native-web": "^0.20.0",
     "superjson": "^2.2.2",
     "zod": "^3.25.71",

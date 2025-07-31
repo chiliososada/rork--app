@@ -5,6 +5,7 @@
 
 import { cacheManager } from './cache-manager';
 import { requestDeduplicator } from './request-deduplicator';
+import { Platform, AppState, AppStateStatus } from 'react-native';
 
 interface CleanupFunction {
   name: string;
@@ -21,18 +22,32 @@ export class CleanupManager {
     // 注册默认的清理函数
     this.registerDefaultCleanups();
     
-    // 监听页面卸载事件
-    if (typeof window !== 'undefined') {
-      window.addEventListener('beforeunload', () => {
-        this.performCleanup();
-      });
-      
-      // React Native 环境下的清理
-      if (typeof window.addEventListener === 'function') {
+    // プラットフォーム固有の初期化
+    this.initializePlatformListeners();
+  }
+  
+  private initializePlatformListeners(): void {
+    if (Platform.OS === 'web') {
+      // Web環境でのイベントリスナー
+      if (typeof window !== 'undefined') {
+        window.addEventListener('beforeunload', () => {
+          this.performCleanup();
+        });
+        
         window.addEventListener('unload', () => {
           this.performCleanup();
         });
       }
+    } else {
+      // React Native環境でのAppStateリスナー
+      const handleAppStateChange = (nextAppState: AppStateStatus) => {
+        if (nextAppState === 'background') {
+          // アプリがバックグラウンドに移る時にクリーンアップ
+          this.performCleanup();
+        }
+      };
+      
+      AppState.addEventListener('change', handleAppStateChange);
     }
   }
 

@@ -98,6 +98,7 @@ export default function UserProfileScreen() {
         const userInfo: User = {
           id: userData.id,
           name: userData.nickname || 'ユーザー',
+          nickname: userData.nickname || 'ユーザー',
           avatar: userData.avatar_url || '',
           email: userData.can_view_profile ? userData.email : undefined,
           isProfilePublic: userData.is_profile_public,
@@ -136,6 +137,7 @@ export default function UserProfileScreen() {
         author: {
           id: topic.user.id,
           name: topic.user.nickname,
+          nickname: topic.user.nickname,
           avatar: topic.user.avatar_url || '',
         },
         location: {

@@ -49,7 +49,7 @@ export default function SmartTagSelector({
   const { user } = useAuthStore();
   const toast = useToast();
   const fadeAnim = new Animated.Value(1); // 初期値を1に設定して即座に表示
-  const [searchTimer, setSearchTimer] = useState<NodeJS.Timeout | null>(null);
+  const [searchTimer, setSearchTimer] = useState<TimerHandle | null>(null);
   
   // 折りたたみ状態管理
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
@@ -171,7 +171,10 @@ export default function SmartTagSelector({
   // タグ追加処理
   const handleAddTag = (tagName: string) => {
     if (selectedTags.length >= maxTags) {
-      toast.show(`最大${maxTags}個までタグを選択できます`, 'warning');
+      toast.show({
+        type: 'warning' as const,
+        title: `最大${maxTags}個までタグを選択できます`
+      });
       return;
     }
 

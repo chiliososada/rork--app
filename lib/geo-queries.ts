@@ -161,6 +161,7 @@ export async function fetchNearbyTopics(params: GeoQueryParams): Promise<QueryRe
         author: {
           id: topic.users.id,
           name: topic.users.nickname,
+          nickname: topic.users.nickname,
           avatar: topic.users.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(topic.users.nickname)}&background=random`,
           email: topic.users.email
         },
@@ -332,6 +333,7 @@ export async function fetchMapTopics(params: GeoQueryParams): Promise<QueryResul
         author: {
           id: topic.users.id,
           name: topic.users.nickname,
+          nickname: topic.users.nickname,
           avatar: topic.users.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(topic.users.nickname)}&background=random`,
           email: topic.users.email
         },
@@ -499,6 +501,7 @@ export async function fetchParticipatedTopics(userId: string, params: Omit<GeoQu
         author: {
           id: topic.users.id,
           name: topic.users.nickname,
+          nickname: topic.users.nickname,
           avatar: topic.users.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(topic.users.nickname)}&background=random`,
           email: topic.users.email
         },
@@ -718,6 +721,7 @@ export async function searchNearbyTopics(params: GeoQueryParams & { searchQuery:
         author: {
           id: topic.users.id,
           name: topic.users.nickname,
+          nickname: topic.users.nickname,
           avatar: topic.users.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(topic.users.nickname)}&background=random`,
           email: topic.users.email
         },
@@ -896,6 +900,7 @@ export async function searchMapTopics(params: GeoQueryParams & { searchQuery: st
         author: {
           id: topic.users.id,
           name: topic.users.nickname,
+          nickname: topic.users.nickname,
           avatar: topic.users.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(topic.users.nickname)}&background=random`,
           email: topic.users.email
         },
@@ -1029,6 +1034,7 @@ export async function fetchTopicsInBounds(bounds: {
         author: {
           id: topic.users.id,
           name: topic.users.nickname,
+          nickname: topic.users.nickname,
           avatar: topic.users.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(topic.users.nickname)}&background=random`,
           email: topic.users.email
         },

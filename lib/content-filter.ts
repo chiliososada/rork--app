@@ -36,7 +36,7 @@ const SENSITIVE_WORDS_CACHE_KEY = 'sensitive_words_cache';
 let memoryCache: SensitiveWordsCache | null = null;
 
 // キャッシュクリーンアップのタイマー
-let cacheCleanupTimer: NodeJS.Timeout | null = null;
+let cacheCleanupTimer: TimerHandle | null = null;
 
 // URL検出の正規表現
 const URL_REGEX = /(https?:\/\/[^\s]+)/gi;

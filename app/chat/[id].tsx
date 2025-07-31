@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { StyleSheet, Text, View, FlatList, Modal, TouchableOpacity, TextInput } from "react-native";
 import { useLocalSearchParams, Stack, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -10,9 +10,10 @@ import { useLocationStore } from "@/store/location-store";
 import MessageItem from "@/components/MessageItem";
 import DateSeparator from "@/components/DateSeparator";
 import ChatInput from "@/components/input/ChatInput";
-import { Message, Topic } from "@/types";
+import { Message, Topic, ChatItem } from "@/types";
 import { groupMessagesByDate, MessageGroup } from "@/lib/utils/timeUtils";
 import { TopicDetailService } from "@/lib/services/topicDetailService";
+import { contentModerationService } from "@/lib/content-moderation";
 
 export default function ChatRoomScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -22,10 +23,9 @@ export default function ChatRoomScreen() {
   const [topicLoading, setTopicLoading] = useState(false);
   const { currentLocation } = useLocationStore();
   const { 
-    getMessagesForTopic, 
     fetchMessages, 
     addMessage, 
-    initializeGlobalConnection,
+    initializeConnection,
     updateUserTopics,
     setCurrentTopic,
     sendTypingIndicator,
@@ -46,15 +46,21 @@ export default function ChatRoomScreen() {
     isConnected,
     getConnectionStatus 
   } = useChatStore();
+
+  // Zustandセレクターを使用してメッセージを取得（シンプルバージョン）
+  const messagesForTopic = useChatStore((state) => state.messages[id as string]);
+  const messages = messagesForTopic || [];
+
   
   const [messageText, setMessageText] = useState("");
   const [lastSent, setLastSent] = useState(0);
   const [isTyping, setIsTyping] = useState(false);
-  const [typingTimeout, setTypingTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const [typingTimeout, setTypingTimeout] = useState<TimerHandle | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const [showOnlineUsers, setShowOnlineUsers] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const flatListRef = useRef<FlatList>(null);
+  const presenceIntervalRef = useRef<TimerHandle | null>(null);
   
   // 入力中のユーザーを取得
   const typingUsers = id ? getTypingUsers(id).filter(t => t.userId !== user?.id) : [];
@@ -70,8 +76,7 @@ export default function ChatRoomScreen() {
     ...(allOnlineUsers.some(u => u.userId === user.id) ? [] : [{ userId: user.id, name: user.name }])
   ] : allOnlineUsers;
   
-  // 現在のトピックのメッセージを取得
-  const messages = id ? getMessagesForTopic(id) : [];
+  // メッセージは上記のZustandセレクターで取得済み
   
   // メッセージを日付でグループ化
   const messageGroups = groupMessagesByDate(messages);
@@ -88,8 +93,8 @@ export default function ChatRoomScreen() {
     // 该日期的所有消息
     group.messages.forEach(message => {
       acc.push({
-        type: 'message',
         ...message,
+        type: 'message', // 確実にtype: 'message'を設定
       });
     });
     
@@ -143,7 +148,7 @@ export default function ChatRoomScreen() {
         
         // Initialize global connection (if needed)
         if (!isConnected()) {
-          await initializeGlobalConnection(user.id);
+          await initializeConnection(user.id);
         }
         
         if (!isMounted) return;
@@ -156,7 +161,7 @@ export default function ChatRoomScreen() {
         }, 1000);
         
         // Set up presence interval
-        presenceInterval = setInterval(() => {
+        presenceIntervalRef.current = setInterval(() => {
           if (isMounted && user?.id && id) {
             updateUserPresence(id, user.id, user.nickname || user.name);
           }
@@ -175,8 +180,8 @@ export default function ChatRoomScreen() {
       isMounted = false;
       
       // Clear presence interval
-      if (presenceInterval) {
-        clearInterval(presenceInterval);
+      if (presenceIntervalRef.current) {
+        clearInterval(presenceIntervalRef.current);
       }
       
       // Remove user presence
@@ -280,19 +285,52 @@ export default function ChatRoomScreen() {
         setQuotedMessage(null);
       }
       
+      // Content moderation pre-check
+      const preCheckResult = await contentModerationService.preCheckContent(
+        finalText,
+        'message',
+        user.id
+      );
+      
+      if (!preCheckResult.canPost) {
+        alert(preCheckResult.message);
+        return;
+      }
+      
       await addMessage(id, finalText, user.id);
       setMessageText("");
       setLastSent(now);
+      
+      // Post-moderation analysis (async, non-blocking)
+      if (preCheckResult.canPost) {
+        contentModerationService.moderateContent(
+          finalText,
+          'message',
+          id, // Use message ID or topic ID for tracking
+          user.id
+        ).catch(error => {
+          console.error('Post-moderation error:', error);
+        });
+      }
     } catch (error) {
       console.error('メッセージ送信エラー:', error);
+      
+      // User-friendly error handling
+      if (error instanceof Error) {
+        if (error.message.includes('moderation') || error.message.includes('content')) {
+          alert("メッセージの確認中にエラーが発生しました。もう一度お試しください。");
+        } else {
+          alert("メッセージの送信に失敗しました。接続を確認してお試しください。");
+        }
+      }
     }
   };
   
-  const renderItem = ({ item }: { item: { type: 'date-separator'; id: string; dateString: string } | ({ type: 'message' } & Message) }) => {
+  const renderItem = ({ item }: { item: ChatItem }) => {
     if (item.type === 'date-separator') {
       return <DateSeparator dateString={item.dateString} />;
     } else if (item.type === 'message') {
-      return <MessageItem message={item} />;
+      return <MessageItem message={item as unknown as Message} />;
     }
     return null;
   };
@@ -377,6 +415,7 @@ export default function ChatRoomScreen() {
             setIsAtBottom(isNearBottom);
           }}
           scrollEventThrottle={100}
+          showsVerticalScrollIndicator={true}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>まだメッセージがありません。会話を始めましょう！</Text>
@@ -498,6 +537,7 @@ const styles = StyleSheet.create({
   },
   messagesList: {
     padding: 16,
+    flexGrow: 1,
   },
   emptyContainer: {
     flex: 1,

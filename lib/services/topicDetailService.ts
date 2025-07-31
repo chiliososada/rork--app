@@ -74,6 +74,7 @@ export class TopicDetailService {
         author: {
           id: topicData.users.id,
           name: topicData.users.nickname,
+          nickname: topicData.users.nickname,
           avatar: topicData.users.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(topicData.users.nickname)}&background=random`,
           email: topicData.users.email
         },

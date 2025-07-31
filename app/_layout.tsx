@@ -10,6 +10,7 @@ import { useAuthStore } from '@/store/auth-store';
 import { useAdultContentStore } from '@/store/adult-content-store';
 import ToastContainer from '@/components/ToastContainer';
 import AdultContentModal from '@/components/AdultContentModal';
+import { AgeVerificationModal } from '@/components/AgeVerificationModal';
 import NotificationProvider from '@/components/NotificationProvider';
 
 // Only import reanimated on native platforms to avoid web bundling issues
@@ -26,10 +27,19 @@ const queryClient = new QueryClient();
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const [loaded] = useFonts({});
-  const { checkAuth, isAuthenticated } = useAuthStore();
-  const { checkConfirmationNeeded, hasConfirmedAdultContent, confirmAdultContent } = useAdultContentStore();
+  const { checkAuth, isAuthenticated, user } = useAuthStore();
+  const { 
+    checkConfirmationNeeded, 
+    hasConfirmedAdultContent, 
+    confirmAdultContent,
+    canAccessAdultContent,
+    serverVerificationStatus,
+    markConfirmationShown
+  } = useAdultContentStore();
   const [showAdultModal, setShowAdultModal] = useState(false);
+  const [showAgeVerificationModal, setShowAgeVerificationModal] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [hasShownAgeModal, setHasShownAgeModal] = useState(false);
 
   useEffect(() => {
     if (loaded) {
@@ -43,20 +53,45 @@ export default function RootLayout() {
     }
   }, [loaded, checkAuth]);
 
-  // 檢查是否需要顯示成人內容確認
+  // 年齢確認システムのチェック
   useEffect(() => {
-    if (isInitialized && isAuthenticated) {
-      // 添加小延迟确保store已完全恢复
+    if (isInitialized && isAuthenticated && user?.id && !hasShownAgeModal) {
       const checkTimer = setTimeout(() => {
-        const needsConfirmation = checkConfirmationNeeded();
-        if (needsConfirmation && !hasConfirmedAdultContent && !showAdultModal) {
-          setShowAdultModal(true);
+        console.log('Checking age verification status:', {
+          canAccess: canAccessAdultContent(),
+          serverVerified: serverVerificationStatus?.isVerified,
+          hasConfirmed: hasConfirmedAdultContent,
+          hasShownModal: hasShownAgeModal
+        });
+        
+        // サーバーサイド年齢確認が必要かチェック
+        if (!canAccessAdultContent()) {
+          // サーバー確認が未完了の場合は年齢確認モーダルを表示
+          if (!serverVerificationStatus?.isVerified && !showAgeVerificationModal) {
+            console.log('Showing age verification modal');
+            setShowAgeVerificationModal(true);
+            setHasShownAgeModal(true);
+          } else {
+            // 宽限期内のクライアント確認が必要
+            const needsConfirmation = checkConfirmationNeeded();
+            if (needsConfirmation && !hasConfirmedAdultContent && !showAdultModal) {
+              console.log('Showing adult content confirmation modal');
+              setShowAdultModal(true);
+            }
+          }
         }
       }, 200);
       
       return () => clearTimeout(checkTimer);
     }
-  }, [isInitialized, isAuthenticated, checkConfirmationNeeded, hasConfirmedAdultContent, showAdultModal]);
+  }, [
+    isInitialized, 
+    isAuthenticated, 
+    user?.id,
+    canAccessAdultContent,
+    serverVerificationStatus?.isVerified,
+    hasShownAgeModal
+  ]);
 
   const handleAdultContentConfirm = () => {
     setShowAdultModal(false);
@@ -65,6 +100,20 @@ export default function RootLayout() {
   const handleAdultContentDecline = () => {
     setShowAdultModal(false);
     // 在實際應用中，這裡可能需要退出應用或返回到登錄頁面
+  };
+
+  const handleAgeVerificationComplete = () => {
+    setShowAgeVerificationModal(false);
+    // 验证完成时也标记确认已显示
+    markConfirmationShown();
+    console.log('Age verification completed, marked as shown');
+  };
+
+  const handleAgeVerificationClose = () => {
+    setShowAgeVerificationModal(false);
+    // 标记确认已显示，防止重复弹出
+    markConfirmationShown();
+    console.log('Age verification modal closed, marked as shown');
   };
 
   if (!loaded || !isInitialized) {
@@ -100,7 +149,14 @@ export default function RootLayout() {
               </Stack>
               <ToastContainer />
               
-              {/* 成人內容確認模態框 */}
+              {/* サーバーサイド年齢確認モーダル */}
+              <AgeVerificationModal
+                visible={showAgeVerificationModal}
+                onClose={handleAgeVerificationClose}
+                onVerified={handleAgeVerificationComplete}
+              />
+              
+              {/* 成人內容確認模態框（宽限期用） */}
               <AdultContentModal
                 visible={showAdultModal}
                 onConfirm={handleAdultContentConfirm}

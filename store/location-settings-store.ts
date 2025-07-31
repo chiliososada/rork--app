@@ -19,6 +19,7 @@ interface LocationSettingsState extends LocationSettings {
   updateSettings: (settings: Partial<LocationSettings>, userId: string) => Promise<void>;
   clearLocationHistory: (userId: string) => Promise<{ success: boolean; deletedCount: number }>;
   resetSettings: () => void;
+  getLocationPrecisionLabel: () => string;
 }
 
 const STORAGE_KEY = 'location-settings';
@@ -153,6 +154,22 @@ export const useLocationSettingsStore = create<LocationSettingsState>((set, get)
   resetSettings: () => {
     set({ ...defaultSettings, isLoading: false, error: null });
     AsyncStorage.removeItem(STORAGE_KEY).catch(console.error);
+  },
+
+  getLocationPrecisionLabel: () => {
+    const { locationPrecision } = get();
+    switch (locationPrecision) {
+      case 'exact':
+        return '正確な位置';
+      case 'area':
+        return 'エリア';
+      case 'city':
+        return '市区町村';
+      case 'hidden':
+        return '非表示';
+      default:
+        return '正確な位置';
+    }
   },
 }));
 

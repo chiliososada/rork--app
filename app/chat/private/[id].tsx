@@ -82,6 +82,7 @@ export default function PrivateChatScreen() {
       await sendPrivateMessage(id, user.id, message, {
         id: user.id,
         name: user.name,
+        nickname: user.nickname,
         avatar: user.avatar
       });
       

@@ -464,7 +464,7 @@ export const useMapTopicsStore = create<MapTopicsState>((set, get) => {
         const searchSettings = useSearchSettingsStore.getState().settings;
         
         // Get current user ID for privacy filtering
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
         
         const searchParams = {
           latitude: currentLocation.latitude,
@@ -473,7 +473,7 @@ export const useMapTopicsStore = create<MapTopicsState>((set, get) => {
           timeRange: searchSettings.timeRange,
           searchQuery: normalizedQuery,
           limit: 30, // More results for map
-          currentUserId: user?.id
+          currentUserId: currentUser?.id
         };
         
         const result = await withNetworkRetry(async () => {
@@ -489,10 +489,10 @@ export const useMapTopicsStore = create<MapTopicsState>((set, get) => {
         });
         
         // Check user interaction status for search results
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user?.id && result.topics.length > 0) {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (authUser?.id && result.topics.length > 0) {
           const topicIds = result.topics.map(t => t.id);
-          await get().checkInteractionStatus(topicIds, user.id);
+          await get().checkInteractionStatus(topicIds, authUser.id);
         }
         
       } catch (error: any) {
@@ -530,7 +530,7 @@ export const useMapTopicsStore = create<MapTopicsState>((set, get) => {
       const searchSettings = useSearchSettingsStore.getState().settings;
       
       // Get current user ID for privacy filtering
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user: searchUser } } = await supabase.auth.getUser();
       
       const searchParams = {
         latitude: currentLocation.latitude,
@@ -540,7 +540,7 @@ export const useMapTopicsStore = create<MapTopicsState>((set, get) => {
         searchQuery: searchQuery.trim(),
         cursor: searchNextCursor,
         limit: 30,
-        currentUserId: user?.id
+        currentUserId: searchUser?.id
       };
       
       const result = await searchMapTopics(searchParams);
@@ -559,10 +559,10 @@ export const useMapTopicsStore = create<MapTopicsState>((set, get) => {
       });
       
       // Check interaction status for new topics
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user?.id && newTopics.length > 0) {
+      const { data: { user: moreUser } } = await supabase.auth.getUser();
+      if (moreUser?.id && newTopics.length > 0) {
         const newTopicIds = newTopics.map(t => t.id);
-        await get().checkInteractionStatus(newTopicIds, user.id);
+        await get().checkInteractionStatus(newTopicIds, moreUser.id);
       }
       
     } catch (error: any) {
@@ -743,10 +743,10 @@ export const useMapTopicsStore = create<MapTopicsState>((set, get) => {
       });
       
       // Check favorite and like status
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user?.id && result.topics.length > 0) {
+      const { data: { user: viewportUser } } = await supabase.auth.getUser();
+      if (viewportUser?.id && result.topics.length > 0) {
         const topicIds = result.topics.map(t => t.id);
-        await get().checkInteractionStatus(topicIds, user.id);
+        await get().checkInteractionStatus(topicIds, viewportUser.id);
       }
       
       // Apply current search if exists

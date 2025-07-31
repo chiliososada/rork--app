@@ -21,7 +21,7 @@ import {
 interface AvatarPickerProps {
   currentAvatarUrl?: string;
   userId: string;
-  onAvatarChange: (newAvatarUrl: string) => void;
+  onAvatarChange?: (newAvatarUrl: string) => void;
   size?: number;
   editable?: boolean;
 }
@@ -105,7 +105,7 @@ export default function AvatarPicker({
         : undefined;
       
       const result = await uploadUserAvatar(imageUri, userId, oldAvatarUrl);
-      onAvatarChange(result.url);
+      onAvatarChange?.(result.url);
       
       Alert.alert(
         '成功',

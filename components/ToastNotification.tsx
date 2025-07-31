@@ -57,7 +57,7 @@ export default function ToastNotification({
   const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(-TOAST_HEIGHT - insets.top)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const autoHideTimer = useRef<NodeJS.Timeout | null>(null);
+  const autoHideTimer = useRef<TimerHandle | null>(null);
 
   useEffect(() => {
     if (notification) {

@@ -79,6 +79,8 @@ export default function FollowButton({
     // 楽観的更新
     setLocalIsFollowing(!isFollowing);
 
+    if (!user?.id) return;
+    
     const newFollowState = await toggleFollow(user.id, targetUserId);
     
     if (onFollowChange) {

@@ -71,7 +71,7 @@ export const useBlockingStore = create<BlockingStore>((set, get) => ({
         });
         
         // Add timeout to prevent hanging with proper cleanup
-        let timeoutId: NodeJS.Timeout;
+        let timeoutId: Timeout | null = null;
         const timeoutPromise = new Promise<never>((_, reject) => {
           timeoutId = setTimeout(() => reject(new Error('Request timeout')), 10000);
         });

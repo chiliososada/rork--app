@@ -237,7 +237,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: Colors.text.primary,
     marginTop: 8,
-    backgroundColor: Colors.inputBackground,
+    backgroundColor: Colors.backgroundSoft,
     padding: 16,
     borderRadius: 12,
   },

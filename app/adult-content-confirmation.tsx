@@ -201,10 +201,10 @@ export default function AdultContentConfirmationScreen() {
               title="同意してサービスを利用する"
               onPress={handleConfirm}
               isLoading={isLoading}
-              style={[
-                styles.confirmButton,
-                (!hasReadTerms || !acceptsRisks) && styles.confirmButtonDisabled
-              ]}
+              style={(!hasReadTerms || !acceptsRisks) 
+                ? {...styles.confirmButton, ...styles.confirmButtonDisabled}
+                : styles.confirmButton
+              }
               disabled={!hasReadTerms || !acceptsRisks}
             />
             

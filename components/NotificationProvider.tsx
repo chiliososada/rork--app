@@ -19,13 +19,13 @@ export default function NotificationProvider({ children }: NotificationProviderP
     sendNotification,
   } = usePushNotificationStore();
   const [currentToast, setCurrentToast] = useState<AppNotification | null>(null);
-  const notificationListener = useRef<Notifications.Subscription>();
-  const responseListener = useRef<Notifications.Subscription>();
+  const notificationListener = useRef<Notifications.Subscription | null>(null);
+  const responseListener = useRef<Notifications.Subscription | null>(null);
   const appState = useRef(AppState.currentState);
 
   useEffect(() => {
     if (user?.id) {
-      initializeNotifications();
+      initializeNotifications(user.id);
     }
 
     // クリーンアップ
@@ -35,7 +35,7 @@ export default function NotificationProvider({ children }: NotificationProviderP
     };
   }, [user?.id]);
 
-  const initializeNotifications = async () => {
+  const initializeNotifications = async (userId: string) => {
     console.log('🔔 Initializing notifications...');
     
     // プッシュ通知の権限を取得
@@ -74,9 +74,9 @@ export default function NotificationProvider({ children }: NotificationProviderP
       title: title || '新しい通知',
       body: body || '',
       data: data,
-      type: data?.type || 'system',
-      userId: data?.userId,
-      topicId: data?.topicId,
+      type: (data?.type as "message" | "comment" | "follow" | "like" | "system") || 'system',
+      userId: data?.userId as string | undefined,
+      topicId: data?.topicId as string | undefined,
       isRead: false,
       createdAt: new Date(),
     };

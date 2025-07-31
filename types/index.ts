@@ -1,6 +1,7 @@
 export interface User {
   id: string;
   name: string; // maps to nickname in DB
+  nickname: string; // Direct mapping to DB nickname field
   avatar: string; // maps to avatar_url in DB
   email?: string;
   phone?: string;
@@ -111,6 +112,18 @@ export interface Message {
   chatId?: string;  // プライベートチャット用に追加
   type: 'topic' | 'private'; // メッセージタイプを区別
 }
+
+export interface DateSeparatorItem {
+  type: 'date-separator';
+  id: string;
+  dateString: string;
+}
+
+export interface MessageItem extends Omit<Message, 'type'> {
+  type: 'message';
+}
+
+export type ChatItem = DateSeparatorItem | MessageItem;
 
 export interface TopicFavorite {
   id: string;

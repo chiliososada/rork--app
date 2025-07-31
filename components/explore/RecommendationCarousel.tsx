@@ -69,7 +69,7 @@ export default function RecommendationCarousel({
         console.warn('URL開く際の警告:', {
           originalUrl: recommendation.targetUrl,
           processedUrl: url,
-          error: error.message
+          error: error instanceof Error ? error.message : String(error)
         });
         
         // 開発環境でのエラーの場合はアラートを表示しない
@@ -117,7 +117,7 @@ export default function RecommendationCarousel({
             activeOpacity={0.8}
           >
             <LinearGradient
-              colors={recommendation.gradientColors}
+              colors={recommendation.gradientColors.length >= 2 ? recommendation.gradientColors as [string, string, ...string[]] : ['#4A90E2', '#4A90E2']}
               style={styles.gradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}

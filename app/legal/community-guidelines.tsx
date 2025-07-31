@@ -267,7 +267,7 @@ const styles = StyleSheet.create({
   principle: {
     marginBottom: 16,
     padding: 16,
-    backgroundColor: Colors.inputBackground,
+    backgroundColor: Colors.backgroundSoft,
     borderRadius: 12,
   },
   principleTitle: {

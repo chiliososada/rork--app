@@ -139,6 +139,7 @@ export default function BlockedUsersScreen() {
           user={{
             id: blockedUser.blocked_user_id,
             name: blockedUser.blocked_user_name,
+            nickname: blockedUser.blocked_user_name,
             avatar: blockedUser.blocked_user_avatar || ''
           }}
           size={50}

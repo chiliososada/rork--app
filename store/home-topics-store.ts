@@ -111,6 +111,10 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
         set(state => {
           const newTopic: Topic = {
             ...data.topic,
+            author: {
+              ...data.topic.author,
+              nickname: (data.topic.author as any).nickname || data.topic.author.name
+            },
             distance: 0, // Will be calculated properly on next fetch
             commentCount: 0,
             participantCount: 1,
@@ -668,7 +672,7 @@ export const useHomeTopicsStore = create<HomeTopicsState>((set, get) => {
       const params = {
         latitude: currentLocation.latitude,
         longitude: currentLocation.longitude,
-        radiusKm: searchSettings.maxDistance,
+        radiusKm: searchSettings.settings.radiusKm,
         limit: TOPICS_PER_PAGE,
         searchQuery: tag, // 使用标签作为搜索词
         currentUserId: user?.id
