@@ -40,9 +40,9 @@ class RealtimeConnectionManager {
   
   private config: ConnectionConfig = {
     maxRetries: 5,
-    retryDelay: 3000, // 增加重连延迟
+    retryDelay: 3000, // 増加重连延迟
     heartbeatInterval: 30000,
-    connectionTimeout: 30000, // 增加连接超时时间 10s -> 30s
+    connectionTimeout: 60000, // 接続タイムアウトを60秒に延長（30s -> 60s）
     maxIdleTime: 300000 // 5分間
   };
   
@@ -123,6 +123,7 @@ class RealtimeConnectionManager {
    * ユーザーIDを設定し、接続を初期化
    */
   public async initialize(userId: string): Promise<void> {
+    console.log('🔄 リアルタイム接続の初期化を開始:', { userId, timestamp: new Date().toISOString() });
     this.currentUserId = userId;
     this.setStatus('connecting');
     
@@ -141,12 +142,17 @@ class RealtimeConnectionManager {
       // 连接成功后停止降级轮询
       this.stopFallbackPolling();
       
-      console.log('✅ リアルタイム接続管理システムが初期化されました');
+      console.log('✅ リアルタイム接続管理システムが初期化されました', {
+        userId,
+        connectionTime: new Date().toISOString(),
+        stats: this.stats
+      });
       
     } catch (error) {
       console.error('❌ 接続初期化に失敗:', error);
       console.error('接続エラーの詳細:', {
         errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
         userId: userId,
         retryCount: this.retryCount,
         currentStatus: this.connectionStatus,
@@ -156,11 +162,15 @@ class RealtimeConnectionManager {
       this.stats.failedConnections++;
       this.setStatus('error');
       
-      // 启动降级轮询机制
+      // 即座に降級轮询機構を起動（接続失敗時のフォールバック）
+      console.log('⚠️ 降級轮询モードを起動します - リアルタイム接続が利用できません');
       this.startFallbackPolling(userId);
       
       // 自動再接続を試行
       this.scheduleReconnect();
+      
+      // エラーを再throw しない（降級モードで動作継続）
+      console.log('📡 降級モードで動作を継続します');
     }
   }
   
@@ -174,12 +184,19 @@ class RealtimeConnectionManager {
     let topicIds = await this.getUserTopicIds(userId);
     
     if (topicIds.length === 0) {
-      console.log('⚠️ 参加している話題がありません。空の購読を作成してブロードキャスト機能のみ有効化します。');
+      console.log('⚠️ 参加している話題がありません。グローバルチャンネルを作成します。');
+      console.log('💡 ヒント: メッセージ送信時に自動的に話題に参加します');
       // 話題が見つからない場合でも、グローバルなbroadcast購読を作成
+      // 全メッセージを監視するためのワイルドカード
       topicIds = ['*']; // 全話題に対応するプレースホルダー
     }
     
-    console.log('🔄 创建频道订阅:', { subscriptionId, topicCount: topicIds.length });
+    console.log('🔄 チャンネル購読を作成中:', { 
+      subscriptionId, 
+      topicCount: topicIds.length,
+      isWildcard: topicIds.includes('*'),
+      timestamp: new Date().toISOString()
+    });
     
     // チャンネルを作成 - broadcast機能を含める
     let channel = supabase
@@ -257,17 +274,34 @@ class RealtimeConnectionManager {
     // 接続状態を監視
     const subscription = await new Promise<ChannelSubscription>((resolve, reject) => {
       const timeout = setTimeout(() => {
-        console.error('⏰ 连接超时 - 30秒内未收到响应');
-        reject(new Error('接続タイムアウト - 30秒以内に応答がありませんでした'));
+        console.error('⏰ 接続タイムアウト - 60秒以内に応答がありませんでした');
+        console.error('タイムアウト詳細:', {
+          subscriptionId,
+          topicCount: topicIds.length,
+          isWildcard: topicIds.includes('*'),
+          timeout: this.config.connectionTimeout,
+          timestamp: new Date().toISOString()
+        });
+        reject(new Error('接続タイムアウト - 60秒以内に応答がありませんでした'));
       }, this.config.connectionTimeout);
       
       channel.subscribe((status) => {
-        console.log('📡 频道状态变化:', { subscriptionId, status, timestamp: new Date().toISOString() });
+        console.log('📡 チャンネルステータス変更:', { 
+          subscriptionId, 
+          status, 
+          timestamp: new Date().toISOString(),
+          topicCount: topicIds.length
+        });
         
         if (status === 'SUBSCRIBED') {
           clearTimeout(timeout);
           
-          console.log('✅ 频道订阅成功:', subscriptionId);
+          console.log('✅ チャンネル購読成功:', {
+            subscriptionId,
+            topicCount: topicIds.length,
+            isWildcard: topicIds.includes('*'),
+            timestamp: new Date().toISOString()
+          });
           
           const sub: ChannelSubscription = {
             id: subscriptionId,
@@ -284,19 +318,28 @@ class RealtimeConnectionManager {
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           clearTimeout(timeout);
           
-          console.error('❌ 频道连接失败:', { 
+          console.error('❌ チャンネル接続失敗:', { 
             subscriptionId, 
             status,
-            topicIds: topicIds.length,
-            error: `频道状态: ${status}`
+            topicCount: topicIds.length,
+            isWildcard: topicIds.includes('*'),
+            error: `チャンネルステータス: ${status}`,
+            timestamp: new Date().toISOString()
           });
           
           reject(new Error(`接続失敗: ${status} - 频道无法建立连接`));
         } else if (status === 'CLOSED') {
-          console.warn('🔌 频道连接已关闭:', subscriptionId);
+          console.warn('🔌 チャンネル接続が閉じられました:', {
+            subscriptionId,
+            timestamp: new Date().toISOString()
+          });
           this.handleConnectionClosed(subscriptionId);
         } else {
-          console.log('🔄 频道状态中间态:', { subscriptionId, status });
+          console.log('🔄 チャンネルステータス中間状態:', { 
+            subscriptionId, 
+            status,
+            timestamp: new Date().toISOString()
+          });
         }
       });
     });
@@ -311,6 +354,7 @@ class RealtimeConnectionManager {
     try {
       console.log('🔍 ユーザーの参加話題を検索中:', userId);
       
+      // topic_participants テーブルから取得
       const { data, error } = await supabase
         .from('topic_participants')
         .select('topic_id')
@@ -319,6 +363,7 @@ class RealtimeConnectionManager {
       
       if (error) {
         console.error('話題ID取得エラー:', error);
+        console.log('🔄 topic_participants テーブルのエラーのため、代替方法を試します');
         
         // エラーの場合、代替方法として chat_messages から話題IDを取得
         console.log('📝 代替方法：ユーザーがメッセージを送った話題を取得');
@@ -330,30 +375,58 @@ class RealtimeConnectionManager {
             .order('created_at', { ascending: false })
             .limit(50); // 最近の50件
           
-          if (!messageError && messageData) {
+          if (!messageError && messageData && messageData.length > 0) {
             const uniqueTopicIds = [...new Set(messageData.map(row => row.topic_id))];
             console.log('📬 メッセージ履歴から取得した話題ID:', uniqueTopicIds);
             return uniqueTopicIds;
+          } else if (messageError) {
+            console.error('メッセージ履歴取得エラー:', messageError);
+          } else {
+            console.log('💡 メッセージ履歴なし - 新規ユーザーの可能性');
           }
         } catch (altError) {
           console.error('代替方法も失敗:', altError);
         }
         
+        // どちらの方法でも話題IDが取得できない場合は空配列を返す
+        console.log('⚠️ 話題IDが取得できませんでした - グローバルチャンネルを使用します');
         return [];
       }
       
       const topicIds = data?.map(row => row.topic_id) || [];
-      console.log('✅ 参加している話題ID:', topicIds);
       
-      // 話題参加者テーブルが空の場合、現在表示中の話題IDを追加
-      if (topicIds.length === 0) {
-        console.log('⚠️ 参加話題が見つかりません。現在のページから話題IDを推測します。');
-        // この部分は後で現在の画面の話題IDを取得するロジックに置き換える
+      if (topicIds.length > 0) {
+        console.log('✅ 参加している話題ID:', topicIds);
+      } else {
+        console.log('⚠️ 参加話題が見つかりません - 新規ユーザーまたは初回起動');
+        console.log('💡 ヒント: 話題に参加した後、メッセージを送信すると自動的にtopic_participantsに追加されます');
+        
+        // 代替方法として、topics テーブルから最近の話題を取得してみる
+        try {
+          const { data: recentTopics, error: topicsError } = await supabase
+            .from('topics')
+            .select('id')
+            .order('created_at', { ascending: false })
+            .limit(5); // 最近の5件
+          
+          if (!topicsError && recentTopics && recentTopics.length > 0) {
+            const recentTopicIds = recentTopics.map(topic => topic.id);
+            console.log('🌟 最近の話題を監視対象に追加:', recentTopicIds);
+            return recentTopicIds;
+          }
+        } catch (topicsError) {
+          console.error('最近の話題取得エラー:', topicsError);
+        }
       }
       
       return topicIds;
     } catch (error) {
       console.error('話題ID取得に失敗:', error);
+      console.error('エラー詳細:', {
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        userId
+      });
       return [];
     }
   }

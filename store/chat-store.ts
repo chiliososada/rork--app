@@ -442,15 +442,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
   // 新しい接続システムを初期化
   initializeConnection: async (userId: string) => {
     try {
+      console.log('🌐 リアルタイム接続を初期化中...', { userId });
       set({ currentUserId: userId });
       
       // ステータスリスナーを設定
       realtimeConnectionManager.addStatusListener((status) => {
+        console.log('🔄 接続ステータス更新:', status);
         set({ 
           connectionStatus: status,
           // 後方互換性のために既存フィールドも更新
           isGlobalChannelConnected: status === 'connected'
         });
+        
+        // 降級モードの場合はユーザーに通知
+        if (realtimeConnectionManager.isFallbackMode()) {
+          console.log('⚠️ 降級モードで動作中 - メッセージは5秒ごとに更新されます');
+        }
       });
       
       // メッセージリスナーを設定
@@ -458,16 +465,26 @@ export const useChatStore = create<ChatState>((set, get) => ({
         get().handleRealtimeMessage(message);
       });
       
-      // 接続を初期化
+      // 接続を初期化（エラーをthrowしないので、try-catchは不要）
       await realtimeConnectionManager.initialize(userId);
       
       // 統計情報を更新
-      set({ connectionStats: realtimeConnectionManager.getStats() });
+      const stats = realtimeConnectionManager.getStats();
+      set({ connectionStats: stats });
       
-      console.log('新しいリアルタイム接続システムが初期化されました');
+      // 接続状態を確認
+      const currentStatus = realtimeConnectionManager.getStatus();
+      if (currentStatus === 'connected') {
+        console.log('✅ リアルタイム接続が確立されました');
+      } else if (realtimeConnectionManager.isFallbackMode()) {
+        console.log('📡 降級モードで動作中 - メッセージは轮询で取得されます');
+      } else {
+        console.log('⚠️ リアルタイム接続の確立に失敗しましたが、再接続を試行中です');
+      }
       
     } catch (error) {
-      console.error('接続初期化に失敗:', error);
+      // このブロックは基本的に実行されない（initializeがエラーをthrowしないため）
+      console.error('予期せぬエラー:', error);
       set({ 
         connectionStatus: 'error',
         isGlobalChannelConnected: false
