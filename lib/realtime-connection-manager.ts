@@ -139,8 +139,11 @@ class RealtimeConnectionManager {
       this.stats.lastConnectionTime = Date.now();
       this.retryCount = 0;
       
-      // 连接成功后停止降级轮询
+      // 接続成功後に降級轮询を停止
       this.stopFallbackPolling();
+      
+      // PostgreSQLの通知リスナーを設定
+      this.setupPostgreSQLNotifications();
       
       console.log('✅ リアルタイム接続管理システムが初期化されました', {
         userId,
@@ -162,7 +165,7 @@ class RealtimeConnectionManager {
       this.stats.failedConnections++;
       this.setStatus('error');
       
-      // 即座に降級轮询機構を起動（接続失敗時のフォールバック）
+      // 即座に降級轮询モードを起動（接続失敗時のフォールバック）
       console.log('⚠️ 降級轮询モードを起動します - リアルタイム接続が利用できません');
       this.startFallbackPolling(userId);
       
@@ -1059,6 +1062,95 @@ class RealtimeConnectionManager {
     // 購読が存在しない場合は再初期化
     console.log('🔄 購読が存在しないため再初期化します');
     await this.initialize(this.currentUserId);
+  }
+
+  /**
+   * PostgreSQL通知リスナーの設定
+   */
+  private setupPostgreSQLNotifications(): void {
+    if (!this.currentUserId) return;
+    
+    try {
+      // participant_joined 通知をリッスン
+      const participantChannel = supabase
+        .channel('participant_notifications')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'topic_participants'
+          },
+          (payload) => {
+            this.handleParticipantChange(payload);
+          }
+        )
+        .subscribe();
+
+      // PostgreSQL NOTIFY イベントをリッスン
+      const notificationChannel = supabase
+        .channel('pg_notifications')
+        .on(
+          'broadcast',
+          { event: 'participant_joined' },
+          (payload) => {
+            console.log('📡 参加者通知を受信:', payload);
+            this.handleParticipantJoined(payload.payload);
+          }
+        )
+        .subscribe();
+
+      console.log('🔔 PostgreSQL通知リスナーを設定しました');
+      
+    } catch (error) {
+      console.warn('⚠️ PostgreSQL通知リスナーの設定に失敗:', error);
+    }
+  }
+
+  /**
+   * 参加者変更の処理
+   */
+  private handleParticipantChange(payload: any): void {
+    console.log('👥 参加者変更イベント:', {
+      eventType: payload.eventType,
+      new: payload.new,
+      old: payload.old,
+      timestamp: new Date().toISOString()
+    });
+
+    // 参加者数の更新などの処理をここに追加可能
+    if (payload.eventType === 'INSERT' && payload.new) {
+      this.messageListeners.forEach(listener => {
+        listener({
+          type: 'participant_joined',
+          topic_id: payload.new.topic_id,
+          user_id: payload.new.user_id,
+          joined_at: payload.new.joined_at
+        });
+      });
+    }
+  }
+
+  /**
+   * 参加者参加通知の処理
+   */
+  private handleParticipantJoined(payload: any): void {
+    if (!payload) return;
+    
+    console.log('👋 新しい参加者:', {
+      topic_id: payload.topic_id,
+      user_id: payload.user_id,
+      action: payload.action,
+      timestamp: payload.timestamp
+    });
+
+    // 現在のユーザーが関連する話題に新しい参加者が加わった場合の処理
+    this.messageListeners.forEach(listener => {
+      listener({
+        type: 'participant_notification',
+        ...payload
+      });
+    });
   }
 
   /**
